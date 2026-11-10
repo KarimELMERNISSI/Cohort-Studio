@@ -73,19 +73,33 @@ class StepRecord:
 class ReplayResult:
     df: pd.DataFrame | None
     error: str | None = None
-    missing_file: tuple[int, str] | None = None  # (step index, recorded path) when a step needs a file that was not found
+    missing_file: tuple[int, str] | None = (
+        None  # (step index, recorded path) when a step needs a file that was not found
+    )
     warnings: list[str] = field(default_factory=list)
     steps_applied: int = 0
-    divergence: tuple[int, str, str] | None = None  # (step index, recorded fingerprint, replayed fingerprint)
-    not_replayable: list[int] = field(default_factory=list)  # step indexes that could not be recomputed
+    divergence: tuple[int, str, str] | None = (
+        None  # (step index, recorded fingerprint, replayed fingerprint)
+    )
+    not_replayable: list[int] = field(
+        default_factory=list
+    )  # step indexes that could not be recomputed
     verified_steps: int = 0  # steps whose result was checked against the recorded fingerprint
     imputations: dict[int, Any] = field(default_factory=dict)  # step index -> MIData re-computed
     mi_divergence: list[int] = field(default_factory=list)  # mi_impute steps whose cells differ
-    single_imputed: dict[str, Any] = field(default_factory=dict)  # column -> row ids filled by single imputation
-    exact_imputed: dict[str, Any] = field(default_factory=dict)  # column -> row ids imputed by an exact formula
-    records: dict[int, StepRecord] = field(default_factory=dict)  # step index -> what a recomputed imputation did
+    single_imputed: dict[str, Any] = field(
+        default_factory=dict
+    )  # column -> row ids filled by single imputation
+    exact_imputed: dict[str, Any] = field(
+        default_factory=dict
+    )  # column -> row ids imputed by an exact formula
+    records: dict[int, StepRecord] = field(
+        default_factory=dict
+    )  # step index -> what a recomputed imputation did
     # during a replay only: the tables a later step's population was evaluated on, by fingerprint
-    population_frames: dict[str, pd.DataFrame] = field(default_factory=dict, repr=False, compare=False)
+    population_frames: dict[str, pd.DataFrame] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     @property
     def reproducible(self) -> bool:
@@ -183,7 +197,9 @@ def _population_rows(
         return df.index
     recorded = _rules_version(block)
     frame = (frames or {}).get(str(block.get("data_fp") or ""), df)
-    if recorded != RULES_VERSION:  # read otherwise when recorded: the rows it kept then, when the step holds them
+    if (
+        recorded != RULES_VERSION
+    ):  # read otherwise when recorded: the rows it kept then, when the step holds them
         then = f"recorded under rules version {recorded} ({_RULES_BEFORE.get(recorded, 'read otherwise')})"
         kept = _recorded_rows(block, frame)
         if kept is not None:
@@ -205,10 +221,16 @@ def _population_rows(
     result = evaluate_population(frame, criteria)
     if not result.ok:
         raise ValueError(f"the population criteria cannot be evaluated: {', '.join(result.errors)}")
-    if recorded == RULES_VERSION and block.get("rows_fp") and result.rows_fingerprint != block["rows_fp"]:
+    if (
+        recorded == RULES_VERSION
+        and block.get("rows_fp")
+        and result.rows_fingerprint != block["rows_fp"]
+    ):
         recorded_on = str(block.get("data_fp") or "")
         # the table it was recorded on: kept by the replay, or the one it is read on (a freeze is given no other)
-        same_table = bool(recorded_on) and (recorded_on in (frames or {}) or frame_fingerprint(frame) == recorded_on)
+        same_table = bool(recorded_on) and (
+            recorded_on in (frames or {}) or frame_fingerprint(frame) == recorded_on
+        )
         kept = _recorded_rows(block, frame) if same_table else None
         if kept is not None:
             warnings.append(
@@ -248,7 +270,7 @@ def _rules_version(block: Mapping[str, Any]) -> int:
     version was recorded), 0 when it names one that is no number."""
     try:
         return int(block.get("rules_version") or 1)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 
@@ -279,7 +301,9 @@ def _enrichment(df, step, index, paths, warnings):
     # read as the page read it (the sheet, merge key, separator and decimal recorded with the step), then the date
     # keys parsed as the page parsed them (with the formats it recorded; a step recorded before holds none)
     recorded = params.get("parse_options")
-    enrichment_df = _read_any(resolved, ParseOptions.from_dict(recorded) if recorded else None, paths)
+    enrichment_df = _read_any(
+        resolved, ParseOptions.from_dict(recorded) if recorded else None, paths
+    )
     if enrichment_df is None:
         raise ValueError(f"could not read enrichment file {resolved}")
     main = df
@@ -296,8 +320,12 @@ def _enrichment(df, step, index, paths, warnings):
         enrichment_df = enrichment_df[[c for c in enrichment_df.columns if str(c) in set(retained)]]
     additional_columns = [c for c in enrichment_df.columns if c not in set(right_ids)]
     merged = eed.add_data(
-        df=main, additional_df=enrichment_df, left_id_names=left_ids, right_id_names=right_ids,
-        additional_cols=additional_columns, strategy=params.get("strategy", "left"),
+        df=main,
+        additional_df=enrichment_df,
+        left_id_names=left_ids,
+        right_id_names=right_ids,
+        additional_cols=additional_columns,
+        strategy=params.get("strategy", "left"),
         conflict_resolution=params.get("conflict_resolution", "keep"),
         # how many rows of the file each row took (a step recorded before chose none: all of them)
         file_rows=params.get("file_rows", "all"),
@@ -306,7 +334,9 @@ def _enrichment(df, step, index, paths, warnings):
         # which row is the first or the last (a step recorded before: the file's order)
         order_by=params.get("order_by"),
     )
-    if merged is main:  # refused (the merge returns the dataset unchanged): said here, not one step later
+    if (
+        merged is main
+    ):  # refused (the merge returns the dataset unchanged): said here, not one step later
         raise ValueError(
             "the merge could not be done again: the file now repeats an identifier the step took once, or its "
             "identifiers no longer compare with the dataset's"
@@ -337,7 +367,9 @@ def _scoped_rows(
     block = step.get("population")
     if not block or not block.get("criteria"):
         return None
-    return _population_rows(df, block, index, warnings, result.population_frames if result else None)
+    return _population_rows(
+        df, block, index, warnings, result.population_frames if result else None
+    )
 
 
 def _imputation(df, step, index, paths, warnings, result=None):
@@ -359,7 +391,10 @@ def _imputation(df, step, index, paths, warnings, result=None):
         random_state=params.get("random_state"),
     )
     if result is not None:
-        methods = (outcome.params["numerical_imputation_method"], outcome.params["categorical_imputation_method"])
+        methods = (
+            outcome.params["numerical_imputation_method"],
+            outcome.params["categorical_imputation_method"],
+        )
         aside = outcome.params.get("set_aside") or ()
         description = describe_imputation(*methods, None if rows is None else len(rows), aside)
         kept = {"derived": params["derived"]} if "derived" in params else {}
@@ -387,7 +422,9 @@ def _targeted_imputation(df, step, index, paths, warnings, result=None):
     )
     recorded = params.get("filled_count")
     if recorded is not None and int(recorded) != filled:
-        warnings.append(f"step {index + 1}: {filled} values filled on replay, {recorded} when recorded")
+        warnings.append(
+            f"step {index + 1}: {filled} values filled on replay, {recorded} when recorded"
+        )
     if result is not None:
         n_rows = None if rows is None else len(rows)
         left = left_missing(df, target, formula, rows) if complete else (0, ())
@@ -396,7 +433,9 @@ def _targeted_imputation(df, step, index, paths, warnings, result=None):
         definition = derived.get("definition") if isinstance(derived, Mapping) else None
         of = definition.get("target") if isinstance(definition, Mapping) else None
         single = 0
-        if of is not None and exact:  # the values computed from imputed ones, as the page's description counts them
+        if (
+            of is not None and exact
+        ):  # the values computed from imputed ones, as the page's description counts them
             new = new_df.index[df[target].isna() & new_df[target].notna()].to_numpy()
             estimates = [
                 np.asarray(result.single_imputed[str(c)], dtype=np.int64)
@@ -422,7 +461,9 @@ def _variable_transformation(df, step, index, paths, warnings):
 
 def _variable_computation(df, step, index, paths, warnings):
     params = step.get("params", {}) or {}
-    success, msg, new_df = evaluate_formula_safely(params.get("formula"), params.get("variable_name"), df)
+    success, msg, new_df = evaluate_formula_safely(
+        params.get("formula"), params.get("variable_name"), df
+    )
     if not success:
         raise ValueError(f"variable computation failed: {msg}")
     return new_df, None
@@ -516,13 +557,17 @@ def _recode_levels(df, step, index, paths, warnings):
 def _apply_filter(df, step, index, paths, warnings):
     kept = (step.get("params", {}) or {}).get("kept_index")
     if kept is None:
-        warnings.append(f"step {index + 1}: filter recorded without the kept rows; it was not replayed")
+        warnings.append(
+            f"step {index + 1}: filter recorded without the kept rows; it was not replayed"
+        )
         return df, None
     return df[df.index.isin(kept)], None
 
 
 def _population_definition(df, step, index, paths, warnings):
-    _population_rows(df, step.get("population") or {}, index, warnings, checks_only=True)  # verification only
+    _population_rows(
+        df, step.get("population") or {}, index, warnings, checks_only=True
+    )  # verification only
     return df, None
 
 
@@ -537,7 +582,11 @@ def _mi_impute(df, step, index, paths, warnings, result=None):
     block = step.get("population") or {}
     frames = result.population_frames if result is not None else None
     # the imputed datasets are checked against their hash and the table is left as it is: other rows are said there
-    rows = _population_rows(df, block, index, warnings, frames, checks_only=True) if block else df.index
+    rows = (
+        _population_rows(df, block, index, warnings, frames, checks_only=True)
+        if block
+        else df.index
+    )
     spec = ImputationSpec(**params["spec"])
     derived = params.get("derived") if isinstance(params.get("derived"), Mapping) else None
     if derived is not None:
@@ -560,14 +609,18 @@ def _mi_impute(df, step, index, paths, warnings, result=None):
         now = {"numpy": numpy.__version__, "scikit-learn": sklearn.__version__}
         changed = [f"{k} {versions.get(k)} -> {v}" for k, v in now.items() if versions.get(k) != v]
         why = f" (changed since: {', '.join(changed)})" if changed else ""
-        warnings.append(f"step {index + 1} (mi_impute): the re-computed imputation differs from the recorded one{why}")
+        warnings.append(
+            f"step {index + 1} (mi_impute): the re-computed imputation differs from the recorded one{why}"
+        )
     return df, None
 
 
 def _freeze_population(df, step, index, paths, warnings, result=None):
     block = step.get("population") or {}
     if block.get("criteria"):
-        rows = _population_rows(df, block, index, warnings, result.population_frames if result else None)
+        rows = _population_rows(
+            df, block, index, warnings, result.population_frames if result else None
+        )
     elif block.get("included"):
         rows = pd.Index(ranges_to_ids(block["included"]))
     else:
@@ -603,8 +656,14 @@ _HANDLED: dict[str, Callable[..., tuple[pd.DataFrame, str | None]]] = {
 _REPORTING = frozenset({"imputation", "targeted_imputation", "mi_impute", "freeze_population"})
 
 
-def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, paths: PathResolver | None,
-                warnings: list[str], result: ReplayResult | None = None) -> tuple[pd.DataFrame, str | None]:
+def _apply_step(
+    df: pd.DataFrame,
+    step: dict[str, Any],
+    index: int,
+    paths: PathResolver | None,
+    warnings: list[str],
+    result: ReplayResult | None = None,
+) -> tuple[pd.DataFrame, str | None]:
     """Apply one recorded step; returns (df, missing_path). Raises _NotReplayable for steps it cannot redo."""
     func_name = str(step.get("function"))
 
@@ -614,14 +673,20 @@ def _apply_step(df: pd.DataFrame, step: dict[str, Any], index: int, paths: PathR
     if func_name in NOT_REPLAYABLE or step.get("replayable") is False:
         snapshot = _snapshot(step, paths)
         if snapshot is not None:
-            warnings.append(f"step {index + 1} ({func_name}) cannot be recomputed: its recorded snapshot was used")
+            warnings.append(
+                f"step {index + 1} ({func_name}) cannot be recomputed: its recorded snapshot was used"
+            )
             return snapshot, None
         handler = _HANDLED.get(func_name)
         if handler is not None:  # recorded in part only (e.g. a filter that also clipped values)
-            warnings.append(f"step {index + 1} ({func_name}) was replayed only in part: it was not fully recorded")
+            warnings.append(
+                f"step {index + 1} ({func_name}) was replayed only in part: it was not fully recorded"
+            )
             partial, _ = handler(df, step, index, paths, warnings)
             raise _NotReplayable(partial)
-        warnings.append(f"step {index + 1} ({func_name}) cannot be recomputed and has no snapshot: skipped")
+        warnings.append(
+            f"step {index + 1} ({func_name}) cannot be recomputed and has no snapshot: skipped"
+        )
         raise _NotReplayable(df)
 
     handler = _HANDLED.get(func_name)

@@ -20,12 +20,14 @@ from manage.reproduction_manager import apply_steps, execute_trace_pipeline
 @pytest.fixture
 def sample_cohort_csv(tmp_path: Path) -> Path:
     """Create a temporary source dataset CSV for pipeline execution."""
-    df = pd.DataFrame({
-        "patient_id": [101, 102, 103, 104, 105],
-        "age": [45, 52, 61, 39, 70],
-        "systolic_bp": [120, 140, 135, 110, 160],
-        "cholesterol": [180.0, 220.0, np.nan, 195.0, 240.0],
-    })
+    df = pd.DataFrame(
+        {
+            "patient_id": [101, 102, 103, 104, 105],
+            "age": [45, 52, 61, 39, 70],
+            "systolic_bp": [120, 140, 135, 110, 160],
+            "cholesterol": [180.0, 220.0, np.nan, 195.0, 240.0],
+        }
+    )
     csv_path = tmp_path / "baseline_cohort.csv"
     df.to_csv(csv_path, index=False)
     return csv_path
@@ -34,11 +36,13 @@ def sample_cohort_csv(tmp_path: Path) -> Path:
 @pytest.fixture
 def sample_enrichment_csv(tmp_path: Path) -> Path:
     """Create a secondary enrichment file for merging."""
-    df = pd.DataFrame({
-        "patient_id": [101, 102, 103, 104, 105],
-        "smoking_status": ["Never", "Former", "Current", "Never", "Former"],
-        "diabetes": [0, 1, 1, 0, 1],
-    })
+    df = pd.DataFrame(
+        {
+            "patient_id": [101, 102, 103, 104, 105],
+            "smoking_status": ["Never", "Former", "Current", "Never", "Former"],
+            "diabetes": [0, 1, 1, 0, 1],
+        }
+    )
     csv_path = tmp_path / "lifestyle_enrichment.csv"
     df.to_csv(csv_path, index=False)
     return csv_path
@@ -72,7 +76,9 @@ class TestReproductionPipelineExecution:
         def on_progress(pct: int, msg: str) -> None:
             progress_calls.append((pct, msg))
 
-        df, err = execute_trace_pipeline(trace, progress_callback=on_progress, paths=PathResolver.unconfined())
+        df, err = execute_trace_pipeline(
+            trace, progress_callback=on_progress, paths=PathResolver.unconfined()
+        )
         assert err is None
         assert df is not None
         assert df.shape == (5, 4)
@@ -161,9 +167,9 @@ class TestReproductionPipelineExecution:
         }
 
         with patch("manage.reproduction_manager.apply_variable_transformation") as mock_transform:
-            mock_transform.return_value = pd.DataFrame({
-                "log_systolic": [4.78, 4.94, 4.90, 4.70, 5.07]
-            })
+            mock_transform.return_value = pd.DataFrame(
+                {"log_systolic": [4.78, 4.94, 4.90, 4.70, 5.07]}
+            )
 
             df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
             assert err is None
@@ -183,7 +189,10 @@ class TestReproductionPipelineExecution:
             ],
         }
 
-        with patch("manage.reproduction_manager.impute_rows", side_effect=ValueError("Corrupt imputation matrix")):
+        with patch(
+            "manage.reproduction_manager.impute_rows",
+            side_effect=ValueError("Corrupt imputation matrix"),
+        ):
             df, err = execute_trace_pipeline(trace, paths=PathResolver.unconfined())
             assert df is None
             assert "error during step 1" in err.lower()
@@ -201,7 +210,9 @@ class TestReplayVerification:
         from manage.transformation_manager import TransformationManager
 
         src = tmp_path / "cohort.csv"
-        pd.DataFrame({"age": [30, 40, None, 70], "w": [60.0, None, 80.0, 90.0]}).to_csv(src, index=False)
+        pd.DataFrame({"age": [30, 40, None, 70], "w": [60.0, None, 80.0, 90.0]}).to_csv(
+            src, index=False
+        )
         tm = TransformationManager(trace_dir=str(tmp_path / "traces"))
         tm.initialize_session("cohort.csv")
         tm.source_dataset = str(src)
@@ -219,9 +230,19 @@ class TestReplayVerification:
         from manage.reproduction_manager import run_trace
 
         tm, session = self._recorded(tmp_path)
-        session.commit(session.base.rename(columns={"w": "weight"}), "rename_columns", {"mapping": {"w": "weight"}}, "Renamed")
+        session.commit(
+            session.base.rename(columns={"w": "weight"}),
+            "rename_columns",
+            {"mapping": {"w": "weight"}},
+            "Renamed",
+        )
         filled, n = fill_with_formula(session.draft_frame(), "age", "weight / 2")
-        session.stage(filled, "targeted_imputation", {"target_variable": "age", "formula": "weight / 2", "filled_count": n}, "Imputed age")
+        session.stage(
+            filled,
+            "targeted_imputation",
+            {"target_variable": "age", "formula": "weight / 2", "filled_count": n},
+            "Imputed age",
+        )
         session.commit_staging()
 
         result = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
@@ -234,7 +255,12 @@ class TestReplayVerification:
         from manage.reproduction_manager import run_trace
 
         tm, session = self._recorded(tmp_path)
-        session.commit(session.base.rename(columns={"w": "weight"}), "rename_columns", {"mapping": {"w": "weight"}}, "Renamed")
+        session.commit(
+            session.base.rename(columns={"w": "weight"}),
+            "rename_columns",
+            {"mapping": {"w": "weight"}},
+            "Renamed",
+        )
         trace = copy.deepcopy(tm.get_trace())
         trace["steps"][1]["params"]["mapping"] = {"w": "other"}  # the recorded table had "weight"
         result = run_trace(trace, paths=PathResolver.unconfined())
@@ -245,7 +271,13 @@ class TestReplayVerification:
         from manage.reproduction_manager import run_trace
 
         tm, session = self._recorded(tmp_path)
-        session.stage(session.draft_frame().fillna(0), "multiple_imputation", {"m": 5}, "MI adopted", replayable=False)
+        session.stage(
+            session.draft_frame().fillna(0),
+            "multiple_imputation",
+            {"m": 5},
+            "MI adopted",
+            replayable=False,
+        )
         session.commit_staging()
         result = run_trace(tm.get_trace(), paths=PathResolver.unconfined())
         assert result.not_replayable == [1] and not result.reproducible
@@ -253,14 +285,26 @@ class TestReplayVerification:
 
 
 def test_the_replay_keeps_values_imputed_by_an_exact_formula_apart() -> None:
-    df = pd.DataFrame({"weight": [70.0, np.nan, np.nan], "bmi": [24.2, 22.0, 30.0], "height": [170.0, 180.0, np.nan]})
+    df = pd.DataFrame(
+        {
+            "weight": [70.0, np.nan, np.nan],
+            "bmi": [24.2, 22.0, 30.0],
+            "height": [170.0, 180.0, np.nan],
+        }
+    )
     step = {
         "function": "targeted_imputation",
-        "params": {"target_variable": "weight", "formula": "bmi * (height / 100) ** 2", "exact": True},
+        "params": {
+            "target_variable": "weight",
+            "formula": "bmi * (height / 100) ** 2",
+            "exact": True,
+        },
     }
     result = apply_steps(df, [step])
     assert result.error is None
-    assert {c: ids.tolist() for c, ids in result.exact_imputed.items()} == {"weight": [1]}  # row 2 lacks a height
+    assert {c: ids.tolist() for c, ids in result.exact_imputed.items()} == {
+        "weight": [1]
+    }  # row 2 lacks a height
     assert result.single_imputed == {}
     del step["params"]["exact"]  # a step recorded before the option: a single imputation, as before
     result = apply_steps(df, [step])
