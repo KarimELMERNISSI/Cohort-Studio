@@ -112,6 +112,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   17.81, 5 df, p = 0.007 beside six curves; the six groups drawn give chi2 4.53, p = 0.48. The warning now says that
   a skipped group's rows are in neither the curves nor the test. A result with a skipped group changes; the others do
   not. Pooled over imputed datasets, a group without an event no longer stops the pooling.
+- **The count models end at their optimum.** The negative binomial fit stopped where its quasi-Newton search
+  (BFGS) stops, up to some thousandths of a standard error from the optimum (further with more rows), at a point
+  that depends on the path taken: another start, or another machine's arithmetic, could end elsewhere. It now
+  finishes with Newton steps (estimates within 1e-11 standard error whatever the start; the rate ratios shown move
+  in their sixth digit at most) and says when it did not converge. The Poisson fit took its standard errors from
+  the step before its last: they are now those at the optimum, and move in their eighth digit.
 
 ### Privacy: what today's documents leave out (M8, first steps)
 

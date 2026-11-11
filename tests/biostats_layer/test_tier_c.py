@@ -155,6 +155,50 @@ def test_count_regression_recovers_rate_ratio() -> None:
     assert nb.kind == "negative_binomial" and len(nb.table) == 1
 
 
+def test_a_count_model_ends_at_its_optimum() -> None:
+    """The negative binomial fit stopped where its quasi-Newton search stops (here 4e-6 standard error from the
+    optimum, thousandths with more rows), and the Poisson fit took its standard errors from the step before its
+    last (6e-8 away, relative): each is compared with a search that starts elsewhere and runs to the end."""
+    import warnings
+
+    import statsmodels.api as sm
+
+    rng = np.random.default_rng(17)
+    n = 600
+    age = rng.normal(60, 10, n)
+    smoker = rng.integers(0, 2, n)
+    mu = np.exp(0.3 + 0.02 * (age - 60) + 0.5 * smoker)
+    df = pd.DataFrame(
+        {"visits": rng.negative_binomial(2, 2 / (2 + mu)), "age": age, "smoker": smoker}
+    )
+    x, y = np.column_stack([np.ones(n), age, smoker]), df["visits"].to_numpy()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        elsewhere = np.asarray(sm.GLM(y, x, family=sm.families.Poisson()).fit().params) * 0.9
+        best = sm.NegativeBinomial(y, x).fit(
+            start_params=np.r_[elsewhere, 1.0], method="newton", disp=0, tol=1e-13, maxiter=500
+        )
+        full = sm.GLM(y, x, family=sm.families.Poisson()).fit(
+            start_params=elsewhere, tol=1e-15, maxiter=300
+        )
+
+    def away(result, reference) -> tuple[float, float]:
+        table = result.table.set_index("term")
+        params, bse = np.asarray(reference.params), np.asarray(reference.bse)
+        places = ((1, "age"), (2, "smoker"))
+        return (
+            max(abs(table.loc[t, "coef"] - params[i]) / bse[i] for i, t in places),
+            max(abs(table.loc[t, "se"] - bse[i]) / bse[i] for i, t in places),
+        )
+
+    nb = count_regression(df, "visits", ["age", "smoker"], family="negative_binomial")
+    estimate, spread = away(nb, best)
+    assert estimate < 1e-9 and spread < 1e-9
+    assert nb.dispersion == pytest.approx(float(np.asarray(best.params)[-1]), rel=1e-9)
+    estimate, spread = away(count_regression(df, "visits", ["age", "smoker"]), full)
+    assert estimate < 1e-9 and spread < 1e-10
+
+
 def test_incidence_rate_and_ratio_reference_values() -> None:
     rate = incidence_rate(15, 1200, per=1000)
     assert rate.rate * 1000 == pytest.approx(12.5)

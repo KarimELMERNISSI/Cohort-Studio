@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from warnings import catch_warnings, simplefilter
 
 import numpy as np
 import pandas as pd
@@ -222,14 +223,46 @@ def count_regression(
         offset = np.log(exposure)
     warnings: list[str] = []
     if family == "poisson":
-        res = sm.GLM(y, x, family=sm.families.Poisson(), offset=offset).fit()
+        # statsmodels stops on the deviance and takes the covariance from the weights of the step before the last:
+        # the standard errors then sit some 1e-7 (relative) from those at the optimum, at a point that moves with
+        # the start. One more fit from where it stopped, a single step, ends within 1e-13 of them from any start
+        model = sm.GLM(y, x, family=sm.families.Poisson(), offset=offset)
+        res = model.fit(tol=1e-10)
+        res = model.fit(start_params=np.asarray(res.params, dtype=float), tol=1e-10)
         dispersion = float(res.pearson_chi2 / res.df_resid) if res.df_resid > 0 else None
         if dispersion is not None and dispersion > 1.5:
             warnings.append(
                 f"over-dispersion (Pearson chi2/df = {dispersion:.2f}); consider the negative binomial family"
             )
     elif family == "negative_binomial":
-        res = sm.NegativeBinomial(y, x, offset=offset).fit(disp=0, maxiter=200)
+        model = sm.NegativeBinomial(y, x, offset=offset)
+        res = model.fit(
+            disp=0, maxiter=200
+        )  # BFGS: it stops at a gradient of 1e-5, some 1e-3 standard error away
+        try:
+            # Newton steps from there end at the optimum (1e-11 standard error whatever the path taken)
+            with catch_warnings():
+                simplefilter("ignore")
+                finished = model.fit(
+                    start_params=np.asarray(res.params, dtype=float),
+                    method="newton",
+                    disp=0,
+                    maxiter=100,
+                )
+            if (
+                finished.mle_retvals.get("converged", False)
+                and np.isfinite(np.asarray(finished.params, dtype=float)).all()
+                and np.isfinite(np.asarray(finished.bse, dtype=float)).all()
+            ):
+                res = finished
+        except (
+            Exception
+        ) as exc:  # a dispersion at its boundary has no Hessian to step with: the BFGS fit stands
+            logger.debug("negative binomial: Newton steps not taken: %s", type(exc).__name__)
+        if not res.mle_retvals.get("converged", True):
+            warnings.append(
+                "the optimiser reported non-convergence: the estimates may not be the maximum of the likelihood"
+            )
         dispersion = float(
             np.asarray(res.params, dtype=float)[-1]
         )  # NB2 alpha: variance = mu + alpha mu^2
