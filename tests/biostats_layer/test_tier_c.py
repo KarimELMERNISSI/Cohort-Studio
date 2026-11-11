@@ -275,8 +275,26 @@ def test_a_skipped_group_is_counted_not_named() -> None:
     screen)."""
     frame = _gehan().assign(arm=["6-MP"] * 41 + ["Luxembourgg"])
     res = compare_survival(frame, "time", "event", "arm")
-    assert res.warnings[0] == "1 group with fewer than 2 observations was skipped"
+    assert res.warnings[0] == (
+        "1 group with fewer than 2 observations was skipped: its rows are in neither the curves nor the log-rank "
+        "test"
+    )
     assert not any("Luxembourgg" in w for w in res.warnings)
+
+
+def test_the_log_rank_test_compares_the_groups_that_are_drawn() -> None:
+    """A group of one row has no curve, but was left in the test: the statistic was that of three groups, read with
+    the one degree of freedom of the two curves drawn, and one participant could make the result."""
+    gehan = _gehan()
+    two = compare_survival(gehan, "time", "event", "arm")
+    early = pd.DataFrame(
+        {"time": [0.5], "event": [1], "arm": ["Luxembourgg"]}
+    )  # one early death, misspelt arm
+    three = compare_survival(pd.concat([gehan, early], ignore_index=True), "time", "event", "arm")
+    assert [c.label for c in three.curves] == [c.label for c in two.curves]
+    assert three.logrank_df == two.logrank_df == 1
+    assert three.logrank_statistic == pytest.approx(two.logrank_statistic, rel=1e-12)
+    assert three.logrank_p == pytest.approx(two.logrank_p, rel=1e-12)
 
 
 def test_lifelines_warnings_naming_a_column_stay_in(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -106,6 +106,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   say that the range is rough when the ROC curve is flat near its top, and the dossier now gives the range. A marker
   that points the other way gave an infinite cut-off with a sensitivity of 0: the cut-off is always an observed
   score, and the result says that the marker points the other way.
+- **The log-rank test compares the groups that are drawn.** A group of fewer than 2 rows gets no Kaplan-Meier curve,
+  but it stayed in the test, whose degrees of freedom were those of the curves drawn. On the tutorial cohort by
+  `site` as recorded (seven spellings, one of them held by one participant who died on day 108), the page read chi2
+  17.81, 5 df, p = 0.007 beside six curves; the six groups drawn give chi2 4.53, p = 0.48. The warning now says that
+  a skipped group's rows are in neither the curves nor the test. A result with a skipped group changes; the others do
+  not. Pooled over imputed datasets, a group without an event no longer stops the pooling.
 
 ### Privacy: what today's documents leave out (M8, first steps)
 

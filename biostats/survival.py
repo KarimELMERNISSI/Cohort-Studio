@@ -273,7 +273,8 @@ def compare_survival(
     if skipped:
         warnings.append(
             f"{skipped} group{'s' if skipped > 1 else ''} with fewer than 2 observations "
-            f"{'were' if skipped > 1 else 'was'} skipped"
+            f"{'were' if skipped > 1 else 'was'} skipped: {'their' if skipped > 1 else 'its'} rows are in neither "
+            "the curves nor the log-rank test"
         )
     if len(curves) < 2:
         return SurvivalComparison(
@@ -284,8 +285,12 @@ def compare_survival(
             references=[REFERENCES["kaplan1958"], REFERENCES["brookmeyer1982"]],
             warnings=warnings + ["log-rank needs at least two groups"],
         )
-    t, e = _clean(frame[time_col], frame[event_col])
-    g = frame[group_col].astype(str).to_numpy()
+    # the test compares the groups that are drawn: a group of one row has no curve, and left in the test it gave a
+    # statistic of one group more than the degrees of freedom said (on the tutorial cohort by site as recorded, one
+    # participant made chi2 17.8, p = 0.007, where the six groups drawn give 4.5, p = 0.48)
+    drawn = frame[frame[group_col].astype(str).isin([c.label for c in curves])]
+    t, e = _clean(drawn[time_col], drawn[event_col])
+    g = drawn[group_col].astype(str).to_numpy()
     from statsmodels.duration.survfunc import survdiff
 
     stat, p = survdiff(t, e, g)

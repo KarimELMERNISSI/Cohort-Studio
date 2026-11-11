@@ -441,7 +441,8 @@ def pool_km_curves(curves: list[Any], *, alpha: float = 0.05) -> pd.DataFrame:
                     "fmi": np.nan,
                 }
             )
-    return pd.DataFrame(rows)
+    # the columns named even without a row: a group with no event has no step, and still a curve
+    return pd.DataFrame(rows, columns=["time", "survival", "lower", "upper", "fmi"])
 
 
 def median_from_curve(
