@@ -498,6 +498,18 @@ No description available.
 
 How a result reads: the comparison's values in the data the model read, and its reference level.
 
+### def `left_out_of` (analysis_survival.py)
+
+- **Arguments**: `result`
+
+- **Returns**: `tuple[ComplexType]`
+
+The rows a survival analysis left out for another reason than a missing value, and the words for them: the rows
+of a group too small to draw, and the rows with a follow-up time below zero. They are counts of participants
+with a characteristic, where the rows that lack a value are given exactly: called missing values, a shared flow
+would have shown them as they are. A pooled result counts the most that an imputed dataset left out: a group
+read from imputed values is too small to draw in some datasets only.
+
 ### def `_fit_curves` (analysis_survival.py)
 
 - **Arguments**: `df, mi, key, config, time_col, event_col, group`

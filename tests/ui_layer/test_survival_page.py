@@ -335,3 +335,65 @@ def test_a_text_variable_written_several_ways_is_offered_by_its_values_set_aside
     df["name"] = [f"Person {i}" for i in range(len(df))]
     offered = page._group_candidates(df, DataAnalyzer(df))
     assert {"sex", "site"} <= set(offered) and "name" not in offered
+
+
+def test_rows_with_a_follow_up_time_below_zero_are_no_missing_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """They were counted with the rows that lack a value ("2 not used: missing values"), which a shared flow gives
+    exactly: they are a count of participants with a characteristic, like a group too small to draw."""
+    import numpy as np
+    import pandas as pd
+
+    from biostats.survival import compare_survival, cox_regression
+    from core.attrition import not_used_words
+
+    rng = np.random.default_rng(4)
+    df = pd.DataFrame(
+        {
+            "days": rng.exponential(300, 200).round() + 1,
+            "died": rng.integers(0, 2, 200),
+            "arm": ["control", "drug"] * 100,
+            "age": rng.normal(60, 8, 200).round(1),
+        }
+    )
+    df.loc[[3, 8], "days"] = -5.0  # two follow-up times below zero
+    df.loc[11, "age"] = np.nan  # one missing value
+    df.loc[20, "arm"] = "Luxembourgg"  # a group of one row
+    curves = compare_survival(df, "days", "died", "arm")
+    assert page.left_out_of(curves, pooled=False) == (
+        3,
+        "in a group too small to draw or with a follow-up time below zero",
+    )
+    analysed = sum(c.n for c in curves.curves)
+    assert not_used_words(200, analysed, n_left_out=3, left_out="left out") == ("3 left out",)
+    cox = cox_regression(df, "days", "died", ["arm", "age"])
+    n_left_out, words = page.left_out_of(cox, pooled=False)
+    assert (n_left_out, words) == (2, "with a follow-up time below zero")
+    assert not_used_words(200, cox.n, n_left_out=n_left_out, left_out=words) == (
+        "2 with a follow-up time below zero",
+        "1 not used: missing values",
+    )
+    # a pooled result counts what its imputed datasets left out (it counted none: the curves then held fewer rows
+    # than the flow said were analysed)
+    from biostats.mi import MIData
+    from biostats.plan import run, specify
+
+    filled = df.copy()
+    filled.loc[11, "age"] = 61.0
+    mi = MIData.from_completed(df, [filled.copy() for _ in range(5)], methods={"age": "pmm"})
+    pooled = run(specify("survival", pooled=True, time="days", event="died", group="arm"), mi=mi)
+    assert page.left_out_of(pooled.result, pooled=True) == (
+        3,
+        "in a group too small to draw or with a follow-up time below zero",
+    )
+    assert page.left_out_of(curves, pooled=True) == (0, "")  # not a pooled result: nothing to read
+    # and the number it analysed is every row but those: the page read 200 beside "3 in a group too small to
+    # draw or with a follow-up time below zero"
+    kept: dict = {}
+    monkeypatch.setattr(page, "remember", lambda key, result, **settings: kept.update(settings))
+    monkeypatch.setattr(page, "mark_step", lambda *args, **kwargs: None)
+    page._fit_curves(df, mi, "survival_mi", {}, "days", "died", "arm")
+    assert (kept["n_analysed"], kept["n_left_out"]) == (197, 3)
+    page._fit_cox(df, mi, "cox_mi", {}, "days", "died", "arm", ["age"])
+    assert (kept["n_analysed"], kept["n_left_out"]) == (198, 2)

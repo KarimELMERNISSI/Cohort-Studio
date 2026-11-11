@@ -202,7 +202,8 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Rows left out for another reason than a missing value are no longer called missing values.** A comparison of two
   groups among three read "87 not used: missing values" of the third group's rows, and a Kaplan-Meier plot the same
   of a group too small to draw. The caption, the flow box and the dossier now say "87 not in the compared groups"
-  or "1 in a group too small to draw", apart from the rows that lack a value.
+  or "1 in a group too small to draw", apart from the rows that lack a value. A row with a follow-up time below
+  zero is counted the same way ("2 with a follow-up time below zero").
 - **Each result of Survival & regression is kept with its specification** (`biostats/plan.py`): the variables by
   their role (which one is compared, which ones adjust for it), the options, what was read on the data when it ran
   (each factor's levels with the reference first, the values read as an event, the event's level, a covariate

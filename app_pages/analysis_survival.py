@@ -285,6 +285,26 @@ def _comparison(
 # ----------------------------------------------------------------------------- time to event
 
 
+def left_out_of(result, *, pooled: bool) -> tuple[int, str]:
+    """
+    The rows a survival analysis left out for another reason than a missing value, and the words for them: the rows
+    of a group too small to draw, and the rows with a follow-up time below zero. They are counts of participants
+    with a characteristic, where the rows that lack a value are given exactly: called missing values, a shared flow
+    would have shown them as they are. A pooled result counts the most that an imputed dataset left out: a group
+    read from imputed values is too small to draw in some datasets only.
+    """
+    if pooled:
+        held = getattr(result, "extra", None) or {}
+        skipped, negative = held.get("rows_skipped"), held.get("rows_left_out")
+    else:
+        skipped, negative = getattr(result, "skipped_rows", 0), getattr(result, "rows_left_out", 0)
+    counts = (
+        (int(skipped or 0), "in a group too small to draw"),
+        (int(negative or 0), "with a follow-up time below zero"),
+    )
+    return sum(n for n, _ in counts), " or ".join(words for n, words in counts if n)
+
+
 def _fit_curves(df, mi, key, config, time_col, event_col, group) -> None:
     """Kaplan-Meier curves and the log-rank test, computed from their spec (biostats.plan) and stored with it."""
     try:
@@ -292,16 +312,18 @@ def _fit_curves(df, mi, key, config, time_col, event_col, group) -> None:
             "survival", pooled=mi is not None, time=time_col, event=event_col, group=group
         )
         done = run(spec, df, mi=mi)
+        n_left_out, left_out = left_out_of(done.result, pooled=mi is not None)
+        drawn = sum(c.n for c in done.result.curves) if mi is None else None
         remember(
             key,
             done.result,
             config=config,
-            n_analysed=len(mi.base) if mi is not None else sum(c.n for c in done.result.curves),
+            # pooled: every row that was not left out, the imputation filling the missing values
+            n_analysed=len(mi.base) - n_left_out if drawn is None else drawn,
             columns=[time_col, event_col, group or ""],
             spec=done.spec,
-            # a group of one row is not drawn: its rows are no missing values
-            n_left_out=0 if mi is not None else done.result.skipped_rows,
-            left_out="in a group too small to draw",
+            n_left_out=n_left_out,
+            left_out=left_out,
         )
         mark_step("analyse", "survival analysis")
     except Exception as exc:
@@ -321,13 +343,16 @@ def _fit_cox(df, mi, key, config, time_col, event_col, compare, adjust) -> None:
             adjust=list(adjust),
         )
         done = run(spec, df, mi=mi)
+        n_left_out, left_out = left_out_of(done.result, pooled=mi is not None)
         remember(
             key,
             done.result,
             config=config,
-            n_analysed=len(mi.base) if mi is not None else done.result.n,
+            n_analysed=len(mi.base) - n_left_out if mi is not None else done.result.n,
             columns=[time_col, event_col, *spec.covariates()],
             spec=done.spec,
+            n_left_out=n_left_out,
+            left_out=left_out,
         )
         mark_step("analyse", "Cox model")
     except Exception as exc:
