@@ -46,6 +46,7 @@ MAX_ELEMENTS = 10_000_000  # an array built from a constant size (np.full, np.on
 MAX_WIDTH = 10_000  # a padding width, or a text repeated a constant number of times
 _SIZED_ARRAYS = frozenset({"full", "ones", "zeros"})
 _WIDTHS = frozenset({"pad", "zfill", "center", "ljust", "rjust"})
+_SIZE_KEYWORDS = frozenset({"shape", "width"})  # a size given by its name is a size too
 
 
 def _constant(node: ast.AST) -> float | None:
@@ -383,6 +384,34 @@ def _pd_facade(policy: ExpressionPolicy) -> SimpleNamespace:
     )
 
 
+def _size(node: ast.AST) -> float | None:
+    """A size as a number: a constant, or the product of a shape's dimensions (None when one is not a constant)."""
+    if isinstance(node, ast.Tuple | ast.List):
+        total = 1.0
+        for item in node.elts:
+            one = _constant(item)
+            if one is None:
+                return None
+            total *= one
+        return total
+    return _constant(node)
+
+
+def _repeats(node: ast.AST) -> float:
+    """How many times a text written in the expression is repeated by ``node``, a product of constants however it
+    is built: ``('x' * 10000) * 10000`` repeats it a hundred million times. 0 when ``node`` repeats no such text."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return 1.0
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
+        for text, times in ((node.left, node.right), (node.right, node.left)):
+            inner, count = _repeats(text), _constant(times)
+            if inner and count is not None:
+                return inner * max(count, 0.0)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return max(_repeats(node.left), _repeats(node.right))
+    return 0.0
+
+
 class _Validator(ast.NodeVisitor):
     def __init__(self, policy: ExpressionPolicy, extra_names: frozenset[str]) -> None:
         self.policy = policy
@@ -455,18 +484,10 @@ class _Validator(ast.NodeVisitor):
                 raise UnsafeExpressionError(
                     f"An exponent larger than {MAX_EXPONENT:,.0f} is not allowed."
                 )
-        if isinstance(node.op, ast.Mult):
-            for text, times in ((node.left, node.right), (node.right, node.left)):
-                count = _constant(times)
-                if (
-                    isinstance(text, ast.Constant)
-                    and isinstance(text.value, str)
-                    and count
-                    and count > MAX_WIDTH
-                ):
-                    raise UnsafeExpressionError(
-                        f"A text repeated more than {MAX_WIDTH:,} times is not allowed."
-                    )
+        if isinstance(node.op, ast.Mult) and _repeats(node) > MAX_WIDTH:
+            raise UnsafeExpressionError(
+                f"A text repeated more than {MAX_WIDTH:,} times is not allowed."
+            )
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -476,15 +497,21 @@ class _Validator(ast.NodeVisitor):
                 raise UnsafeExpressionError(f"Function '{func.id}' is not allowed.")
         elif isinstance(func, ast.Attribute):
             self.visit(func)
-            size = _constant(node.args[0]) if node.args else None
-            if size is not None and func.attr in _SIZED_ARRAYS and abs(size) > MAX_ELEMENTS:
-                raise UnsafeExpressionError(
-                    f"An array of more than {MAX_ELEMENTS:,} values is not allowed."
-                )
-            if size is not None and func.attr in _WIDTHS and abs(size) > MAX_WIDTH:
-                raise UnsafeExpressionError(
-                    f"A width larger than {MAX_WIDTH:,} characters is not allowed."
-                )
+            # a size is the first argument, or the one named shape or width; a shape of several dimensions counts
+            # their product
+            asked = [
+                *node.args[:1],
+                *(kw.value for kw in node.keywords if kw.arg in _SIZE_KEYWORDS),
+            ]
+            for size in (_size(given) for given in asked):
+                if size is not None and func.attr in _SIZED_ARRAYS and abs(size) > MAX_ELEMENTS:
+                    raise UnsafeExpressionError(
+                        f"An array of more than {MAX_ELEMENTS:,} values is not allowed."
+                    )
+                if size is not None and func.attr in _WIDTHS and abs(size) > MAX_WIDTH:
+                    raise UnsafeExpressionError(
+                        f"A width larger than {MAX_WIDTH:,} characters is not allowed."
+                    )
         else:
             raise UnsafeExpressionError("Only named functions and methods may be called.")
         for arg in node.args:
@@ -493,6 +520,14 @@ class _Validator(ast.NodeVisitor):
             if kw.arg is None or kw.arg.startswith("_"):
                 raise UnsafeExpressionError(
                     "Keyword unpacking and private keywords are not allowed."
+                )
+            if kw.arg == "inplace" and not (
+                isinstance(kw.value, ast.Constant) and kw.value.value is False
+            ):
+                # df.replace(97, 60, inplace=True) changed the table a criterion was evaluated on, outside the trace;
+                # inplace=False changes nothing, and criteria written with it are stored
+                raise UnsafeExpressionError(
+                    "An expression reads the data and never changes it: 'inplace' can only be False."
                 )
             self.visit(kw.value)
 
@@ -550,8 +585,11 @@ def evaluate_tree(
         "pd": _pd_facade(policy),
     }
     namespace.update(extra_locals)
+    # the expression gets a table of its own, which shares the caller's values until one is written (copy-on-write):
+    # whatever a method does in place, the caller's table stays as it was
+    own = None if df is None else df.copy(deep=False)
     for name in policy.frame_names:
-        namespace[name] = df
+        namespace[name] = own
     return eval(code, namespace, {})
 
 

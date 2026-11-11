@@ -181,6 +181,13 @@ class TestSafeFormat:
         ("np.full(2 * 10 ** 8, 1)", "An array of more than 10,000,000 values"),
         ("df['sex'].str.pad(100000)", "A width larger than 10,000 characters"),
         ("'x' * 10 ** 6", "A text repeated more than 10,000 times"),
+        # a size given by its name, a shape of several dimensions, a text repeated in two steps
+        ("np.ones(shape=10 ** 9)", "An array of more than 10,000,000 values"),
+        ("np.full(shape=10 ** 12, fill_value=1)", "An array of more than 10,000,000 values"),
+        ("np.zeros((10 ** 4, 10 ** 4))", "An array of more than 10,000,000 values"),
+        ("df['sex'].str.pad(width=100000000)", "A width larger than 10,000 characters"),
+        ("('x' * 10000) * 10000", "A text repeated more than 10,000 times"),
+        ("('x' * 200 + 'y') * 200 * 2", "A text repeated more than 10,000 times"),
     ],
 )
 def test_an_expression_cannot_ask_for_huge_sizes(expression: str, message: str) -> None:
@@ -203,3 +210,49 @@ def test_an_expression_cannot_ask_for_huge_sizes(expression: str, message: str) 
 )
 def test_clinical_formulas_keep_their_sizes(expression: str) -> None:
     validate(expression)
+
+
+# --- an expression reads the table and never changes it (every change of the data goes through the trace) ---
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "df['age'] == df.replace(70, 60, inplace=True)",
+        "df['age'].isna() & (df.fillna(0, inplace=True) is None)",
+        "df.where(df['age'] > 20, 0, inplace=True)",
+        "df['age'].clip(0, 20, inplace=True)",
+        "df['age'].fillna(0, inplace=1)",  # anything but False
+        "df['age'].fillna(0, inplace=df['age'].notna().all())",
+    ],
+)
+def test_an_expression_cannot_change_the_table_it_reads(df: pd.DataFrame, expression: str) -> None:
+    """``df.replace(70, 60, inplace=True)`` inside a criterion changed the table the criterion was evaluated on,
+    without a step of the trace, even when the criterion was then refused."""
+    before = df.copy(deep=True)
+    with pytest.raises(UnsafeExpressionError, match="never changes it"):
+        evaluate(expression, df)
+    assert df.equals(before)
+
+
+def test_an_expression_gets_a_table_of_its_own(df: pd.DataFrame) -> None:
+    """Whatever a method does in place, it does to the expression's own table, which shares the caller's values
+    until one is written."""
+    before = df.copy(deep=True)
+    seen: list[pd.DataFrame] = []
+
+    def keep(frame: pd.DataFrame) -> bool:
+        seen.append(frame)
+        frame.fillna({"age": 0}, inplace=True)
+        frame.loc[frame.index[0], "sex"] = "changed"
+        return True
+
+    tree = ast.parse("keep(df)", mode="eval")
+    assert evaluate_tree(tree, df, extra_locals={"keep": keep}) is True
+    assert seen[0] is not df and seen[0]["sex"].iloc[0] == "changed"
+    assert df.equals(before)
+    # a new column, as ever
+    assert evaluate("df['age'].fillna(0)", df).tolist() == [10.0, 25.0, 70.0, 0.0]
+    # inplace=False changes nothing, and stored criteria are written with it: read as before
+    assert evaluate("df['age'].fillna(0, inplace=False)", df).tolist() == [10.0, 25.0, 70.0, 0.0]
+    assert df.equals(before)

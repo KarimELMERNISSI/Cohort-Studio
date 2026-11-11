@@ -118,6 +118,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   finishes with Newton steps (estimates within 1e-11 standard error whatever the start; the rate ratios shown move
   in their sixth digit at most) and says when it did not converge. The Poisson fit took its standard errors from
   the step before its last: they are now those at the optimum, and move in their eighth digit.
+- **A criterion cannot change the table it reads.** An expression written with `inplace=True`
+  (`df['age'] == df.replace(97, 60, inplace=True)`, `df.fillna(0, inplace=True)`) changed the table the criterion
+  was evaluated on, without a step of the trace, even when the criterion was then refused. The evaluator now
+  refuses `inplace` unless it is False (a stored criterion written `fillna(True, inplace=False)` reads as before),
+  and gives each expression a table of its own, which shares the caller's values until one is written; formulas
+  were already computed on such a copy. The sizes the evaluator limits are read when they are given by name or as
+  a shape of several dimensions too (`np.ones(shape=10**9)`, `np.zeros((10**4, 10**4))` and
+  `str.pad(width=100000000)` were accepted), and a text repeated in several steps is counted in all
+  (`('x' * 10000) * 10000`).
 
 ### Privacy: what today's documents leave out (M8, first steps)
 
