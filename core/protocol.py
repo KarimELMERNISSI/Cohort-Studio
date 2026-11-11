@@ -39,7 +39,7 @@ from typing import Any
 from core.criteria import RULES_VERSION
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.lineage import canonical_json, normalise
-from core.population import catalogue, family_operator
+from core.population import catalogue, configuration_for_sharing, family_operator
 from core.workspace import is_device_name
 
 SCHEMA = 1
@@ -365,6 +365,87 @@ def protocol_hash(body: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical_json(hashed_view(body)).encode("utf-8")).hexdigest()
 
 
+@dataclass(frozen=True)
+class SharedProtocol:
+    """
+    A study definition as a package meant to travel holds it, and what it leaves out of the session's.
+
+    ``protocol_hash`` is the definition's fingerprint when the shared body still hashes to it (only labels were left
+    out: a reader then computes the same fingerprint from the package). Otherwise it is None and ``shared_hash``
+    alone names what the package holds: the session's fingerprint covers what was left out, and a guess of the rows
+    a rule lists could be tried against it.
+    """
+
+    body: dict[str, Any]
+    shared_hash: str
+    protocol_hash: str | None = None
+    # "family: rule": a rule that lists rows of this dataset (outliers frozen as rows), left out whole
+    with_rows: tuple[str, ...] = ()
+    # a family counted "at least k of" its rules, left out whole because one of its rules was
+    families: tuple[str, ...] = ()
+    # a rule, a family or a derived variable that cannot be read
+    unreadable: tuple[str, ...] = ()
+    # "family: rule", "family: the operator" or a derived variable rebuilt without keys that this version does not
+    # read: the shared body no longer hashes to the session's, and this says of what
+    trimmed: tuple[str, ...] = ()
+    # the derived variables whose note was left out, and whether the follow-up's was
+    notes: tuple[str, ...] = ()
+    # the ticks of criteria the shared body no longer holds
+    ticks: tuple[str, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        """Whether a reader of the package holds the definition the results were computed under."""
+        return self.protocol_hash is not None
+
+
+def protocol_for_sharing(body: Mapping[str, Any]) -> SharedProtocol:
+    """
+    The body a package meant to travel holds (see ``core.population.configuration_for_sharing``, which the
+    configuration download uses): each rule rebuilt from the keys its kind holds, no rule that lists rows of this
+    dataset (their row ids are participants), no note of a derived variable or of the follow-up (a user's own
+    commentary), no tick of a criterion that was left out. The descriptions of the criteria stay: they are the
+    study's own text, and the package's scan reads them.
+    """
+    source = {key: body[key] for key in ("mask_families", DERIVED_KEY) if _filled(body.get(key))}
+    shared = configuration_for_sharing(source)
+    out: dict[str, Any] = {}
+    families = shared.config.get("mask_families")
+    if _filled(families):
+        out["mask_families"] = families
+    population = body.get("population")
+    ticked = population.get("ticked") if isinstance(population, Mapping) else None
+    asked = sorted({str(i) for i in ticked}) if isinstance(ticked, list | tuple) else []
+    known = {c.id for c in catalogue({"mask_families": families or {}})}
+    kept = [i for i in asked if i in known]
+    if kept:
+        out["population"] = {"ticked": kept}
+    notes = list(shared.notes)
+    follow_up = body.get("follow_up")
+    if _filled(follow_up):
+        if isinstance(follow_up, Mapping):
+            if _filled(follow_up.get("note")):
+                notes.append("follow_up")
+            follow_up = {key: value for key, value in follow_up.items() if key != "note"}
+        out["follow_up"] = normalise(follow_up)
+    derived = shared.config.get(DERIVED_KEY)
+    if _filled(derived):
+        out[DERIVED_KEY] = derived
+    ordered = {key: out[key] for key in BODY_KEYS if key in out}
+    shared_hash = protocol_hash(ordered)
+    return SharedProtocol(
+        body=ordered,
+        shared_hash=shared_hash,
+        protocol_hash=shared_hash if shared_hash == protocol_hash(body) else None,
+        with_rows=shared.with_rows,
+        families=shared.families,
+        unreadable=shared.unreadable,
+        trimmed=shared.trimmed,
+        notes=tuple(notes),
+        ticks=tuple(i for i in asked if i not in known),
+    )
+
+
 def diff_lines(old: Mapping[str, Any], new: Mapping[str, Any]) -> list[str]:
     """
     What changed from one body to the next, as the lines of a unified diff: indented JSON, keys sorted, the families
@@ -425,6 +506,7 @@ __all__ = [
     "SCHEMA",
     "STUDY_ID",
     "ProtocolMeta",
+    "SharedProtocol",
     "StudyProtocol",
     "body_checksum",
     "body_of",
@@ -432,6 +514,7 @@ __all__ = [
     "hashed_view",
     "is_study_id",
     "next_revision",
+    "protocol_for_sharing",
     "protocol_hash",
     "snapshot_params",
     "study_id_for",

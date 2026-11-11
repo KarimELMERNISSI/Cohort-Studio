@@ -43,6 +43,23 @@ def test_the_defaults(env: pytest.MonkeyPatch) -> None:
     assert (s.graph.renderer, s.graph.offline, s.graph.no_fallback) == ("auto", False, False)
     assert (s.statistics.random_seed, s.statistics.mi_max_workers) == (20260101, None)
     assert s.development.strict_state is False
+    from core.disclosure import DEFAULT_K, FLOOR_K
+
+    # the smallest count a shared package may show: 10 unless the administrator lowers it, never below 5
+    assert s.sharing.disclosure_min == DEFAULT_K == 10 and FLOOR_K == 5
+
+
+def test_an_administrator_can_lower_the_smallest_count_shared_to_five(
+    env: pytest.MonkeyPatch,
+) -> None:
+    from core.disclosure import DisclosurePolicy
+
+    env.setenv("CMP_DISCLOSURE_MIN", "5")
+    floor = cfg.get_settings().sharing.disclosure_min
+    assert floor == 5 and DisclosurePolicy.for_study(5, floor=floor).k == 5
+    env.setenv("CMP_DISCLOSURE_MIN", "20")
+    policy = DisclosurePolicy.for_study(None, floor=cfg.get_settings().sharing.disclosure_min)
+    assert policy.to_dict() == {"k": 20, "asked": 10, "floor": 20, "version": 1}
 
 
 def test_values_are_read_as_their_readers_read_them(env: pytest.MonkeyPatch) -> None:
@@ -66,6 +83,7 @@ def test_every_wrong_value_is_named_without_its_value(env: pytest.MonkeyPatch) -
         "CMP_MI_MAX_WORKERS": "0",
         "CMP_RANDOM_SEED": "-2",
         "CMP_MIN_PASSWORD_LENGTH": "twelve-zz",
+        "CMP_DISCLOSURE_MIN": "4",  # an installation may ask for more than 5, never for less
     }
     for name, value in wrong.items():
         env.setenv(name, value)

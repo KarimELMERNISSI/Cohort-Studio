@@ -393,3 +393,135 @@ def test_revisions_chain_by_checksum() -> None:
         1,
     )
     assert next_revision(second, _body(), meta, number=7).meta.revision == 7
+
+
+# ----------------------------------------------------------------------------- the definition a package shares
+
+
+def _body_with_rows() -> dict:
+    from core.criteria import expression_rule, listed_rows_rule, numeric_rule
+    from core.derived import CONFIG_KEY
+
+    return {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "age": {**numeric_rule(18, 110, "include"), "description": "Adults"},
+                "consented": {
+                    **expression_rule("df['consent'] == 'yes'"),
+                    "description": "Consent given",
+                },
+            },
+            "outliers": {
+                "operator": "any",
+                "weight outliers": listed_rows_rule(
+                    [[137, 137], [802, 804]],
+                    method="iqr",
+                    params={"k": 1.5},
+                    columns=["weight_kg"],
+                    description="Flagged by the IQR rule",
+                ),
+            },
+        },
+        "population": {
+            "ticked": [
+                "study_inclusion::age",
+                "study_inclusion::consented",
+                "outliers::weight outliers",
+            ]
+        },
+        "follow_up": {"index": "enrol_date", "note": "as Mrs Dupont asked on the phone"},
+        CONFIG_KEY: {
+            "bmi": {
+                "formula": "weight_kg / (height_cm / 100) ** 2",
+                "note": "checked with patient 4512's chart",
+            }
+        },
+    }
+
+
+def test_a_shared_definition_holds_no_listed_row_and_no_note() -> None:
+    """The rows a rule lists are participants, and a note is a user's own commentary: neither travels. The ticks of
+    a criterion that was left out go with it."""
+    import json
+
+    from core.population import catalogue
+    from core.protocol import protocol_for_sharing
+
+    body = _body_with_rows()
+    ticked = [c.id for c in catalogue(body)]
+    body["population"] = {"ticked": ticked}
+    shared = protocol_for_sharing(body)
+    text = json.dumps(shared.body)
+    assert "row_ids" not in text and "137" not in text and "802" not in text
+    assert "Dupont" not in text and "4512" not in text
+    assert (
+        "Adults" in text and "Consent given" in text
+    )  # the criteria's descriptions are the study's own text
+    assert shared.with_rows == ("outliers: weight outliers",)
+    assert set(shared.notes) == {"bmi", "follow_up"}
+    assert len(shared.ticks) == 1 and "weight outliers" in shared.ticks[0]
+    assert len(shared.body["population"]["ticked"]) == len(ticked) - 1
+    assert "outliers" not in shared.body["mask_families"]
+    assert shared.body["follow_up"] == {"index": "enrol_date"}
+    # the session's fingerprint covers the listed rows: a guess of them could be tried against it, so it stays behind
+    assert not shared.complete and shared.protocol_hash is None
+    assert shared.shared_hash == protocol_hash(shared.body) != protocol_hash(body)
+
+
+def test_a_definition_that_loses_only_labels_keeps_its_fingerprint() -> None:
+    from core.protocol import protocol_for_sharing
+
+    body = _body_with_rows()
+    del body["mask_families"]["outliers"]
+    body["population"] = {
+        "ticked": [i for i in body["population"]["ticked"] if "outliers" not in i]
+    }
+    shared = protocol_for_sharing(body)
+    assert shared.complete and shared.protocol_hash == protocol_hash(body) == shared.shared_hash
+    assert shared.with_rows == () and set(shared.notes) == {"bmi", "follow_up"}
+    assert protocol_for_sharing({}).body == {} and protocol_for_sharing({}).complete
+
+
+def test_a_family_counted_with_a_threshold_goes_whole_when_one_of_its_rules_lists_rows() -> None:
+    """ "At least 2 of" three rules would count other rules once one is left out: the family is not shared in part."""
+    from core.criteria import expression_rule, listed_rows_rule
+    from core.protocol import protocol_for_sharing
+
+    body = {
+        "mask_families": {
+            "frailty": {
+                "operator": {"threshold": 2},
+                "slow": expression_rule("df['gait'] < 0.8"),
+                "weak": expression_rule("df['grip'] < 20"),
+                "flagged": listed_rows_rule(
+                    [[5, 9]], method="manual", params={}, columns=["gait"], description=""
+                ),
+            }
+        }
+    }
+    shared = protocol_for_sharing(body)
+    assert shared.body == {} and shared.families == ("frailty",) and not shared.complete
+
+
+def test_a_shared_definition_names_what_it_rebuilt_without_the_keys_it_does_not_read() -> None:
+    """A rule holding a key that no kind reads is rebuilt without it: the shared body no longer hashes to the
+    session's, and nothing said of what."""
+    import json
+
+    from core.criteria import expression_rule
+    from core.protocol import protocol_for_sharing
+
+    body = {
+        "mask_families": {
+            "study_inclusion": {
+                "operator": "all",
+                "consented": {**expression_rule("df['consent'] == 'yes'"), "reviewer": "Dr Dupont"},
+            }
+        }
+    }
+    shared = protocol_for_sharing(body)
+    assert shared.trimmed == ("study_inclusion: consented",)
+    assert "Dupont" not in json.dumps(shared.body) and "consent" in json.dumps(shared.body)
+    assert not shared.complete and shared.protocol_hash is None
+    assert shared.shared_hash == protocol_hash(shared.body)

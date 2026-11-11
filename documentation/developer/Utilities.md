@@ -1617,6 +1617,10 @@ No description available.
 
 No description available.
 
+### class `SharingSection` (settings.py)
+
+No description available.
+
 ### class `DevelopmentSection` (settings.py)
 
 No description available.

@@ -260,6 +260,14 @@ class StatisticsSection(_Section):
     mi_max_workers: int | None = Field(None, ge=1, validation_alias="CMP_MI_MAX_WORKERS")
 
 
+class SharingSection(_Section):
+    # the smallest count of participants a shared package may show on this installation (core.disclosure): a study
+    # asks for its own k (10 unless it says otherwise) and gets the larger of the two. 10 unless the administrator
+    # lowers it: showing counts from 5 is a decision of the organisation that shares, not of one study's author.
+    # Never below 5
+    disclosure_min: int = Field(10, ge=5, validation_alias="CMP_DISCLOSURE_MIN")
+
+
 class DevelopmentSection(_Section):
     # a change of the data that bypasses the trace raises instead of logging (the test suite sets it)
     strict_state: bool = Field(False, validation_alias="CMP_STRICT_STATE")
@@ -274,6 +282,7 @@ class Settings:
     vector_store: VectorStoreSection
     graph: GraphSection
     statistics: StatisticsSection
+    sharing: SharingSection
     development: DevelopmentSection
 
 
@@ -285,6 +294,7 @@ _SECTIONS: dict[str, type[_Section]] = {
     "vector_store": VectorStoreSection,
     "graph": GraphSection,
     "statistics": StatisticsSection,
+    "sharing": SharingSection,
     "development": DevelopmentSection,
 }
 # The environment variables of the settings, section by section

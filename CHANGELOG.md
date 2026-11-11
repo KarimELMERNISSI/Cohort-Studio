@@ -235,6 +235,35 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   skipped and how many rows were left out (by a pooled result too: the most over its imputed datasets) are numbers
   of the record, no longer only words of a warning.
 - The titles of the stored results come from one catalogue of analysis kinds (the same 20 titles).
+- **The smallest count a shared package may show is set for an installation** (`CMP_DISCLOSURE_MIN`: 10 by
+  default; an administrator may lower it to 5, never further). The rules a shareable study package will apply are
+  in place (`core/disclosure.py`); nothing shows them yet. A count of participants is given exactly or as "fewer
+  than 10" (the larger of what the study asks for and of the installation's number). The participant flow is shown
+  so that no withheld count comes back by subtraction, and a result is shown with the analysis the flow shows for
+  it, or withheld with it.
+  - **A model's term** is shown only when both cells it compares hold k rows, k with the event and k without (a
+    factor's level or a covariate coded with two values against the reference; the rows off the commonest value of
+    a covariate that half of the rows hold at one value), and not when its estimate has no maximum. No count
+    travels beside a term. In a model of categories alone a coefficient and its standard error are its cells'
+    counts in another form, so the cells withheld of a variable hold k of each count together, the smallest cell
+    shown being withheld with them otherwise. The numbers of the fit as a whole (likelihood, AIC, pseudo-R2, AUC,
+    concordance, whether it converged) are written only when no term is withheld: with its only term withheld, a
+    model's AUC gave the cell back. A model none of whose terms can be shown, or no term of whose comparison can,
+    is withheld whole.
+  - **A Kaplan-Meier curve** is given at multiples of one time step for the whole result (a hundredth of the
+    follow-up, and five times the data's own unit), with at least k events between two times and none or at least
+    k after the last, to the time until which k rows were followed. Its median is rounded up to the step, its lower
+    limit down and its upper limit up, or said to be later than the follow-up. A group is withheld with others
+    until those withheld hold k rows, k events and k rows without the event together, the same groups in a pooled
+    result and in its complete cases.
+  - **No warning's wording travels**: a model's parameters and events per parameter, a curve's step and its
+    follow-up are written as numbers, with fixed sentences to read them by.
+  - The study definition travels without the rows a rule lists and without notes.
+  - **Before a package is offered**, the texts that come from its user and from the data are read for a value that
+    fewer than k rows hold (a criterion that names a site, a column named after a level, a code, a date,
+    "age == 97", a range that takes one value, a criterion stored as numbers): a hit names its place and its
+    column, never the value. A test that cannot be run safely (a pattern that could take hours) is reported as not
+    checked, and the datasets given to the scan are never changed.
 
 ### Documentation: the architecture scheme
 
