@@ -10,6 +10,11 @@ CohortStudio is a set of Python packages in layers. Each layer imports only the 
 runs without the web interface, and the pages hold no logic of their own. Two mechanisms carry every extension point,
 one place builds the services, and a fixed set of tests keeps all of this true as the code grows.
 
+![The architecture of CohortStudio in layers: the interface (app_pages, ui), the services (manage, graph) with their four connector families, the data work (ingest, enrich, explore, monitor), the data and statistics engine (core, biostats, prompts) with its catalogues, and utils; imports go down only; the browser enters through the interface and the command line at the services, which store one workspace per user](../assets/readme/architecture.svg)
+
+The scheme is drawn by `dev_scripts/make_architecture_diagram.py` from a description of the layers; a test fails when it
+no longer names every package of the table below.
+
 ### The layers
 
 | Layer | Packages | Role |

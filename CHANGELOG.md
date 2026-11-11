@@ -222,6 +222,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   longer only words of a warning.
 - The titles of the stored results come from one catalogue of analysis kinds (the same 20 titles).
 
+### Documentation: the architecture scheme
+
+- The README's architecture scheme is redrawn from the application as it is: the packages on their layers, with
+  imports going down only; the two ways in (the browser through the interface, the command line and scripts at the
+  services, below it); the four connector families, with what reaches outside the server marked; the catalogues of
+  the engine; and what a workspace stores. It comes in a light and a dark version, drawn by
+  `dev_scripts/make_architecture_diagram.py`, and a test fails when it no longer names every package of the layer
+  table or when its files are not what the script builds. The text under it says how to read it (two ways in, one
+  writer of the data, connectors, catalogues, storage), and the developer guide shows the same scheme.
+
 ### Statistics: results corrected (follow-up programme M5)
 
 - **Rate ratio** (Analyze > Hypothesis tests > Paired, rates & stratified).

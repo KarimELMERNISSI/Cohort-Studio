@@ -3,8 +3,10 @@ images sized, the current version in the citation."""
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import re
+import sys
 import tomllib
 from html.parser import HTMLParser
 from pathlib import Path
@@ -213,6 +215,7 @@ def _builder(name: str):
     spec = importlib.util.spec_from_file_location(name, ROOT / "dev_scripts" / f"{name}.py")
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # a dataclass looks its module up by name while it is defined
     spec.loader.exec_module(module)
     return module
 
@@ -224,3 +227,32 @@ def test_the_screenshot_library_holds_what_the_image_builders_use() -> None:
     needed |= {f"plot_{shot}" for shot in readme.PLOTS.values()} | {shot for shot, _, _ in site.SHOTS.values()}
     library = {path.stem for path in (ROOT / "assets" / "screenshots").glob("*.webp")}
     assert needed <= library, sorted(needed - library)
+
+
+def test_the_architecture_scheme_names_every_package_and_is_what_its_script_builds() -> None:
+    """The README's scheme is drawn by a script from a description of the layers. It names every package of the
+    layer table (tests/test_layering.py), so a package added or moved fails here until the scheme says so; its
+    two files, light and dark, are what the script builds; and the README shows both with a text alternative."""
+    builder = _builder("make_architecture_diagram")
+    tree = ast.parse((ROOT / "tests" / "test_layering.py").read_text(encoding="utf-8"))
+    layers = next(
+        ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "LAYERS" for t in node.targets)
+    )
+    assert builder.PACKAGES == set(layers), sorted(builder.PACKAGES ^ set(layers))
+    files = builder.build()
+    assert set(files) == {"architecture.svg", "architecture-dark.svg"}
+    for name, content in files.items():
+        path = ROOT / "assets" / "readme" / name
+        assert path.read_text(encoding="utf-8") == content, f"{name}: run dev_scripts/make_architecture_diagram.py"
+        # a picture a README can show: nothing that runs, nothing loaded from elsewhere, a title for a reader
+        assert not re.search(r"<script|<style|<foreignObject|<image|href=", content)
+        assert "<title" in content and "<desc" in content and path.stat().st_size < 100_000
+        assert all(re.search(rf">[^<]*\b{package}\b[^<]*</text>", content) for package in layers)
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert f'srcset="{RAW}assets/readme/architecture-dark.svg"' in readme
+    shown = re.search(r'<img src="assets/readme/architecture\.svg" width="100%" alt="([^"]+)"', readme)
+    assert shown and all(package in shown.group(1) for package in layers)
+    assert "```mermaid" not in readme
+
