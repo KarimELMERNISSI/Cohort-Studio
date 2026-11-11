@@ -69,7 +69,7 @@ COX_PARTS = {
 SURVIVAL_PARTS = {
     "curve": [
         "rows", "events", "confidence", "median", "median_lower", "median_upper", "last_time", "times", "at_risk",
-        "survival", "lower", "upper", "se", "events_at", "censored_after",
+        "survival", "lower", "upper", "se", "events_at", "censored_after", "follow_times", "followed",
     ],
     "data": ["groups_skipped", "rows_skipped", "rows_left_out"],
     "test": ["statistic", "df", "p"],
@@ -461,6 +461,8 @@ def test_a_cox_record_names_its_numbers_and_the_counts_behind_each_term() -> Non
     assert model.support == {
         "rows": len(df),
         "events": int(df["died"].sum()),
+        "censored": len(df)
+        - int(df["died"].sum()),  # a cohort where everybody had the event says so of each
         "df_resid": int(result.df_resid),
     }
     assert model.number("converged").value is True
@@ -472,6 +474,7 @@ def test_a_cox_record_names_its_numbers_and_the_counts_behind_each_term() -> Non
     assert third.support == {
         "rows": int(at_level.sum()),
         "events": int(df.loc[at_level, "died"].sum()),
+        "censored": int(at_level.sum()) - int(df.loc[at_level, "died"].sum()),
     }
     row = result.table.set_index("term").loc["nyha_III"]
     estimate = third.number("log_hr")
@@ -485,6 +488,7 @@ def test_a_cox_record_names_its_numbers_and_the_counts_behind_each_term() -> Non
     assert age.labels == {"variable": "age"} and age.support == {
         "rows": len(df),
         "events": int(df["died"].sum()),
+        "censored": len(df) - int(df["died"].sum()),
     }
     reference = record.part("reference:nyha")
     assert reference.labels == {"variable": "nyha", "level": "I"} and reference.numbers == ()
@@ -562,6 +566,7 @@ def test_a_covariate_coded_0_and_1_has_the_counts_of_its_two_cells() -> None:
     assert cox is not None and cox.part("term:transplanted").support == {
         "rows": 6,
         "events": events,
+        "censored": 6 - events,
     }
 
 
@@ -581,6 +586,15 @@ def test_a_count_model_counts_the_rows_with_an_event() -> None:
     third = record.part("term:nyha#2")
     assert third.support["events"] == 12 and third.support["rows_with_events"] == 1
     assert "non_events" not in third.support
+    # and the rows without one, in the level and in the model: both sides of what a shared result must hold
+    assert third.support["rows_without_events"] == third.support["rows"] - 1
+    with_events = int((df["admissions"] > 0).sum())
+    model = record.part("model").support
+    assert (model["rows_with_events"], model["rows_without_events"]) == (
+        with_events,
+        len(df) - with_events,
+    )
+    assert model["events"] == int(df["admissions"].sum()) > with_events
 
 
 def test_a_logistic_record_counts_the_rows_without_the_event() -> None:
@@ -637,8 +651,9 @@ def test_a_survival_record_marks_what_is_one_participant_s() -> None:
         for number in part.numbers
         if 98765.0 in (number.value if isinstance(number.value, list) else [number.value])
     ]
-    # the curve's steps and the last follow-up time: a shared package coarsens or drops them
-    assert {name for _, name, _ in holding} == {"times", "last_time"}
+    # the curve's steps, the times its follow-ups end and the last of them: a shared package coarsens or drops
+    # them
+    assert {name for _, name, _ in holding} == {"times", "last_time", "follow_times"}
     assert all(fine for _, _, fine in holding)
     curve = record.part("curve#0")
     assert curve.labels == {"group": "control"}
@@ -652,6 +667,13 @@ def test_a_survival_record_marks_what_is_one_participant_s() -> None:
     assert curve.number("at_risk").value[0] - sum(events) - sum(censored) == 0
     assert record.part("test:log_rank").number("df").value == 1
     assert record.part("data").number("groups_skipped").value == 0
+    # every time a follow-up ends, by an event or a censoring, with the rows still followed at it
+    ends, followed = curve.number("follow_times").value, curve.number("followed").value
+    assert curve.number("follow_times").fine and curve.number("followed").fine
+    assert ends == sorted(set(ends)) and set(curve.number("times").value) <= set(ends)
+    assert followed[0] == curve.support["rows"] and followed == sorted(followed, reverse=True)
+    control = df[df["arm"] == "control"]
+    assert followed[len(ends) // 2] == int((control["days"] >= ends[len(ends) // 2]).sum())
 
 
 def test_a_record_holds_no_residual_and_no_covariate_value() -> None:
@@ -735,7 +757,10 @@ def test_a_pooled_record_keeps_each_imputation_and_the_smallest_counts() -> None
     pooling = record.part("pooling")
     assert pooling.number("m").value == 5 and pooling.number("partial").value is False
     model = record.part("model")
-    assert model.number("converged_in").value == 5 and "df_resid" in model.support
+    # the model's counts are the smallest over the imputed datasets, and are named so
+    assert model.number("converged_in").value == 5
+    assert set(model.support) == {"rows_min", "events_min", "censored_min", "df_resid_min"}
+    assert model.number("rows_left_out").value == 0 and model.number("rows_left_out").fine
     term = record.part("term:nyha#2")
     assert term.labels == {"variable": "nyha", "level": "III"}
     assert len(term.number("estimates").value) == 5
@@ -770,17 +795,152 @@ def test_a_pooled_record_keeps_each_imputation_and_the_smallest_counts() -> None
     assert km is not None
     drug = next(p for p in km.parts if p.labels.get("group") == "drug")
     assert drug.id == "curve#1" and drug.number("times").fine and drug.number("median").fine
-    assert set(drug.support) == {
-        "rows",
-        "events",
-    }  # the smallest group and the fewest events over the datasets
+    # the smallest group, the fewest events and the fewest rows without the event over the datasets: three
+    # counts that do not add up, and are named for what they are
+    assert set(drug.support) == {"rows_min", "events_min", "censored_min"}
+    # the fewest rows still followed at every time a follow-up ends in a dataset
+    ends, followed = drug.number("follow_times"), drug.number("followed_min")
+    assert ends.fine and followed.fine and len(ends.value) == len(followed.value)
+    assert followed.value[0] == drug.support["rows_min"]
+    assert followed.value == sorted(followed.value, reverse=True)
+    data = km.part("data")
+    assert [(n.name, n.value, n.fine) for n in data.numbers] == [
+        ("rows_skipped", 0, True),
+        ("rows_left_out", 0, True),
+    ]
+    # the events up to each time in each of the 5 datasets: the events between two times are counted in each
+    each = drug.number("events_so_far_each")
+    assert each.fine and len(each.value) == 5
+    assert all(len(one) == len(drug.number("times").value) for one in each.value)
+    assert [min(column) for column in zip(*each.value, strict=True)] == drug.number(
+        "events_so_far_min"
+    ).value
     so_far, at_risk = drug.number("events_so_far_min").value, drug.number("at_risk_min").value
     assert len(so_far) == len(drug.number("times").value) == len(at_risk)
     assert so_far == sorted(so_far) and at_risk == sorted(at_risk, reverse=True)
-    assert so_far[-1] == drug.support["events"]
+    assert so_far[-1] == drug.support["events_min"]
     test = km.part("test:log_rank")
     assert test.number("method").value == "D2"
     assert test.support == {
-        "rows": len(mi.base),
-        "events": int(mi.base["died"].sum()),
+        "rows_min": len(mi.base),
+        "events_min": int(mi.base["died"].sum()),
     }  # every row, in every dataset
+
+
+def test_a_covariate_that_most_rows_hold_at_one_value_has_the_counts_on_and_off_it() -> None:
+    """A dose that is 0 for all but two participants is read as a number of many values: its term carried the whole
+    model's counts, while its coefficient is those two participants' outcome."""
+    from biostats.design import OTHER_VALUES, dominant_counts
+
+    df = _cohort()
+    df["dose"] = 0.0
+    df.loc[df.index[:2], "dose"] = [1.0, 3.0]
+    df["packs"] = np.where(np.arange(len(df)) % 2 == 0, 0, 1 + np.arange(len(df)) % 7)
+    df["transplanted"] = (np.arange(len(df)) % 9 == 0).astype(int)
+    cells = dominant_counts(df, ["dose", "packs", "age", "transplanted", "arm"], df["died"])
+    # neither a factor, nor a covariate of two values (an indicator), nor one that no value holds for half
+    assert list(cells) == ["dose", "packs"]
+    died = int(df.loc[df.index[:2], "died"].sum())
+    assert cells["dose"] == {
+        "0": (len(df) - 2, int(df["died"].sum()) - died, int(df["died"].sum()) - died),
+        OTHER_VALUES: (2, died, died),
+    }
+    assert cells["packs"]["0"][0] == cells["packs"][OTHER_VALUES][0] == len(df) // 2  # exactly half
+    record = plan.record("logistic", logistic_regression(df, "died", ["dose", "age"]))
+    assert record is not None
+    assert record.part("term:dose").labels == {"variable": "dose"}  # a slope: no level of its own
+    assert record.part("term:dose").support == {"rows": 2, "events": died, "non_events": 2 - died}
+    assert record.part("reference:dose").labels == {"variable": "dose", "level": "0"}
+    for key, result in (
+        ("cox", cox_regression(df, "days", "died", ["dose", "age"], diagnostics=False)),
+        ("count", count_regression(df, "admissions", ["dose", "age"], exposure_col="years")),
+    ):
+        other = plan.record(key, result)
+        assert other is not None and other.part("term:dose").support["rows"] == 2, key
+        assert other.part("reference:dose").support["rows"] == len(df) - 2, key
+
+
+def test_a_pooled_term_s_cells_are_those_of_its_recorded_values() -> None:
+    """One participant coded 1, and gaps filled by a normal draw: no imputed dataset keeps the covariate's two
+    values, its term took the model's counts, and an odds ratio that is one participant's outcome passed any
+    small-cell rule."""
+    truth = _cohort()
+    truth["transplanted"] = 0.0
+    truth.loc[truth.index[5], "transplanted"] = 1.0
+    truth["prior"] = 0.0
+    truth.loc[truth.index[10:16], "prior"] = [1, 1, 2, 1, 3, 1]
+    rng = np.random.default_rng(9)
+    base = truth.copy()
+    gap = rng.random(len(base)) < 0.12
+    gap[:20] = False
+    base.loc[gap, ["transplanted", "prior"]] = np.nan
+    completed = []
+    for _ in range(5):
+        one = base.copy()
+        one.loc[gap, "transplanted"] = rng.normal(0.0, 0.05, gap.sum())
+        one.loc[gap, "prior"] = rng.normal(0.1, 0.05, gap.sum())
+        completed.append(one)
+    mi = MIData.from_completed(base, completed, methods={"transplanted": "norm", "prior": "norm"})
+    recorded = int((~gap).sum())
+    for kind, roles, without in (
+        ("logistic", {"outcome": "died"}, "non_events"),
+        ("cox", {"time": "days", "event": "died"}, "censored"),
+    ):
+        done = plan.run(
+            specify(
+                kind, pooled=True, compare="arm", adjust=["transplanted", "prior", "age"], **roles
+            ),
+            mi=mi,
+        )
+        record = plan.record(f"{kind}_mi", done.result)
+        assert record is not None
+        term = record.part("term:transplanted")
+        assert term.labels == {"variable": "transplanted", "level": "1"}, kind
+        died = int(truth.loc[truth.index[5], "died"])
+        assert term.support == {"rows": 1, "events": died, without: 1 - died}, kind
+        assert record.part("reference:transplanted").support["rows"] == recorded - 1, kind
+        # more than two values, 0 for most rows: the rows off it, on recorded values too
+        assert record.part("term:prior").support["rows"] == 6, kind
+        assert record.part("reference:prior").labels == {"variable": "prior", "level": "0"}, kind
+        assert record.part("reference:prior").support["rows"] == recorded - 6, kind
+    # a covariate whose two values every dataset keeps is counted in the datasets, as before
+    kept = plan.run(
+        specify("logistic", pooled=True, outcome="died", compare="arm", adjust=["age"]),
+        mi=_imputed(),
+    )
+    assert "recorded_cells" in kept.result.extra
+
+
+def test_a_pooled_result_counts_the_rows_its_datasets_left_out() -> None:
+    """A pooled Kaplan-Meier counted no row left out: with a group of one row, its curves held one row less than
+    the flow said it had analysed."""
+    truth = _cohort()
+    truth["site"] = "b"
+    truth.loc[truth.index[:150], "site"] = "a"
+    truth.loc[truth.index[0], "site"] = "c"  # a group of one row: no curve
+    truth.loc[truth.index[1:3], "days"] = -4.0  # two follow-up times below zero
+    rng = np.random.default_rng(4)
+    base = truth.copy()
+    gap = rng.random(len(base)) < 0.1
+    base.loc[gap, "age"] = np.nan
+    completed = []
+    for _ in range(5):
+        one = base.copy()
+        one.loc[gap, "age"] = truth.loc[gap, "age"] + rng.normal(0, 4, gap.sum())
+        completed.append(one)
+    mi = MIData.from_completed(base, completed, methods={"age": "pmm"})
+    km = plan.run(specify("survival", pooled=True, time="days", event="died", group="site"), mi=mi)
+    assert (km.result.extra["rows_skipped"], km.result.extra["rows_left_out"]) == (1, 2)
+    record = plan.record("survival_mi", km.result)
+    assert record is not None
+    data = record.part("data")
+    assert (data.number("rows_skipped").value, data.number("rows_left_out").value) == (1, 2)
+    assert [p.labels["group"] for p in record.parts if p.id.startswith("curve#")] == ["a", "b"]
+    cox = plan.run(
+        specify("cox", pooled=True, time="days", event="died", compare="arm", adjust=["age"]), mi=mi
+    )
+    pooled = plan.record("cox_mi", cox.result)
+    assert pooled is not None
+    left = pooled.part("model").number("rows_left_out")
+    assert left.value == 2 and left.fine
+    assert pooled.part("model").support["rows_min"] == len(truth) - 2

@@ -19,7 +19,7 @@ from statsmodels.duration.hazard_regression import PHReg
 from statsmodels.duration.survfunc import SurvfuncRight
 
 from biostats._types import CI
-from biostats.design import design_matrix, indicator_counts, level_counts
+from biostats.design import design_matrix, dominant_counts, indicator_counts, level_counts
 from biostats.references import REFERENCES
 from biostats.regression import extreme_estimates
 
@@ -180,6 +180,10 @@ class KMCurve:
     censored_after: np.ndarray | None = None
     # the last follow-up time, an event's or a censoring's: a stretch at exactly 0.5 runs to it (km_quantile's last)
     last_time: float | None = None
+    # every time a row's follow-up ends, by an event or a censoring, and the rows still followed at each (none in a
+    # curve computed before they were kept): a shared curve says until when enough rows were followed
+    follow_times: np.ndarray | None = None
+    followed: np.ndarray | None = None
 
 
 @dataclass
@@ -260,6 +264,8 @@ def kaplan_meier(
     # the rows that leave between two event times without the event: at risk here, minus the events here, minus
     # those still at risk at the next event time
     censored_after = at_risk - events_at - np.append(at_risk[1:], 0)
+    follow_times = np.unique(t)
+    followed = len(t) - np.searchsorted(np.sort(t), follow_times, side="left")
     return KMCurve(
         label=str(label),
         times=unique_times,
@@ -278,6 +284,8 @@ def kaplan_meier(
         last_time=last,
         events_at=events_at,
         censored_after=censored_after,
+        follow_times=follow_times,
+        followed=followed,
     )
 
 
@@ -382,6 +390,9 @@ class CoxResult:
     level_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     # the same for a numeric or True/False covariate that holds two values (biostats.design.indicator_counts)
     indicator_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    # on and off the commonest value of a numeric covariate of more than two values, when at least half of the rows
+    # hold it (biostats.design.dominant_counts)
+    dominant_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     converged: bool = (
         True  # False: the estimates may not be the maximum of the likelihood (a warning says so)
     )
@@ -524,6 +535,7 @@ def cox_regression(
         reference_levels=refs,
         level_counts=level_counts(frame, covariates, e, levels=levels),
         indicator_counts=indicator_counts(frame, covariates, e, levels=levels),
+        dominant_counts=dominant_counts(frame, covariates, e, levels=levels),
         converged=converged,
         rows_left_out=_negative_times(df[[time_col, event_col, *covariates]].dropna(), time_col),
     )

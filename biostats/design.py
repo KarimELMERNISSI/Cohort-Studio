@@ -169,4 +169,52 @@ def indicator_counts(
     return out
 
 
-__all__ = ["design_matrix", "factor_levels", "indicator_counts", "level_counts"]
+OTHER_VALUES = "other values"  # the cell of the rows off a covariate's commonest value
+
+
+def dominant_counts(
+    df: pd.DataFrame,
+    covariates: Sequence[str],
+    events: Sequence[float],
+    *,
+    levels: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, dict[str, tuple[int, int, int]]]:
+    """
+    The rows, the events and the rows with an event (as :func:`level_counts`) on and off the commonest value of each
+    numeric covariate that holds more than two values, when that value is held by at least half of the rows a model
+    read: ``{covariate: {<the commonest value>: cell, OTHER_VALUES: cell}}``.
+
+    A dose that is 0 for all but two participants, a number of earlier events that is 0 for all but six: the
+    coefficient of such a covariate is carried by the few rows off its commonest value, as an indicator's is by the
+    rows coded 1, while the term would carry the whole model's counts. The two cells are counted, so that a shared
+    result withholds the term when the rows off the commonest value are few.
+    """
+    used = levels if levels is not None else factor_levels(df, covariates)
+    happened = np.asarray(list(events), dtype=float)
+    out: dict[str, dict[str, tuple[int, int, int]]] = {}
+    for col in covariates:
+        if col in used:
+            continue
+        series = df[col]
+        present = series.notna().to_numpy(dtype=bool)
+        counts = series[present].value_counts()
+        if len(counts) <= 2 or int(counts.iloc[0]) * 2 < int(present.sum()):
+            continue
+        commonest = counts.index[0]
+        try:
+            name = _value_text(commonest)
+        except TypeError, ValueError:
+            continue
+        at = present & (series == commonest).fillna(False).to_numpy(dtype=bool)
+        out[col] = {name: _cell(at, happened), OTHER_VALUES: _cell(present & ~at, happened)}
+    return out
+
+
+__all__ = [
+    "OTHER_VALUES",
+    "design_matrix",
+    "dominant_counts",
+    "factor_levels",
+    "indicator_counts",
+    "level_counts",
+]

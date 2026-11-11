@@ -462,11 +462,14 @@ class Part:
     A part of a result (the model, a term, a curve, a test) with its numbers.
 
     ``support`` holds the counts behind it (``rows``, ``events``, ``non_events``, ``rows_with_events``,
-    ``df_resid``; the smallest over the imputed datasets for a pooled result): the small-cell rule of a shared
-    package reads it. ``labels`` holds the names the part's id leaves out: its ``variable``, and for a level or a
-    group its ``level`` or ``group``, which are values of the data. A term with a ``level`` is a contrast between
-    that cell and the cell of the part ``reference:<variable>``: a shared package shows it only when both cells can
-    be shown, and drops the labels of a part it withholds.
+    ``df_resid``): the small-cell rule of a shared package reads it. A pooled result's counts are the smallest
+    over the imputed datasets; those of its model and of its curves, which a shared package can show, are named
+    so (``rows_min``), since they do not add up. ``labels`` holds the names the part's id leaves out: its
+    ``variable``, and for a level or a group its ``level`` or ``group``, which are values of the data. A term
+    whose variable has a part ``reference:<variable>`` compares two cells: a level, or the upper value of a
+    covariate of two values, with the reference; the rows off the commonest value of a numeric covariate with the
+    rows on it. A shared package shows it only when both cells can be shown, and drops the labels of a part it
+    withholds.
     """
 
     id: str
@@ -749,6 +752,31 @@ def _decisions(
     return {**derived, **used}, derived
 
 
+def _recorded_cells(
+    rows: pd.DataFrame, covariates: Sequence[str], events: Any, levels: Mapping[str, Any]
+) -> dict[str, Any]:
+    """
+    The cells of a pooled model's numeric covariates, counted on recorded values. ``rows`` are the observed rows that
+    record the outcome and ``events`` each one's events; a covariate is counted on the rows that record it: each
+    value of a covariate recorded with two values, and the rows on and off the commonest value of one that holds
+    more (biostats.design). An imputed value is not a recorded one. The small-cell rule of a shared result reads
+    these cells where the imputed datasets do not keep a covariate's two values (a normal draw gives it others: one
+    participant coded 1 would carry the term under the model's counts), and for a commonest value always.
+    """
+    from biostats.design import dominant_counts, indicator_counts
+
+    happened = np.asarray(events, dtype=float)
+    cells: dict[str, Any] = {"indicator": {}, "dominant": {}}
+    for name in covariates:
+        if name in levels:
+            continue
+        held = rows[name].notna().to_numpy(dtype=bool)
+        part = rows.loc[held, [name]]
+        cells["indicator"].update(indicator_counts(part, [name], happened[held]))
+        cells["dominant"].update(dominant_counts(part, [name], happened[held]))
+    return cells
+
+
 def _run_survival(
     spec: AnalysisSpec, frame: pd.DataFrame
 ) -> tuple[Any, dict[str, Any], dict[str, Any]]:
@@ -817,7 +845,7 @@ def _run_cox(spec: AnalysisSpec, frame: pd.DataFrame) -> tuple[Any, dict[str, An
 
 def _pool_cox(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     from biostats.mi import analyze_mi
-    from biostats.survival import cox_regression, event_coding
+    from biostats.survival import cox_regression, event_coding, event_indicator, rows_read
 
     v, o = spec.variables, spec.options
     covariates = spec.covariates()
@@ -838,6 +866,10 @@ def _pool_cox(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], dict[st
         mi,
         columns=[v["time"], v["event"], *covariates],
         alpha=o["alpha"],
+    )
+    read = mi.base.loc[rows_read(mi.base, v["time"], v["event"]).index]
+    result.extra["recorded_cells"] = _recorded_cells(
+        read, covariates, event_indicator(read[v["event"]]), levels
     )
     derived = {"levels": own, "event_values": event_coding(mi.base[v["event"]])}
     return result, *_decisions({"levels": levels}, derived)
@@ -906,6 +938,10 @@ def _pool_logistic(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], di
         if o["event_level"] is not None
         else outcome_levels[-1],
     }
+    read = mi.base[mi.base[v["outcome"]].notna()]
+    result.extra["recorded_cells"] = _recorded_cells(
+        read, covariates, read[v["outcome"]].astype(str) == derived["event_level"], levels
+    )
     return result, *_decisions({"levels": levels}, derived)
 
 
@@ -956,6 +992,8 @@ def _pool_count(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], dict[
         columns=[v["count"], *covariates, *([exposure] if exposure else [])],
         alpha=o["alpha"],
     )
+    read = mi.base.loc[mi.base[[v["count"], *([exposure] if exposure else [])]].dropna().index]
+    result.extra["recorded_cells"] = _recorded_cells(read, covariates, read[v["count"]], levels)
     return result, *_decisions({"levels": levels}, {"levels": own})
 
 
@@ -990,24 +1028,32 @@ def _is_extreme(log_estimate: Any, se: Any) -> bool:
 
 def _cell_support(cell: Sequence[int], kind: str) -> dict[str, int]:
     """
-    The counts behind a cell (a factor's level, an indicator's value): its rows and its events; for a logistic
-    model the rows without the event; for a count model the rows with an event, since its events are not people.
-    ``cell`` is (rows, events, rows with an event) from a model, with the rows without an event as a fourth count
-    from a pooled one (the smallest of each over the datasets).
+    The counts behind a cell (a factor's level, an indicator's value): its rows, its events and its rows without
+    the event (``non_events`` for a logistic model, ``censored`` for a Cox model); for a count model the rows with
+    an event and the rows without one, since its events are not people. ``cell`` is (rows, events, rows with an
+    event) from a model, with the rows without an event as a fourth count from a pooled one (the smallest of each
+    over the datasets). A cell where nobody, or everybody, had the event says so of each of its participants: the
+    small-cell rule of a shared result reads both sides.
     """
     rows, events, with_event = int(cell[0]), int(cell[1]), int(cell[2])
+    without = int(cell[3]) if len(cell) > 3 else rows - with_event
     found = {"rows": rows, "events": events}
     if kind == "logistic":
-        found["non_events"] = int(cell[3]) if len(cell) > 3 else rows - with_event
+        found["non_events"] = without
+    if kind == "cox":
+        found["censored"] = without
     if kind == "count":
         found["rows_with_events"] = with_event
+        found["rows_without_events"] = without
     return found
 
 
 @dataclass(frozen=True)
 class _Term:
-    """What a term of a design stands for: its part's id (without the prefix), its labels, and its cell's counts
-    (None for a numeric covariate of more than two values: the model's counts are behind it)."""
+    """What a term of a design stands for: its part's id (without the prefix), its labels, and its cell's counts:
+    a level's, the higher value's of a covariate of two values, the rows off the commonest value of a covariate
+    that at least half of the rows hold at one value (None for any other numeric covariate: the model's counts are
+    behind it)."""
 
     id: str
     labels: dict[str, str]
@@ -1018,11 +1064,14 @@ def _terms_of(
     names: Sequence[str],
     levels: Mapping[str, Mapping[str, Sequence[int]]],
     indicators: Mapping[str, Mapping[str, Sequence[int]]],
+    dominant: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
 ) -> list[_Term]:
     """
     What each term of a design stands for, by its place: the design holds the numeric covariates first, then each
     factor's levels after its reference, so the last terms are the factors' and the others are numeric, whatever
-    their names (two factors can give one name to a term: the place tells them apart).
+    their names (two factors can give one name to a term: the place tells them apart). ``dominant`` holds, for a
+    numeric covariate of more than two values, its commonest value's cell and then the cell of its other rows
+    (biostats.design.dominant_counts).
     """
     of_factors = [
         _Term(f"{factor}#{place}", {"variable": factor, "level": str(level)}, cells[level])
@@ -1033,11 +1082,15 @@ def _terms_of(
     numeric = []
     for name in list(names)[: len(names) - len(of_factors)]:
         cells = indicators.get(str(name))
+        apart = (dominant or {}).get(str(name))
         if (
             cells
         ):  # two values: the term compares the higher with the lower, as a level with its reference
             high = list(cells)[1]
             numeric.append(_Term(str(name), {"variable": str(name), "level": high}, cells[high]))
+        elif apart:
+            # one value for at least half of the rows: the term is carried by the rows off it
+            numeric.append(_Term(str(name), {"variable": str(name)}, apart[list(apart)[1]]))
         else:
             numeric.append(_Term(str(name), {"variable": str(name)}, None))
     return numeric + of_factors
@@ -1047,11 +1100,13 @@ def _reference_parts(
     levels: Mapping[str, Mapping[str, Sequence[int]]],
     indicators: Mapping[str, Mapping[str, Sequence[int]]],
     kind: str,
+    dominant: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
 ) -> list[Part]:
-    """A part per factor, and per covariate of two values, for the cell its terms are compared with: the first
-    level, or the lower value. It has no number of its own; its counts are behind every term of its variable."""
+    """A part per factor, per covariate of two values and per covariate with a commonest value, for the cell its
+    terms are compared with: the first level, the lower value, the commonest value. It has no number of its own;
+    its counts are behind every term of its variable."""
     parts = []
-    for variable, cells in (*levels.items(), *indicators.items()):
+    for variable, cells in (*levels.items(), *indicators.items(), *(dominant or {}).items()):
         names = list(cells)
         if not names:
             continue
@@ -1119,11 +1174,22 @@ def _curve_parts(curves: Sequence[Any]) -> list[Part]:
                 _series("events_at", curve.events_at, EXACT),
                 _series("censored_after", curve.censored_after, EXACT),
             ]
+        if getattr(curve, "follow_times", None) is not None:
+            # every time a follow-up ends and the rows still followed at it: a shared curve's last point and its
+            # follow-up are read on them
+            steps += [
+                _series("follow_times", curve.follow_times, EXACT),
+                _series("followed", curve.followed, EXACT),
+            ]
         parts.append(
             Part(
                 id=f"curve#{place}",
                 labels={"group": str(curve.label)},
-                support={"rows": int(curve.n), "events": int(curve.events)},
+                support={
+                    "rows": int(curve.n),
+                    "events": int(curve.events),
+                    "censored": int(curve.n) - int(curve.events),
+                },
                 numbers=(
                     Number("rows", curve.n, EXACT),
                     Number("events", curve.events, EXACT),
@@ -1172,10 +1238,15 @@ def _record_survival(result: Any) -> tuple[list[Part], None]:
 
 
 def _record_cox(result: Any) -> tuple[list[Part], None]:
-    whole = {"rows": int(result.n), "events": int(result.events)}
+    whole = {
+        "rows": int(result.n),
+        "events": int(result.events),
+        "censored": int(result.n) - int(result.events),
+    }
     levels = getattr(result, "level_counts", {}) or {}
     indicators = getattr(result, "indicator_counts", {}) or {}
-    terms = _terms_of(list(result.table["term"]), levels, indicators)
+    dominant = getattr(result, "dominant_counts", {}) or {}
+    terms = _terms_of(list(result.table["term"]), levels, indicators, dominant)
     parts = [
         Part(
             id="model",
@@ -1191,7 +1262,7 @@ def _record_cox(result: Any) -> tuple[list[Part], None]:
                 Number("concordance", result.concordance, ITERATIVE_LOOSE, scale=1.0),
             ),
         ),
-        *_reference_parts(levels, indicators, "cox"),
+        *_reference_parts(levels, indicators, "cox", dominant),
         *_model_terms(
             result.table,
             terms,
@@ -1233,6 +1304,11 @@ def _record_regression(kind: str) -> Callable[[Any], tuple[list[Part], None]]:
             whole["events"] = int(result.events)
             if logistic:
                 whole["non_events"] = int(result.n) - int(result.events)
+        with_events = getattr(result, "rows_with_events", None)
+        if not logistic and with_events is not None:
+            # a count model's events are a sum of counts: the people behind them are its rows with an event
+            whole["rows_with_events"] = int(with_events)
+            whole["rows_without_events"] = int(result.n) - int(with_events)
         model = [
             Number("family", result.kind, EXACT),
             Number("rows", result.n, EXACT),
@@ -1261,10 +1337,11 @@ def _record_regression(kind: str) -> Callable[[Any], tuple[list[Part], None]]:
             )
         levels = getattr(result, "level_counts", {}) or {}
         indicators = getattr(result, "indicator_counts", {}) or {}
-        terms = _terms_of(list(result.table["term"]), levels, indicators)
+        dominant = getattr(result, "dominant_counts", {}) or {}
+        terms = _terms_of(list(result.table["term"]), levels, indicators, dominant)
         return [
             Part(id="model", support={**whole, **_df(result.df_resid)}, numbers=tuple(model)),
-            *_reference_parts(levels, indicators, kind),
+            *_reference_parts(levels, indicators, kind, dominant),
             *_model_terms(
                 result.table,
                 terms,
@@ -1379,29 +1456,53 @@ def _pooled_model(kind: str) -> Callable[[Any], tuple[list[Part], ResultRecord |
         rows, events = extra.get("n"), extra.get("events")
         whole: dict[str, int] = {}
         sizes: list[Number] = []
+        # each count is the smallest over the imputed datasets, and is named so: they do not add up
         if rows is not None:
-            whole["rows"] = int(rows[0])
+            whole["rows_min"] = int(rows[0])
             sizes += [Number("rows_min", rows[0], EXACT), Number("rows_max", rows[1], EXACT)]
         if events is not None:
-            whole["events"] = int(events[0])
+            whole["events_min"] = int(events[0])
             sizes += [
                 Number("events_min", events[0], EXACT),
                 Number("events_max", events[1], EXACT),
             ]
-            if kind == "logistic" and rows is not None:
-                whole["non_events"] = int(rows[0]) - int(
-                    events[1]
-                )  # at least this many in every dataset
+            if kind in ("logistic", "cox") and rows is not None:
+                # the rows without the event: at least this many in every dataset
+                whole["non_events_min" if kind == "logistic" else "censored_min"] = int(
+                    rows[0]
+                ) - int(events[1])
+        with_events = extra.get("rows_with_events")
+        if kind == "count" and with_events is not None and rows is not None:
+            whole["rows_with_events_min"] = int(with_events[0])
+            whole["rows_without_events_min"] = int(rows[0]) - int(with_events[1])
         if extra.get("df_resid") is not None:
-            whole["df_resid"] = int(extra["df_resid"])
+            whole["df_resid_min"] = int(extra["df_resid"])
+        if kind == "cox":
+            # the rows a dataset's model left out for a follow-up time below zero: a count of participants
+            sizes.append(Number("rows_left_out", extra.get("rows_left_out", 0), EXACT, fine=True))
         levels = extra.get("level_counts") or {}
-        indicators = extra.get("indicator_counts") or {}
         names = (
             [str(t.term) for t in result.table.terms if str(t.term) != "const"]
             if result.table
             else []
         )
-        terms = _terms_of(names, levels, indicators)
+        # where no imputed dataset keeps the two values of a covariate, its cells are those of its recorded
+        # values; the commonest value of a covariate of more values is read on recorded values always
+        recorded = extra.get("recorded_cells") or {}
+        indicators = {
+            name: cells
+            for name, cells in {
+                **(recorded.get("indicator") or {}),
+                **(extra.get("indicator_counts") or {}),
+            }.items()
+            if name in names
+        }
+        dominant = {
+            name: cells
+            for name, cells in (recorded.get("dominant") or {}).items()
+            if name in names and name not in indicators
+        }
+        terms = _terms_of(names, levels, indicators, dominant)
         of_factor: dict[str, list[str]] = {}
         for term in terms:
             if "#" in term.id:
@@ -1420,7 +1521,7 @@ def _pooled_model(kind: str) -> Callable[[Any], tuple[list[Part], ResultRecord |
                     Number("converged_in", extra.get("converged_in", result.m), EXACT),
                 ),
             ),
-            *_reference_parts(levels, indicators, kind),
+            *_reference_parts(levels, indicators, kind, dominant),
             *(_pooled_terms(result.table, terms, whole, kind) if result.table is not None else []),
             *_pooled_tests(result.tests, ITERATIVE, whole, of_factor),
         ], (
@@ -1452,14 +1553,19 @@ def _pooled_survival(result: Any) -> tuple[list[Part], ResultRecord | None]:
     medians = extra.get("medians") or {}
     intervals = extra.get("median_ci") or {}
     counts = extra.get("grid_counts") or {}
+    censored = extra.get("censored") or {}
+    followed = extra.get("followed") or {}
     parts = [_pooling(result)]
     for place, (label, curve) in enumerate((extra.get("curves") or {}).items()):
         low, high = intervals.get(label) or (None, None)
+        # each the smallest over the imputed datasets, and named so: the three do not add up
         behind = {}
         if label in sizes:
-            behind["rows"] = int(sizes[label])
+            behind["rows_min"] = int(sizes[label])
         if label in events:
-            behind["events"] = int(events[label])
+            behind["events_min"] = int(events[label])
+        if label in censored:
+            behind["censored_min"] = int(censored[label])
         steps = [
             _series("times", curve["time"], EXACT),
             _series("survival", curve["survival"], DETERMINISTIC, scale=1.0),
@@ -1472,6 +1578,16 @@ def _pooled_survival(result: Any) -> tuple[list[Part], ResultRecord | None]:
             steps += [
                 _series("events_so_far_min", counts[label]["events"], EXACT),
                 _series("at_risk_min", counts[label]["at_risk"], EXACT),
+                # the same in each dataset: the events between two times are counted in each (never shared)
+                Number(
+                    "events_so_far_each", counts[label].get("events_each") or [], EXACT, fine=True
+                ),
+            ]
+        if (followed.get(label) or {}).get("times"):
+            # at every time a follow-up ends in a dataset: the fewest rows still followed
+            steps += [
+                _series("follow_times", followed[label]["times"], EXACT),
+                _series("followed_min", followed[label]["rows"], EXACT),
             ]
         parts.append(
             Part(
@@ -1488,8 +1604,19 @@ def _pooled_survival(result: Any) -> tuple[list[Part], ResultRecord | None]:
                 ),
             )
         )
+    parts.append(
+        Part(
+            id="data",
+            numbers=(
+                # the rows in no curve (a group too small to draw, a follow-up time below zero), the most over the
+                # datasets: counts of participants, like a level's
+                Number("rows_skipped", extra.get("rows_skipped", 0), EXACT, fine=True),
+                Number("rows_left_out", extra.get("rows_left_out", 0), EXACT, fine=True),
+            ),
+        )
+    )
     total = extra.get("total") or {}
-    whole = {key: int(total[key]) for key in ("rows", "events") if key in total}
+    whole = {f"{key}_min": int(total[key]) for key in ("rows", "events") if key in total}
     parts += _pooled_tests(result.tests, DETERMINISTIC, whole, {})
     complete = result.complete_case
     return parts, (None if complete is None else _record_of("survival", complete, _record_survival))

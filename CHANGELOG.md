@@ -223,12 +223,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   factor's term is named by its factor and its level's place, the level's own name being a label that a shared
   package can drop. The Cox, logistic and count models count the rows and events at each level of each factor, and
   at each value of a covariate coded with two values (0 and 1, True and False): such a covariate is read as a
-  number, so one participant coded 1 carried the whole model's counts. A count model also counts the rows with an
-  event, since its events are not people. Pooled, the counts are the smallest over the imputed datasets. A record
-  holds no residual and no point of a figure; the steps of a Kaplan-Meier curve, its median and the last follow-up
-  time, which are one participant's, are marked so that a shared package coarsens or leaves them out. Whether a fit
-  converged, whether a term's estimate is extreme and how many groups were skipped are numbers of the record, no
-  longer only words of a warning.
+  number, so one participant coded 1 carried the whole model's counts. The same for a covariate of more values
+  that at least half of the rows hold at one value (a dose that is 0 for all but two participants): the rows on and
+  off that value are counted. A count model also counts the rows with an event, since its events are not people.
+  Pooled, the counts are the smallest over the imputed datasets, and are named so (`rows_min`); where an imputation
+  gives a covariate of two values other values (a normal draw), its cells are those of its recorded values. A
+  record holds no residual and no point of a figure; the steps of a Kaplan-Meier curve, the times its follow-ups
+  end, its median and the last follow-up time, which are one participant's, are marked so that a shared package
+  coarsens or leaves them out. Whether a fit converged, whether a term's estimate is extreme, how many groups were
+  skipped and how many rows were left out (by a pooled result too: the most over its imputed datasets) are numbers
+  of the record, no longer only words of a warning.
 - The titles of the stored results come from one catalogue of analysis kinds (the same 20 titles).
 
 ### Documentation: the architecture scheme

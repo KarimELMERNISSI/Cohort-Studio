@@ -138,11 +138,19 @@ def _model_sizes(extracts: list[Extract]) -> dict[str, Any]:
     events = [e.extra.get("events") for e in extracts]
     if all(v is not None for v in events):
         out["events"] = (int(min(events)), int(max(events)))
+    # a count model: the rows that hold an event, its events being a sum of counts
+    with_events = [e.extra.get("rows_with_events") for e in extracts]
+    if all(v is not None for v in with_events):
+        out["rows_with_events"] = (int(min(with_events)), int(max(with_events)))
     residual = [e.dfcom for e in extracts if math.isfinite(e.dfcom)]
     if residual:
         out["df_resid"] = int(min(residual))
     out["datasets"] = len(extracts)
     out["converged_in"] = sum(bool(e.extra.get("converged", True)) for e in extracts)
+    if any("rows_left_out" in e.extra for e in extracts):
+        # the rows a dataset's model left out for another reason than a missing value (a follow-up time below
+        # zero): the most over the datasets
+        out["rows_left_out"] = max(int(e.extra.get("rows_left_out") or 0) for e in extracts)
     levels = [e.extra.get("level_counts") or {} for e in extracts]
     for factor, first in levels[0].items():
         if any(list(c.get(factor, {})) != list(first) for c in levels):
@@ -183,6 +191,7 @@ class RegressionAdapter(Adapter):
                 "kind": result.kind,
                 "n": result.n,
                 "events": result.events,
+                "rows_with_events": getattr(result, "rows_with_events", None),
                 "level_counts": dict(getattr(result, "level_counts", {})),
                 "indicator_counts": dict(getattr(result, "indicator_counts", {})),
                 "converged": getattr(result, "converged", True),
@@ -217,6 +226,7 @@ class CoxAdapter(Adapter):
                 "level_counts": dict(getattr(result, "level_counts", {})),
                 "indicator_counts": dict(getattr(result, "indicator_counts", {})),
                 "converged": getattr(result, "converged", True),
+                "rows_left_out": int(getattr(result, "rows_left_out", 0) or 0),
             },
         )
 
@@ -519,25 +529,55 @@ def pool_km_curves(curves: list[Any], *, alpha: float = 0.05) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["time", "survival", "lower", "upper", "fmi"])
 
 
-def _grid_counts(curves: list[Any], times: np.ndarray, everywhere: bool) -> dict[str, list[int]]:
+def _grid_counts(curves: list[Any], times: np.ndarray, everywhere: bool) -> dict[str, Any]:
     """
-    At each time of a pooled curve's grid, over the imputed datasets: the fewest events up to that time, and the
-    fewest rows still at risk at it. The rows at risk between two of a dataset's event times are not known exactly
-    (the censorings in between are counted, not timed): the number at its next event time is taken, which is never
-    more than the truth. A dataset that lacks the group counts none. What a shared curve is thinned by.
+    At each time of a pooled curve's grid, over the imputed datasets: the fewest events up to that time, the events
+    up to that time in each dataset (``events_each``: the events between two times are counted in each dataset, since
+    the difference of two smallest counts can be more than any dataset holds), and the fewest rows still at risk
+    at it. The rows at risk between two of a dataset's event times are not known exactly (the censorings in between
+    are counted, not timed): the number at its next event time is taken, which is never more than the truth. A
+    dataset that lacks the group counts none. What a shared curve is thinned by.
     """
     events = np.full(len(times), np.iinfo(np.int64).max if everywhere else 0, dtype=np.int64)
     at_risk = events.copy()
+    each: list[list[int]] = []
     for curve in curves if everywhere else []:
         own = np.asarray(curve.times, dtype=float)
         happened = getattr(curve, "events_at", None)
         if happened is None:  # a curve computed before its events were kept: nothing can be said
-            return {"events": [0] * len(times), "at_risk": [0] * len(times)}
+            return {"events": [0] * len(times), "at_risk": [0] * len(times), "events_each": []}
         so_far = np.concatenate([[0], np.cumsum(np.asarray(happened, dtype=np.int64))])
-        events = np.minimum(events, so_far[np.searchsorted(own, times, side="right")])
+        on_grid = so_far[np.searchsorted(own, times, side="right")]
+        each.append([int(v) for v in on_grid])
+        events = np.minimum(events, on_grid)
         left = np.concatenate([np.asarray(curve.at_risk, dtype=np.int64), [0]])
         at_risk = np.minimum(at_risk, left[np.searchsorted(own, times, side="left")])
-    return {"events": [int(v) for v in events], "at_risk": [int(v) for v in at_risk]}
+    return {
+        "events": [int(v) for v in events],
+        "at_risk": [int(v) for v in at_risk],
+        "events_each": each,
+    }
+
+
+def _followed(curves: list[Any], everywhere: bool) -> dict[str, list]:
+    """
+    Over the imputed datasets, at every time a row's follow-up ends in any of them: the fewest rows still followed at
+    that time. A dataset that lacks the group counts none, and a curve computed before its follow-up times were kept
+    gives nothing. What a shared curve says its follow-up by.
+    """
+    if (
+        not curves
+        or not everywhere
+        or any(getattr(c, "follow_times", None) is None for c in curves)
+    ):
+        return {"times": [], "rows": []}
+    times = np.unique(np.concatenate([np.asarray(c.follow_times, dtype=float) for c in curves]))
+    rows = np.full(len(times), np.iinfo(np.int64).max, dtype=np.int64)
+    for curve in curves:
+        own = np.asarray(curve.follow_times, dtype=float)
+        left = np.concatenate([np.asarray(curve.followed, dtype=np.int64), [0]])
+        rows = np.minimum(rows, left[np.searchsorted(own, times, side="left")])
+    return {"times": [float(v) for v in times], "rows": [int(v) for v in rows]}
 
 
 def median_from_curve(
@@ -566,7 +606,12 @@ class SurvivalAdapter(Adapter):
             params=pd.Series(dtype=float),
             chisq=chisq,
             warnings=list(getattr(result, "warnings", [])),
-            extra={"curves": {c.label: c for c in curves}},
+            extra={
+                "curves": {c.label: c for c in curves},
+                # the rows in no curve: of groups too small to draw, with a follow-up time below zero
+                "rows_skipped": int(getattr(result, "skipped_rows", 0) or 0),
+                "rows_left_out": int(getattr(result, "rows_left_out", 0) or 0),
+            },
         )
 
     def finish(
@@ -578,7 +623,9 @@ class SurvivalAdapter(Adapter):
         intervals = {}
         sizes = {}
         events = {}
+        censored = {}
         grid = {}
+        followed = {}
         for label in labels:
             curves = [e.extra["curves"][label] for e in extracts if label in e.extra["curves"]]
             # the smallest: a group read from imputed values can differ in size, and a dataset where the group was
@@ -586,6 +633,7 @@ class SurvivalAdapter(Adapter):
             everywhere = len(curves) == len(extracts)
             sizes[label] = min(c.n for c in curves) if everywhere else 0
             events[label] = min(c.events for c in curves) if everywhere else 0
+            censored[label] = min(c.n - c.events for c in curves) if everywhere else 0
             if any(c.se is None for c in curves):
                 raise ValueError(
                     "the Kaplan-Meier curves carry no standard error and cannot be pooled"
@@ -593,6 +641,7 @@ class SurvivalAdapter(Adapter):
             curve = pool_km_curves(curves, alpha=alpha)
             pooled[label] = curve
             grid[label] = _grid_counts(curves, curve["time"].to_numpy(dtype=float), everywhere)
+            followed[label] = _followed(curves, everywhere)
             # a stretch at exactly 0.5 runs to the last follow-up of any imputation (a curve recorded before: none)
             ends = [c.last_time for c in curves if getattr(c, "last_time", None) is not None]
             last = max(ends) if ends else None
@@ -614,8 +663,15 @@ class SurvivalAdapter(Adapter):
             "median_ci": intervals,
             "sizes": sizes,
             "events": events,
+            "censored": censored,  # the rows without the event, the fewest over the datasets
             # at each time of a pooled curve: the fewest events so far and the fewest rows still at risk
             "grid_counts": grid,
+            # at every time a follow-up ends: the fewest rows still followed
+            "followed": followed,
+            # the rows in no curve, the most over the datasets: a group read from imputed values is too small to
+            # draw in some of them only
+            "rows_skipped": max(int(e.extra.get("rows_skipped") or 0) for e in extracts),
+            "rows_left_out": max(int(e.extra.get("rows_left_out") or 0) for e in extracts),
             # the rows and the events of all the groups drawn, the smallest over the datasets (a sum of each group's
             # smallest would be fewer than any dataset holds)
             "total": {"rows": min(n for n, _ in totals), "events": min(d for _, d in totals)},

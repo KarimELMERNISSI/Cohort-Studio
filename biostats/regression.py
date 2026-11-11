@@ -12,7 +12,7 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
 
-from biostats.design import design_matrix, indicator_counts, level_counts
+from biostats.design import design_matrix, dominant_counts, indicator_counts, level_counts
 from biostats.references import REFERENCES
 
 logger = logging.getLogger(__name__)
@@ -61,12 +61,17 @@ class RegressionResult:
     level_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     # the same for a numeric or True/False covariate that holds two values (biostats.design.indicator_counts)
     indicator_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    # on and off the commonest value of a numeric covariate of more than two values, when at least half of the rows
+    # hold it (biostats.design.dominant_counts)
+    dominant_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     # a logistic model's two outcome levels as read, sorted: the event is one of them
     outcome_levels: tuple[str, ...] = ()
     converged: bool = (
         True  # False: the estimates may not be the maximum of the likelihood (a warning says so)
     )
     dispersion_se: float | None = None  # of a negative binomial model's dispersion
+    # a count model's rows that hold at least one event: its events are a sum of counts, not people
+    rows_with_events: int | None = None
 
 
 def _design(
@@ -212,6 +217,7 @@ def logistic_regression(
         df_resid=float(len(y) - x.shape[1]),
         level_counts=level_counts(frame, covariates, y, levels=levels),
         indicator_counts=indicator_counts(frame, covariates, y, levels=levels),
+        dominant_counts=dominant_counts(frame, covariates, y, levels=levels),
         outcome_levels=tuple(outcome_levels),
         converged=converged,
     )
@@ -324,6 +330,7 @@ def count_regression(
         table=table,
         n=int(len(y)),
         events=int(y.sum()),
+        rows_with_events=int((np.asarray(y) > 0).sum()),
         llf=float(res.llf),
         aic=float(res.aic),
         pseudo_r2=None,
@@ -338,6 +345,7 @@ def count_regression(
         df_resid=float(len(y) - x.shape[1]),
         level_counts=level_counts(frame, covariates, y, levels=levels),
         indicator_counts=indicator_counts(frame, covariates, y, levels=levels),
+        dominant_counts=dominant_counts(frame, covariates, y, levels=levels),
         converged=converged,
         dispersion_se=dispersion_se,
     )
