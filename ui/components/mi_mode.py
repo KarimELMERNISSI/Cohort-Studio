@@ -97,9 +97,18 @@ def mi_banner(state) -> Any | None:
 
 
 def mi_token(state) -> str:
-    """What identifies the imputation in the settings of a stored pooled result."""
+    """
+    What identifies the imputation in the settings of a stored pooled result, by its content: ``mi:`` and the
+    fingerprint of its imputed cells, the one the trace's ``mi_impute`` step records (``cells_fp``), so that a study
+    package links the result to the step that drew them; ``:subset`` when the imputation was fitted on more rows than
+    the analysis population. The fingerprint is computed once per imputation (``StoredMI.cells_fp``).
+    """
     stored = state.mi
-    return "" if stored is None else f"{stored.binding.run_id}:{stored.binding.created_at}"
+    if stored is None:
+        return ""
+    current = state.mi_status()
+    subset = current is not None and current.kind == "subset"
+    return f"mi:{stored.cells_fp}" + (":subset" if subset else "")
 
 
 def pooled_frame(

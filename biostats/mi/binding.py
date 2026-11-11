@@ -20,6 +20,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import cached_property
 from typing import Any, Literal
 
 import numpy as np
@@ -60,6 +61,14 @@ class StoredMI:
     hashes: pd.Series  # row id -> hash of the model columns at fitting time
     strata: pd.Series | None = None  # row id -> stratum label (``by``)
     diagnostics: dict[str, Any] = field(default_factory=dict)
+
+    @cached_property
+    def cells_fp(self) -> str:
+        """
+        The fingerprint of the imputed cells (``MIData.fingerprint``), computed once: what the trace's ``mi_impute``
+        step records and what names the imputation in a pooled result, from one source.
+        """
+        return self.mi.fingerprint()
 
 
 @dataclass(frozen=True)

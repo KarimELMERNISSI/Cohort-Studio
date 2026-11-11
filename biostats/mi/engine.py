@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pickle
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,6 +39,102 @@ from biostats.mi.spec import (
 )
 
 ENGINE = "cohortstudio-fcs 1"
+
+
+def drawn_with() -> dict[str, Any]:
+    """
+    What the draws of an imputation depend on besides its specification and its seed, recorded with the step that
+    drew them: the versions of numpy, scikit-learn and SciPy (the solver of ``polyreg`` is SciPy's), the system and
+    the machine, and every BLAS library the process loaded with its version, its kernel, its threading layer and
+    its threads. Two machines with the same lock file can run different kernels (the wheels choose one by processor),
+    and numpy and SciPy each bring their own BLAS. Never a path or a host name. The threads are those of the process
+    that records, the session's: the chains of a parallel run are drawn in worker processes of one BLAS thread each,
+    and a replay draws in its own process. The lock file's checksum, in the trace's environment record, covers
+    pandas and Python.
+    """
+    import platform
+
+    import numpy
+    import scipy
+    import sklearn
+
+    found: dict[str, Any] = {
+        "versions": {
+            "numpy": numpy.__version__,
+            "scikit-learn": sklearn.__version__,
+            "scipy": scipy.__version__,
+        },
+        "platform": {"system": platform.system(), "machine": platform.machine()},
+    }
+    try:
+        from threadpoolctl import threadpool_info
+
+        found["platform"]["blas"] = sorted(
+            (
+                {
+                    "library": str(pool.get("internal_api") or ""),
+                    "version": str(pool.get("version") or ""),
+                    "kernel": str(pool.get("architecture") or ""),
+                    "threading": str(pool.get("threading_layer") or ""),
+                    "threads": int(pool.get("num_threads") or 0),
+                }
+                for pool in threadpool_info()
+                if pool.get("user_api") == "blas"
+            ),
+            key=lambda pool: tuple(str(v) for v in pool.values()),
+        )
+    except Exception:  # an optional report: a missing or failing threadpoolctl records no BLAS
+        pass
+    return found
+
+
+def _blas_words(pools: Any) -> str:
+    if isinstance(pools, str):  # one library as text, as an early record wrote it
+        return pools
+    return (
+        "; ".join(
+            f"{p.get('library')} {p.get('version')} {p.get('kernel')} "
+            f"({p.get('threading') or 'threading layer not given'}, {p.get('threads')} threads)"
+            for p in pools or []
+            if isinstance(p, Mapping)
+        )
+        or "not available"
+    )
+
+
+def drawn_with_changes(
+    params: Mapping[str, Any], now: Mapping[str, Any] | None = None
+) -> list[str]:
+    """
+    What differs between what a recorded ``mi_impute`` step was drawn with (its ``versions`` and ``platform``) and
+    this process (``now``: :func:`drawn_with`), in words: "scipy 1.15.0 -> 1.16.2", "machine x86_64 -> aarch64". What
+    a step written by an earlier version did not record is said too ("scipy not recorded"): it may have changed.
+    """
+    now = drawn_with() if now is None else now
+    recorded_versions = params.get("versions") or {}
+    recorded_platform = params.get("platform") or {}
+    changes: list[str] = []
+    for name, current in now["versions"].items():
+        was = recorded_versions.get(name)
+        if was is None:
+            changes.append(f"{name} not recorded")
+        elif was != current:
+            changes.append(f"{name} {was} -> {current}")
+    for name in ("system", "machine"):
+        was, current = recorded_platform.get(name), now["platform"].get(name)
+        if was is None:
+            changes.append(f"{name} not recorded")
+        elif was != current:
+            changes.append(f"{name} {was} -> {current}")
+    if "blas" not in recorded_platform:
+        changes.append("BLAS not recorded")
+    elif recorded_platform["blas"] != now["platform"].get("blas"):
+        changes.append(
+            f"BLAS {_blas_words(recorded_platform['blas'])} -> {_blas_words(now['platform'].get('blas'))}"
+        )
+    return changes
+
+
 HAZARD = "Nelson-Aalen H(T)"
 # the warning for a variable left incomplete (method ""): it then predicts no other variable
 NOT_IMPUTED = "{column} is incomplete and not imputed, so it is not used as a predictor"

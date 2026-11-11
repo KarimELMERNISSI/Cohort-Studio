@@ -139,6 +139,21 @@ def test_the_declared_derived_variables_are_computed_in_each_imputed_dataset(app
     step = app.session_state["transformation_manager"].history[-1]
     assert step["function"] == "mi_impute"
     assert step["params"]["derived"]["approach"] == "impute_then_derive"
+    # what the draws depend on (biostats.mi.engine.drawn_with): the libraries, the machine, every BLAS library
+    assert set(step["params"]["versions"]) == {"numpy", "scikit-learn", "scipy"}
+    assert {"system", "machine"} <= set(step["params"]["platform"]) <= {"system", "machine", "blas"}
+    assert step["params"]["cells_fp"] == stored.cells_fp
+    # a pooled result names this imputation by the fingerprint the step records
+    from ui.components.mi_mode import mi_token
+    from ui.state import AppState
+
+    class _State(AppState):
+        mi = stored
+
+        def mi_status(self):
+            return None
+
+    assert mi_token(_State()) == f"mi:{step['params']['cells_fp']}"
     assert [s["target"] for s in step["params"]["derived"]["steps"]] == ["bmi_kg_m2"]
     # the definition removed afterwards: the imputation keeps the formula it used, and says so
     app.session_state["config"] = with_definitions(app.session_state["config"], [])

@@ -141,6 +141,19 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   name also names the study; a name that keeps no letter of its own takes part of its file's checksum into its
   study. The trace download's help no longer suggests replaying it elsewhere: it holds row numbers and values of the
   data.
+- **A pooled result names its imputation by what was drawn.** Its settings hold the fingerprint of the imputed cells,
+  the one the multiple imputation's step records (`cells_fp`), where they held the session's run id, and say when an
+  imputation fitted on more rows than the analysis population was used. The same specification and seed drawn again
+  give the same name, so a result computed on them is current again. In the session that drew the imputation, the
+  name finds its step in the trace; after a saved version is loaded with its imputation, the step is in the trace
+  the version came from.
+- **The imputation's step records what its draws depend on, and the replay says what changed.** Besides numpy and
+  scikit-learn, the step now holds SciPy's version (its solver enters the draws of `polyreg`), the system, the
+  machine, and every BLAS library the process loaded (numpy and SciPy each bring one) with its version, its kernel
+  and its threads: two machines with the same lock file can run different kernels. Never a path or a host name.
+  When a replayed imputation differs from the recorded one, the message names what changed ("changed since: scipy
+  1.15.0 -> 1.18.1, machine aarch64 -> AMD64"), and what a step written by an earlier version did not record
+  ("scipy not recorded").
 - **The software a dataset is analysed with names the code exactly.** The trace and the study dossier record
   CohortStudio's full commit (7 characters were kept), a fingerprint of its own code (SHA-256 over its Python sources,
   line endings read as LF) and the lock file's checksum. The fingerprint names the code that ran when no commit can: a

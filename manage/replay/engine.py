@@ -788,10 +788,8 @@ def _population_definition(df, step, index, paths, warnings):
 
 def _mi_impute(df, step, index, paths, warnings, result=None):
     """Re-run a multiple imputation on its population and check the imputed cells against the recorded hash."""
-    import numpy
-    import sklearn
-
     from biostats.mi import ImputationSpec, impute
+    from biostats.mi.engine import drawn_with_changes
 
     params = step.get("params", {}) or {}
     block = step.get("population") or {}
@@ -820,9 +818,8 @@ def _mi_impute(df, step, index, paths, warnings, result=None):
     if recorded and run.mi.fingerprint() != recorded:
         if result is not None:
             result.mi_divergence.append(index)
-        versions = params.get("versions") or {}
-        now = {"numpy": numpy.__version__, "scikit-learn": sklearn.__version__}
-        changed = [f"{k} {versions.get(k)} -> {v}" for k, v in now.items() if versions.get(k) != v]
+        # the libraries, the machine and the BLAS the step was drawn with, against this process's
+        changed = drawn_with_changes(params)
         why = f" (changed since: {', '.join(changed)})" if changed else ""
         warnings.append(
             f"step {index + 1} (mi_impute): the re-computed imputation differs from the recorded one{why}"

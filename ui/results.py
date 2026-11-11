@@ -256,9 +256,9 @@ def single_imputation_warning(counts: Mapping[str, int]) -> None:
     )
 
 
-_TOKEN = re.compile(
-    r"^[0-9a-f]{32}:"
-)  # the identity of an imputation in a pooled result's settings
+# the identity of an imputation in a pooled result's settings (ui.components.mi_mode.mi_token): by its cells'
+# fingerprint, or by its run (results stored before M8), never words of the settings
+_TOKEN = re.compile(r"^(?:mi:[0-9a-f]{16}(?::subset)?$|[0-9a-f]{32}:)")
 
 
 def describe_settings(config: Any) -> str:

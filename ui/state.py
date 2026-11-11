@@ -1020,10 +1020,7 @@ class AppState:
         st.session_state[MI_KEY] = stored
         tm = self.transformation_manager
         if record and tm.session_id:
-            import numpy
-            import sklearn
-
-            from biostats.mi.engine import ENGINE
+            from biostats.mi.engine import ENGINE, drawn_with
             from biostats.mi.report import incomplete_share
             from biostats.mi.spec import DERIVED
 
@@ -1038,20 +1035,25 @@ class AppState:
                 "incomplete": incomplete_share(
                     mi.base, [c for c in run.spec.columns if run.methods.get(c) != DERIVED]
                 ),
-                "cells_fp": mi.fingerprint(),
+                "cells_fp": stored.cells_fp,
                 "engine": ENGINE,
-                "versions": {"numpy": numpy.__version__, "scikit-learn": sklearn.__version__},
+                # "versions" and "platform": the libraries, the machine and the BLAS the draws were computed with
+                **drawn_with(),
             }
             if mi.info.get("derived"):
                 params["derived"] = dict(mi.info["derived"])
             label = ", ".join(f"{c} ({m})" for c, m in run.methods.items())
-            with contextlib.suppress(Exception):
+            try:
                 tm.add_step(
                     "mi_impute",
                     params,
                     f"Multiple imputation, m = {mi.m}: {label}",
                     population=stored.binding.population,
                 )
+            except (
+                Exception
+            ) as exc:  # the imputation is kept; a pooled result then names a step the trace lacks
+                logger.warning("the mi_impute step could not be recorded: %s", type(exc).__name__)
         return stored
 
     def mi_derived_edited(self) -> list[str]:
