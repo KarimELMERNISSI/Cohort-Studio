@@ -16,6 +16,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from biostats.plan import ImputationUsed
 from ui.components.text import plain
 
 MODE_KEY = "analysis_data_mode"
@@ -109,6 +110,29 @@ def mi_token(state) -> str:
     current = state.mi_status()
     subset = current is not None and current.kind == "subset"
     return f"mi:{stored.cells_fp}" + (":subset" if subset else "")
+
+
+def imputation_reference(state) -> ImputationUsed | None:
+    """
+    The imputation a pooled result used, by its content, for the result's analysis spec: the fingerprint of the
+    imputed cells (``cells_fp`` of the trace's ``mi_impute`` step), m, whether it was fitted on more rows than the
+    analysis population, and that step's number and hash in the session's trace when the trace holds it (after a
+    saved version is loaded with its imputation, the step is in the trace the version came from).
+    """
+    token = mi_token(state)
+    if not token:
+        return None
+    _, cells, *subset = token.split(":")
+    index, digest = None, None
+    history = getattr(state.transformation_manager, "history", None) or []
+    for step in reversed(history):
+        if (
+            step.get("function") == "mi_impute"
+            and (step.get("params") or {}).get("cells_fp") == cells
+        ):
+            index, digest = step.get("index"), step.get("hash")
+            break
+    return ImputationUsed(cells, int(state.mi.mi.m), bool(subset), index, digest)
 
 
 def pooled_frame(

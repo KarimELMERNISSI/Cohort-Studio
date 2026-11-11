@@ -323,6 +323,13 @@ def _pooled_blocks(res: Any) -> ResultBlocks:
     return blocks
 
 
+def _by_group(counts: Any) -> str:
+    """The rows of each group, in the groups' order: "Control 390, Intervention 388"."""
+    if not isinstance(counts, dict):
+        return ""
+    return ", ".join(f"{group} {int(n):,}" for group, n in counts.items())
+
+
 def _univariate_blocks(value: dict) -> ResultBlocks:
     from biostats.multiplicity import adjust
 
@@ -335,6 +342,12 @@ def _univariate_blocks(value: dict) -> ResultBlocks:
     rows = pd.DataFrame(
         {
             "Variable": frame["Variable"],
+            # the rows each variable is analysed on, in all and in each group (STROBE item 12: a difference of two
+            # means is read with its two n); results stored before they were kept say nothing
+            "n": [f"{int(v):,}" for v in frame["N"]] if "N" in frame.columns else "",
+            "n by group": [_by_group(v) for v in frame["N per group"]]
+            if "N per group" in frame.columns
+            else "",
             "Test": frame["Test Used"],
             "Estimate": [_num(v) for v in estimates],
             "Estimate CI": frame["Estimate CI"] if "Estimate CI" in frame.columns else "",

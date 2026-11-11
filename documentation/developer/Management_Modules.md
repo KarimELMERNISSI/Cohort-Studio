@@ -3755,6 +3755,14 @@ No description available.
 
 No description available.
 
+### def `_by_group` (report_tables.py)
+
+- **Arguments**: `counts: Any`
+
+- **Returns**: `str`
+
+The rows of each group, in the groups' order: "Control 390, Intervention 388".
+
 ### def `_univariate_blocks` (report_tables.py)
 
 - **Arguments**: `value: dict`

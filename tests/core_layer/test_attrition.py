@@ -363,6 +363,60 @@ def test_a_criterion_says_what_it_does() -> None:
     )
 
 
+def test_an_analysis_of_several_variables_gives_its_range_of_rows(tutorial) -> None:
+    """A group comparison analyses each variable on its own rows: its box counts the fewest and says the range."""
+    session, config = tutorial
+    flow = participant_flow(
+        session.population(config),
+        analyses=[
+            AnalysisCount("Group comparison", 928, 778, n_most=928),
+            AnalysisCount("Group comparison", 928, 900, n_most=900),
+        ],
+    )
+    several, one = flow.analyses
+    assert several.n == 778
+    assert several.details == ("778 to 928 rows by variable", "up to 150 not used: missing values")
+    assert one.n == 900 and one.details == ("28 not used: missing values",)
+
+
+def test_rows_left_out_for_another_reason_are_not_called_missing_values(tutorial) -> None:
+    """A comparison of two groups among three said "3 not used: missing values" of the third group's rows, and a
+    Kaplan-Meier plot the same of a group too small to draw: nothing was missing."""
+    session, config = tutorial
+    flow = participant_flow(
+        session.population(config),
+        analyses=[
+            AnalysisCount(
+                "Group comparison", 928, 925, n_left_out=3, left_out="not in the compared groups"
+            ),
+            AnalysisCount(
+                "Group comparison", 928, 900, n_left_out=3, left_out="not in the compared groups"
+            ),
+            AnalysisCount(
+                "Kaplan-Meier", 928, 927, n_left_out=1, left_out="in a group too small to draw"
+            ),
+            AnalysisCount(
+                "Group comparison",
+                928,
+                700,
+                n_most=925,
+                n_left_out=3,
+                left_out="not in the compared groups",
+            ),
+        ],
+    )
+    assert [a.details for a in flow.analyses] == [
+        ("3 not in the compared groups",),
+        ("3 not in the compared groups", "25 not used: missing values"),
+        ("1 in a group too small to draw",),
+        (
+            "700 to 925 rows by variable",
+            "3 not in the compared groups",
+            "up to 225 not used: missing values",
+        ),
+    ]
+
+
 def test_the_layout_places_every_box(tutorial) -> None:
     session, config = tutorial
     flow = participant_flow(

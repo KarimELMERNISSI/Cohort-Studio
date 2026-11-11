@@ -468,8 +468,16 @@ def run_univariate_analysis(df, analyzer, transformed=False):
     stored_config = (group_col, tuple(map(str, selected_groups)), tuple(target_cols), test_preference, correction_method,
                      transform)
     if fresh or status("univariate", config=stored_config) != CURRENT:
+        # each variable is analysed on the rows where it and the group are recorded: the stamp gives the smallest and
+        # the largest of these numbers, not the rows of the selected groups
+        # (a variable whose test could not be computed is no analysis: it does not enter the range)
+        sizes = [int(r["N"]) for r in results if r.get("N") is not None and pd.notna(r.get("P-Value"))]
+        # the rows of the groups that are not compared are no missing values: counted apart
+        not_compared = int((df[group_col].notna() & ~df[group_col].isin(selected_groups)).sum())
         remember("univariate", {"results": results, "group": group_col, "correction": correction_method},
-                 config=stored_config, n_analysed=len(df_analysis_filtered), columns=[group_col, *target_cols])
+                 config=stored_config, n_analysed=min(sizes) if sizes else len(df_analysis_filtered),
+                 n_most=max(sizes) if sizes else None, columns=[group_col, *target_cols],
+                 n_left_out=not_compared, left_out="not in the compared groups")
 
     # Display Results Table
     results_df = pd.DataFrame(results)
@@ -514,6 +522,10 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         
         if 'Sample Info' in results_df.columns:
             results_df['Sample Info'] = results_df['Sample Info'].apply(fmt_sample)
+        if 'N per group' in results_df.columns:
+            results_df['N per group'] = results_df['N per group'].apply(
+                lambda x: ", ".join(f"{level}: {n:,}" for level, n in x.items()) if isinstance(x, dict) else str(x)
+            )
 
     if correction_method != "None":
         st.info(f"""

@@ -59,3 +59,44 @@ def test_a_small_group_s_pooled_median_stays_out_of_the_dossier() -> None:
     del extra["sizes"]  # a result pooled before the sizes were kept still gives its table
     table = _pooled_blocks(pooled).tables[0][1].set_index("Group")
     assert table.loc["small", "Median survival (pooled curve)"] != SMALL
+
+
+def test_a_group_comparison_gives_the_number_analysed_of_each_variable() -> None:
+    """STROBE item 12: each variable's own number analysed, not the rows of the selected groups."""
+    rows = [
+        {"Variable": "sbp_6m", "N": 778, "N per group": {"Control": 382, "Intervention": 396},
+         "Test Used": "Welch's t-test", "P-Value": 0.01, "Estimate": 6.64,
+         "Estimate CI": "4.01 to 9.26", "Estimate of": "mean difference (Intervention - Control)"},
+        {"Variable": "age", "N": 1928, "N per group": {"Control": 964, "Intervention": 964},
+         "Test Used": "Welch's t-test", "P-Value": 0.4, "Estimate": 0.2,
+         "Estimate CI": "", "Estimate of": ""},
+    ]  # fmt: skip
+    blocks = result_blocks({"results": rows, "group": "arm", "correction": "None"})
+    title, table = blocks.tables[0]
+    assert title == "Comparison by arm"
+    assert list(table.columns)[:4] == ["Variable", "n", "n by group", "Test"]
+    assert list(table["n"]) == ["778", "1,928"]
+    assert list(table["n by group"]) == ["Control 382, Intervention 396", "Control 964, Intervention 964"]
+    # a result stored before they were kept
+    before = [{k: v for k, v in row.items() if k not in ("N", "N per group")} for row in rows]
+    earlier = result_blocks({"results": before, "group": "arm"}).tables[0][1]
+    assert list(earlier["n"]) == ["", ""] and list(earlier["n by group"]) == ["", ""]
+
+
+def test_a_stamp_says_the_range_of_rows_of_a_result_of_several_analyses() -> None:
+    from ui.results import ResultStamp
+
+    common = dict(
+        data_fp="d", population_fp="p", config_hash="c", revision=3, dataset_label="cohort",
+        population_label="928 of 1,206 rows (2 criteria)", n_population=928, not_used="missing values",
+        computed_at="2026-11-10T16:30:00", trace_head=None,
+    )  # fmt: skip
+    several = ResultStamp(n_analysed=778, n_most=928, **common)
+    assert "N analysed 778 to 928 by variable (up to 150 not used: missing values)" in several.caption
+    assert "N analysed 778 (150 not used: missing values)" in ResultStamp(n_analysed=778, **common).caption
+    assert "N analysed 928 ·" in ResultStamp(n_analysed=928, n_most=928, **common).caption
+    # rows left out for another reason than a missing value are said apart
+    apart = ResultStamp(n_analysed=900, n_left_out=3, left_out="not in the compared groups", **common)
+    assert "N analysed 900 (3 not in the compared groups; 25 not used: missing values)" in apart.caption
+    whole = ResultStamp(n_analysed=925, n_left_out=3, left_out="not in the compared groups", **common)
+    assert "N analysed 925 (3 not in the compared groups) ·" in whole.caption

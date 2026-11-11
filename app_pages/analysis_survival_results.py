@@ -18,6 +18,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from biostats.plan import KINDS
 from biostats.regression import APPARENT_AUC_NOTE
 from biostats.survival import event_indicator
 from core.registry import as_code
@@ -28,9 +29,8 @@ from ui.guidance.outcomes import HELP, ComparisonTerm, comparison_terms, diagnos
 from ui.results import provenance
 from ui.theme import OKABE_ITO
 
-PH_TEST_IMPUTATIONS = (
-    5  # the proportional-hazards test (lifelines) runs on the first imputed datasets only
-)
+# the proportional-hazards test (lifelines) runs on the first imputed datasets only: the Cox kind's own option
+PH_TEST_IMPUTATIONS: int = KINDS["cox"].pooled_options["ph_test_imputations"]
 MUTED = "#6B7C86"  # adjustment terms: about 4.2:1 on the light and on the dark surface alike
 BAND_ALPHA = 0.12
 PLOT_HEIGHT = 380  # of the plotting area, in pixels

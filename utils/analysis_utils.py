@@ -53,6 +53,10 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
     estimate = np.nan
     estimate_ci_text = ""
     effect_ci_text = ""
+    # the rows this variable is analysed on (the group and the variable recorded), in all and in each group: a
+    # comparison of several variables analyses each on its own rows
+    counted = clean_df[group_col].value_counts(sort=False)
+    n_by_group = dict(sorted((str(level), int(n)) for level, n in counted.items() if n > 0))
     if is_numeric:
         # Welch-first policy; assumptions are diagnostics, not gates (audit S7/S8). Engine: biostats.inference
         groups = ordered_groups(df, group_col, target)
@@ -139,6 +143,8 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
 
     ret_dict = {
         "Variable": target,
+        "N": int(len(clean_df)),
+        "N per group": n_by_group,
         "Test Used": test_name,
         "Statistic": statistic,
         "P-Value": p_value,

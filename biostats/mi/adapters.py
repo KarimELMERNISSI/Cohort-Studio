@@ -110,6 +110,57 @@ def _factor_terms(columns: list[str], reference_levels: dict[str, str]) -> dict[
     }
 
 
+def _smallest_cells(counts: list[dict[str, dict[str, tuple[int, int, int]]]], name: str) -> dict:
+    """Of one covariate's cells over the datasets that count them: the smallest rows, events, rows with an event
+    and rows without an event of each cell."""
+    held = [c[name] for c in counts if name in c]
+    return {
+        value: (
+            min(c[value][0] for c in held),
+            min(c[value][1] for c in held),
+            min(c[value][2] for c in held),
+            min(c[value][0] - c[value][2] for c in held),
+        )
+        for value in held[0]
+    }
+
+
+def _model_sizes(extracts: list[Extract]) -> dict[str, Any]:
+    """
+    The sizes behind a pooled model: its rows and its events as their smallest and largest over the imputed datasets,
+    its smallest residual degrees of freedom, the datasets whose fit converged, and for each factor level, and each
+    value of a covariate that holds two values (an indicator), the smallest number of rows, of events, of rows with
+    an event and of rows without one. A level or an outcome read from imputed values differs in size between the
+    datasets; the small-cell rule of a shared result takes the smallest.
+    """
+    rows = [int(e.extra["n"]) for e in extracts]
+    out: dict[str, Any] = {"n": (min(rows), max(rows))}
+    events = [e.extra.get("events") for e in extracts]
+    if all(v is not None for v in events):
+        out["events"] = (int(min(events)), int(max(events)))
+    residual = [e.dfcom for e in extracts if math.isfinite(e.dfcom)]
+    if residual:
+        out["df_resid"] = int(min(residual))
+    out["datasets"] = len(extracts)
+    out["converged_in"] = sum(bool(e.extra.get("converged", True)) for e in extracts)
+    levels = [e.extra.get("level_counts") or {} for e in extracts]
+    for factor, first in levels[0].items():
+        if any(list(c.get(factor, {})) != list(first) for c in levels):
+            # every dataset is given the same levels: a term without its own counts would pass for a large one
+            raise ValueError("the imputed datasets do not hold the same levels of a factor")
+    out["level_counts"] = {factor: _smallest_cells(levels, factor) for factor in levels[0]}
+    # an indicator: two values in a dataset; where an imputation gave it other values it is counted on the datasets
+    # that keep the two (the observed rows are in all of them)
+    indicators = [e.extra.get("indicator_counts") or {} for e in extracts]
+    names = list(dict.fromkeys(name for c in indicators for name in c))
+    out["indicator_counts"] = {}
+    for name in names:
+        held = [c for c in indicators if name in c]
+        same = [c for c in held if list(c[name]) == list(held[0][name])]
+        out["indicator_counts"][name] = _smallest_cells(same, name)
+    return out
+
+
 class RegressionAdapter(Adapter):
     """Logistic, Poisson and negative-binomial regression (biostats.regression.RegressionResult)."""
 
@@ -128,8 +179,20 @@ class RegressionAdapter(Adapter):
             scales={n: "log" for n in names if n != "const"},
             factors=_factor_terms(names, dict(result.reference_levels)),
             warnings=list(result.warnings),
-            extra={"kind": result.kind, "n": result.n, "events": result.events},
+            extra={
+                "kind": result.kind,
+                "n": result.n,
+                "events": result.events,
+                "level_counts": dict(getattr(result, "level_counts", {})),
+                "indicator_counts": dict(getattr(result, "indicator_counts", {})),
+                "converged": getattr(result, "converged", True),
+            },
         )
+
+    def finish(
+        self, extracts: list[Extract], table: PooledTable | None, *, alpha: float
+    ) -> dict[str, Any]:
+        return {"family": extracts[0].extra["kind"], **_model_sizes(extracts)}
 
 
 class CoxAdapter(Adapter):
@@ -148,8 +211,19 @@ class CoxAdapter(Adapter):
             scales=dict.fromkeys(names, "log"),
             factors=_factor_terms(names, dict(result.reference_levels)),
             warnings=list(result.warnings),
-            extra={"n": result.n, "events": result.events},
+            extra={
+                "n": result.n,
+                "events": result.events,
+                "level_counts": dict(getattr(result, "level_counts", {})),
+                "indicator_counts": dict(getattr(result, "indicator_counts", {})),
+                "converged": getattr(result, "converged", True),
+            },
         )
+
+    def finish(
+        self, extracts: list[Extract], table: PooledTable | None, *, alpha: float
+    ) -> dict[str, Any]:
+        return _model_sizes(extracts)
 
 
 class LinearAdapter(Adapter):
@@ -445,6 +519,27 @@ def pool_km_curves(curves: list[Any], *, alpha: float = 0.05) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["time", "survival", "lower", "upper", "fmi"])
 
 
+def _grid_counts(curves: list[Any], times: np.ndarray, everywhere: bool) -> dict[str, list[int]]:
+    """
+    At each time of a pooled curve's grid, over the imputed datasets: the fewest events up to that time, and the
+    fewest rows still at risk at it. The rows at risk between two of a dataset's event times are not known exactly
+    (the censorings in between are counted, not timed): the number at its next event time is taken, which is never
+    more than the truth. A dataset that lacks the group counts none. What a shared curve is thinned by.
+    """
+    events = np.full(len(times), np.iinfo(np.int64).max if everywhere else 0, dtype=np.int64)
+    at_risk = events.copy()
+    for curve in curves if everywhere else []:
+        own = np.asarray(curve.times, dtype=float)
+        happened = getattr(curve, "events_at", None)
+        if happened is None:  # a curve computed before its events were kept: nothing can be said
+            return {"events": [0] * len(times), "at_risk": [0] * len(times)}
+        so_far = np.concatenate([[0], np.cumsum(np.asarray(happened, dtype=np.int64))])
+        events = np.minimum(events, so_far[np.searchsorted(own, times, side="right")])
+        left = np.concatenate([np.asarray(curve.at_risk, dtype=np.int64), [0]])
+        at_risk = np.minimum(at_risk, left[np.searchsorted(own, times, side="left")])
+    return {"events": [int(v) for v in events], "at_risk": [int(v) for v in at_risk]}
+
+
 def median_from_curve(
     curve: pd.DataFrame, column: str = "survival", *, last: float | None = None
 ) -> float | None:
@@ -482,16 +577,22 @@ class SurvivalAdapter(Adapter):
         medians = {}
         intervals = {}
         sizes = {}
+        events = {}
+        grid = {}
         for label in labels:
             curves = [e.extra["curves"][label] for e in extracts if label in e.extra["curves"]]
-            # the smallest: a group read from imputed values can differ in size
-            sizes[label] = min(c.n for c in curves)
+            # the smallest: a group read from imputed values can differ in size, and a dataset where the group was
+            # too small to draw counts as none
+            everywhere = len(curves) == len(extracts)
+            sizes[label] = min(c.n for c in curves) if everywhere else 0
+            events[label] = min(c.events for c in curves) if everywhere else 0
             if any(c.se is None for c in curves):
                 raise ValueError(
                     "the Kaplan-Meier curves carry no standard error and cannot be pooled"
                 )
             curve = pool_km_curves(curves, alpha=alpha)
             pooled[label] = curve
+            grid[label] = _grid_counts(curves, curve["time"].to_numpy(dtype=float), everywhere)
             # a stretch at exactly 0.5 runs to the last follow-up of any imputation (a curve recorded before: none)
             ends = [c.last_time for c in curves if getattr(c, "last_time", None) is not None]
             last = max(ends) if ends else None
@@ -500,7 +601,25 @@ class SurvivalAdapter(Adapter):
                 median_from_curve(curve, "lower", last=last),
                 median_from_curve(curve, "upper", last=last),
             )
-        return {"curves": pooled, "medians": medians, "median_ci": intervals, "sizes": sizes}
+        totals = [
+            (
+                sum(c.n for c in e.extra["curves"].values()),
+                sum(c.events for c in e.extra["curves"].values()),
+            )
+            for e in extracts
+        ]
+        return {
+            "curves": pooled,
+            "medians": medians,
+            "median_ci": intervals,
+            "sizes": sizes,
+            "events": events,
+            # at each time of a pooled curve: the fewest events so far and the fewest rows still at risk
+            "grid_counts": grid,
+            # the rows and the events of all the groups drawn, the smallest over the datasets (a sum of each group's
+            # smallest would be fewer than any dataset holds)
+            "total": {"rows": min(n for n, _ in totals), "events": min(d for _, d in totals)},
+        }
 
 
 def adapter_for(result: Any) -> Adapter:

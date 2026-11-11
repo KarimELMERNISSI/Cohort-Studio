@@ -324,6 +324,7 @@ def test_a_skipped_group_is_counted_not_named() -> None:
         "test"
     )
     assert not any("Luxembourgg" in w for w in res.warnings)
+    assert res.skipped_rows == 1
 
 
 def test_the_log_rank_test_compares_the_groups_that_are_drawn() -> None:
@@ -339,6 +340,7 @@ def test_the_log_rank_test_compares_the_groups_that_are_drawn() -> None:
     assert three.logrank_df == two.logrank_df == 1
     assert three.logrank_statistic == pytest.approx(two.logrank_statistic, rel=1e-12)
     assert three.logrank_p == pytest.approx(two.logrank_p, rel=1e-12)
+    assert three.skipped_rows == 1 and two.skipped_rows == 0
 
 
 def test_lifelines_warnings_naming_a_column_stay_in(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -20,7 +20,6 @@ import pandas as pd
 import streamlit as st
 
 from app_pages.analysis_survival_results import (
-    PH_TEST_IMPUTATIONS,
     Comparison,
     curve_rows,
     show_count,
@@ -29,8 +28,8 @@ from app_pages.analysis_survival_results import (
 )
 from app_pages.clean_categories import take_done
 from app_pages.clean_dialog import clean_actions
-from biostats.regression import count_regression, logistic_regression
-from biostats.survival import EVENT_WORDS, compare_survival, cox_regression
+from biostats.plan import run, specify
+from biostats.survival import EVENT_WORDS
 from enrich.recode import MAX_VALUES
 from ui.components import error_card, glossary_popover, page_link, status_chip
 from ui.components.mi_mode import mi_token
@@ -287,63 +286,49 @@ def _comparison(
 
 
 def _fit_curves(df, mi, key, config, time_col, event_col, group) -> None:
+    """Kaplan-Meier curves and the log-rank test, computed from their spec (biostats.plan) and stored with it."""
     try:
-        if mi is not None:
-            from biostats.mi import analyze_mi
-
-            columns = [time_col, event_col, *([group] if group else [])]
-            res = analyze_mi(
-                lambda d: compare_survival(d, time_col, event_col, group), mi, columns=columns
-            )
-            remember(key, res, config=config, n_analysed=len(mi.base), columns=columns)
-        else:
-            res = compare_survival(df, time_col, event_col, group)
-            remember(
-                key,
-                res,
-                config=config,
-                n_analysed=sum(c.n for c in res.curves),
-                columns=[time_col, event_col, group or ""],
-            )
+        spec = specify(
+            "survival", pooled=mi is not None, time=time_col, event=event_col, group=group
+        )
+        done = run(spec, df, mi=mi)
+        remember(
+            key,
+            done.result,
+            config=config,
+            n_analysed=len(mi.base) if mi is not None else sum(c.n for c in done.result.curves),
+            columns=[time_col, event_col, group or ""],
+            spec=done.spec,
+            # a group of one row is not drawn: its rows are no missing values
+            n_left_out=0 if mi is not None else done.result.skipped_rows,
+            left_out="in a group too small to draw",
+        )
         mark_step("analyse", "survival analysis")
     except Exception as exc:
         _failed("The survival curves could not be computed", exc)
 
 
-def _fit_cox(df, mi, key, config, time_col, event_col, covariates) -> None:
+def _fit_cox(df, mi, key, config, time_col, event_col, compare, adjust) -> None:
+    """The Cox model, computed from its spec and stored with it; pooled, the proportional-hazards test runs on the
+    first imputed datasets only."""
     try:
-        if mi is not None:
-            from biostats.mi import analyze_mi
-
-            levels = mi.levels(covariates)
-            fitted = analyze_mi(
-                lambda d: cox_regression(
-                    d,
-                    time_col,
-                    event_col,
-                    covariates,
-                    levels=levels,
-                    diagnostics=d.attrs["imputation"] <= PH_TEST_IMPUTATIONS,
-                ),
-                mi,
-                columns=[time_col, event_col, *covariates],
-            )
-            remember(
-                key,
-                fitted,
-                config=config,
-                n_analysed=len(mi.base),
-                columns=[time_col, event_col, *covariates],
-            )
-        else:
-            fitted = cox_regression(df, time_col, event_col, covariates)
-            remember(
-                key,
-                fitted,
-                config=config,
-                n_analysed=fitted.n,
-                columns=[time_col, event_col, *covariates],
-            )
+        spec = specify(
+            "cox",
+            pooled=mi is not None,
+            time=time_col,
+            event=event_col,
+            compare=chosen(compare),
+            adjust=list(adjust),
+        )
+        done = run(spec, df, mi=mi)
+        remember(
+            key,
+            done.result,
+            config=config,
+            n_analysed=len(mi.base) if mi is not None else done.result.n,
+            columns=[time_col, event_col, *spec.covariates()],
+            spec=done.spec,
+        )
         mark_step("analyse", "Cox model")
     except Exception as exc:
         _failed("The Cox model could not be fitted", exc)
@@ -416,10 +401,13 @@ def _time_to_event(df, numeric, binary, groups, *, mi, token, guided) -> None:
         if pooled
         else ("survival", (time_col, event_col, group or NONE))
     )
+    # the comparison and the adjustment apart: "compare arm, adjust for age" and "adjust for arm and age" fit the
+    # same model, but they are two requests, and each result says which it answers
+    roles = (chosen(compare) or NONE, tuple(a for a in adjust if a != chosen(compare)))
     cox_key, cox_config = (
-        ("cox_mi", (time_col, event_col, tuple(covariates), token))
+        ("cox_mi", (time_col, event_col, *roles, token))
         if pooled
-        else ("cox", (time_col, event_col, tuple(covariates)))
+        else ("cox", (time_col, event_col, *roles))
     )
     if st.button(
         "Run analysis",
@@ -431,7 +419,7 @@ def _time_to_event(df, numeric, binary, groups, *, mi, token, guided) -> None:
         if curves:
             _fit_curves(df, mi, km_key, km_config, time_col, event_col, group)
         if model:
-            _fit_cox(df, mi, cox_key, cox_config, time_col, event_col, covariates)
+            _fit_cox(df, mi, cox_key, cox_config, time_col, event_col, compare, adjust)
     km = recall(km_key, config=km_config) if curves else None
     cox = recall(cox_key, config=cox_config) if model else None
     show_time_to_event(
@@ -492,10 +480,11 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
             planned, note=note, keys=("logit_compare", "logit_adjust"), **_offered(cands, mi)
         )
     pooled = mi is not None
+    roles = (chosen(compare) or NONE, tuple(a for a in adjust if a != chosen(compare)))
     key, config = (
-        ("logistic_mi", (outcome, event_level, tuple(covs), token))
+        ("logistic_mi", (outcome, event_level, *roles, token))
         if pooled
-        else ("logistic", (outcome, event_level, tuple(covs)))
+        else ("logistic", (outcome, event_level, *roles))
     )
     if st.button(
         "Run analysis",
@@ -506,23 +495,23 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
         "adjust for.",
     ):
         try:
-            if pooled:
-                from biostats.mi import analyze_mi
-
-                levels = mi.levels(covs)
-                fitted = analyze_mi(
-                    lambda d: logistic_regression(
-                        d, outcome, covs, event_level=event_level, levels=levels
-                    ),
-                    mi,
-                    columns=[outcome, *covs],
-                )
-                remember(
-                    key, fitted, config=config, n_analysed=len(mi.base), columns=[outcome, *covs]
-                )
-            else:
-                fitted = logistic_regression(df, outcome, covs, event_level=event_level)
-                remember(key, fitted, config=config, n_analysed=fitted.n, columns=[outcome, *covs])
+            spec = specify(
+                "logistic",
+                pooled=pooled,
+                options={"event_level": event_level},
+                outcome=outcome,
+                compare=chosen(compare),
+                adjust=list(adjust),
+            )
+            done = run(spec, df, mi=mi)
+            remember(
+                key,
+                done.result,
+                config=config,
+                n_analysed=len(mi.base) if pooled else done.result.n,
+                columns=[outcome, *covs],
+                spec=done.spec,
+            )
             mark_step("analyse", "logistic regression")
         except Exception as exc:
             _failed("The logistic model could not be fitted", exc)
@@ -584,10 +573,11 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
             planned, note=note, keys=("count_compare", "count_adjust"), **_offered(cands, mi)
         )
     pooled = mi is not None
+    roles = (chosen(compare) or NONE, tuple(a for a in adjust if a != chosen(compare)))
     key, config = (
-        ("count_mi", (count_col, exposure, family, tuple(covs), token))
+        ("count_mi", (count_col, exposure, family, *roles, token))
         if pooled
-        else ("count", (count_col, exposure, family, tuple(covs)))
+        else ("count", (count_col, exposure, family, *roles))
     )
     if st.button(
         "Run analysis",
@@ -598,35 +588,24 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
         "for.",
     ):
         try:
-            if pooled:
-                from biostats.mi import analyze_mi
-
-                levels = mi.levels(covs)
-                fitted = analyze_mi(
-                    lambda d: count_regression(
-                        d, count_col, covs, exposure_col=exposure_col, family=family, levels=levels
-                    ),
-                    mi,
-                    columns=[count_col, *covs, *([exposure_col] if exposure_col else [])],
-                )
-                remember(
-                    key,
-                    fitted,
-                    config=config,
-                    n_analysed=len(mi.base),
-                    columns=[count_col, *covs, exposure_col or ""],
-                )
-            else:
-                fitted = count_regression(
-                    df, count_col, covs, exposure_col=exposure_col, family=family
-                )
-                remember(
-                    key,
-                    fitted,
-                    config=config,
-                    n_analysed=fitted.n,
-                    columns=[count_col, *covs, exposure_col or ""],
-                )
+            spec = specify(
+                "count",
+                pooled=pooled,
+                options={"family": family},
+                count=count_col,
+                person_time=exposure_col,
+                compare=chosen(compare),
+                adjust=list(adjust),
+            )
+            done = run(spec, df, mi=mi)
+            remember(
+                key,
+                done.result,
+                config=config,
+                n_analysed=len(mi.base) if pooled else done.result.n,
+                columns=[count_col, *covs, exposure_col or ""],
+                spec=done.spec,
+            )
             mark_step("analyse", "count regression")
         except Exception as exc:
             _failed("The count model could not be fitted", exc)

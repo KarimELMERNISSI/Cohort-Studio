@@ -80,6 +80,14 @@ class AnalysisCount:
     not_used: str = "missing values"
     imputations: int | None = None  # m when the analysis pooled multiply imputed datasets
     note: str = ""  # e.g. the variables and options of the analysis
+    # the largest number analysed when the result holds several analyses, each on its own rows (a group comparison of
+    # several variables); n_analysed is then the smallest
+    n_most: int | None = None
+    # the rows of the population the analysis left out for another reason than a missing value, and the words for
+    # them ("not in the compared groups", "in a group too small to draw"): they are no missing values, and a shared
+    # document treats them as a count of participants with a characteristic
+    n_left_out: int = 0
+    left_out: str = ""
 
 
 @dataclass(frozen=True)
@@ -178,6 +186,30 @@ def _added_lines(step: Mapping[str, Any], added: int) -> tuple[str, ...]:
 def _family_label(family: str, kind: str) -> str:
     words = family_words(family)
     return f"Excluded: {words}" if kind == EXCLUSION else f"Not meeting: {words}"
+
+
+def not_used_words(
+    n_population: int,
+    n_analysed: int,
+    n_most: int | None = None,
+    n_left_out: int = 0,
+    left_out: str = "",
+    not_used: str = "missing values",
+) -> tuple[str, ...]:
+    """
+    Why an analysis used fewer rows than the population holds, one reason per entry: the rows it left out for
+    another reason than a missing value ("3 not in the compared groups"), then those it could not use ("7 not used:
+    missing values"; "up to 150 not used" when the result analyses several variables, each on its own rows). Empty
+    when it used every row.
+    """
+    words = []
+    if n_left_out > 0:
+        words.append(f"{n_left_out:,} {left_out or 'left out'}")
+    missing = n_population - n_left_out - n_analysed
+    if missing > 0:
+        several = n_most is not None and n_most != n_analysed
+        words.append(f"{'up to ' if several else ''}{missing:,} not used: {not_used}")
+    return tuple(words)
 
 
 def participant_flow(
@@ -362,12 +394,12 @@ def participant_flow(
             )
         else:
             n = a.n_analysed if a.n_analysed is not None else a.n_population
-            dropped = a.n_population - n
-            detail = (
-                (f"{dropped:,} not used: {a.not_used}",)
-                if dropped > 0
-                else ("every row of the population",)
-            )
+            detail = not_used_words(
+                a.n_population, n, a.n_most, a.n_left_out, a.left_out, a.not_used
+            ) or ("every row of the population",)
+            if a.n_most is not None and a.n_most != n:
+                # the box counts the fewest rows a variable was analysed on, and says the range
+                detail = (f"{n:,} to {a.n_most:,} rows by variable", *detail)
         if a.note:
             detail = (a.note, *detail)
         analysis_boxes.append(FlowBox(f"analysis:{j}", a.label, int(n), ANALYSIS, details=detail))
@@ -434,6 +466,7 @@ __all__ = [
     "SourceRows",
     "criterion_line",
     "missing_line",
+    "not_used_words",
     "flow_layout",
     "participant_flow",
     "source_from_trace",

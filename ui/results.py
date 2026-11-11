@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -22,6 +23,10 @@ from datetime import datetime
 from typing import Any
 
 import streamlit as st
+
+from biostats.plan import AnalysisSpec, ComputedOn, titles
+
+logger = logging.getLogger(__name__)
 
 RESULTS_KEY = "_results"
 REPORT_KEY = "_report"  # the results added to the study dossier
@@ -52,6 +57,13 @@ class ResultStamp:
     trace_head: str | None
     # (column, number of values filled by a single imputation) among the columns the analysis read
     single_imputed: tuple[tuple[str, int], ...] = ()
+    # a result of several analyses, each on its own rows (a group comparison of several variables): the largest
+    # number analysed, n_analysed being the smallest; None when the result has one number analysed
+    n_most: int | None = None
+    # the rows of the population left out for another reason than a missing value (groups not compared, groups too
+    # small to draw), and the words for them
+    n_left_out: int = 0
+    left_out: str = ""
 
     @property
     def caption(self) -> str:
@@ -61,10 +73,21 @@ class ResultStamp:
             f"population: {self.population_label}",
         ]
         if self.n_analysed is not None:
-            dropped = self.n_population - self.n_analysed
+            from core.attrition import not_used_words
+
             analysed = f"N analysed {self.n_analysed:,}"
-            if dropped > 0:
-                analysed += f" ({dropped:,} not used: {self.not_used})"
+            if self.n_most is not None and self.n_most != self.n_analysed:
+                analysed += f" to {self.n_most:,} by variable"
+            why = not_used_words(
+                self.n_population,
+                self.n_analysed,
+                self.n_most,
+                self.n_left_out,
+                self.left_out,
+                self.not_used,
+            )
+            if why:
+                analysed += f" ({'; '.join(why)})"
             parts.append(analysed)
         parts.append(self.computed_at[11:16])
         if self.trace_head:
@@ -77,6 +100,9 @@ class StoredResult:
     value: Any
     stamp: ResultStamp
     config: Any = None  # the settings, kept to describe the result in the study dossier
+    # what was asked and on what (biostats.plan): a study package computes the result again from it; None for a kind
+    # that has no spec yet, or a result stored before specs existed
+    spec: AnalysisSpec | None = None
 
 
 @dataclass(frozen=True)
@@ -90,30 +116,11 @@ class ReportItem:
     value: Any
     stamp: ResultStamp
     added_at: str
+    spec: AnalysisSpec | None = None  # as StoredResult.spec
 
 
-RESULT_TITLES: dict[str, str] = {
-    "survival": "Kaplan-Meier survival and log-rank test",
-    "survival_mi": "Kaplan-Meier survival and log-rank test, pooled",
-    "cox": "Cox proportional-hazards model",
-    "cox_mi": "Cox proportional-hazards model, pooled",
-    "logistic": "Logistic regression",
-    "logistic_mi": "Logistic regression, pooled",
-    "count": "Count regression",
-    "count_mi": "Count regression, pooled",
-    "univariate": "Group comparison",
-    "univariate_mi": "Group comparison, pooled",
-    "ancova": "ANCOVA",
-    "ancova_mi": "ANCOVA, pooled",
-    "paired": "Paired test",
-    "paired_mi": "Paired t-test, pooled",
-    "one_sample": "One-sample test",
-    "one_sample_mi": "One-sample t-test, pooled",
-    "mcnemar": "McNemar's test",
-    "mantel_haenszel": "Mantel-Haenszel stratified analysis",
-    "diagnostic": "Diagnostic accuracy",
-    "bland_altman": "Bland-Altman agreement",
-}
+# the title of every stored key, from the catalogue of analysis kinds (biostats.plan.KINDS)
+RESULT_TITLES: dict[str, str] = titles()
 
 
 def config_hash(config: Any) -> str:
@@ -138,11 +145,19 @@ def remember(
     n_analysed: int | None = None,
     not_used: str = "missing values",
     columns: Sequence[str] | None = None,
+    spec: AnalysisSpec | None = None,
+    n_most: int | None = None,
+    n_left_out: int = 0,
+    left_out: str = "",
 ) -> ResultStamp | None:
     """
     Store ``value`` with the identity of the data, the population and the settings it was computed on.
 
     ``columns`` (the variables the analysis reads) lets the stamp count the values a single imputation filled.
+    ``spec`` (the analysis as it ran, biostats.plan.run) is kept with what it was computed on (:func:`_computed_on`).
+    ``n_most`` is the largest number analysed when the result holds several analyses, each on its own rows
+    (``n_analysed`` is then the smallest). ``n_left_out`` counts the rows left out for another reason than a missing
+    value, and ``left_out`` says which ("not in the compared groups").
     """
     from ui.state import get_state
 
@@ -168,9 +183,54 @@ def remember(
         single_imputed=tuple(
             state.single_imputed_counts([c for c in columns if c]).items() if columns else ()
         ),
+        n_most=None if n_most is None else int(n_most),
+        n_left_out=int(n_left_out),
+        left_out=left_out if n_left_out else "",
     )
-    _store()[key] = StoredResult(value, stamp, config)
+    if spec is not None:
+        try:
+            spec = spec.on(_computed_on(state, identity, spec.pooled, stamp, tm))
+        except Exception as exc:
+            # the result is computed: it is kept without its spec (a package then lists it as not run), rather than
+            # reported as a model that could not be fitted
+            logger.warning("the spec of %s could not be recorded: %s", key, type(exc).__name__)
+            spec = None
+    _store()[key] = StoredResult(value, stamp, config, spec)
     return stamp
+
+
+def _computed_on(
+    state: Any, identity: Any, pooled: bool, stamp: ResultStamp, trace: Any
+) -> ComputedOn:
+    """
+    What an analysis was computed on, for its spec: the data's fingerprint, the fingerprint of the analysis
+    population's row ids (which does not depend on the pandas version, unlike the data's), the numbers of rows, the
+    study definition's hash, the version of the rules that read missing values and criteria, the trace's head and
+    its number of steps (saving a revision of the study definition adds a step that changes no data: the head then
+    moves, and the number of steps says how far behind a result is), and for a pooled analysis the imputation by its
+    content.
+    """
+    from core.criteria import RULES_VERSION
+    from core.protocol import protocol_hash
+
+    population = state.population
+    imputation = None
+    if pooled:
+        from ui.components.mi_mode import imputation_reference
+
+        imputation = imputation_reference(state)
+    return ComputedOn(
+        mode="imputed" if pooled else "observed",
+        data_fp=identity.data_fp,
+        n_population=identity.n_population,
+        n_analysed=stamp.n_analysed,
+        rows_fp=None if population is None else population.rows_fingerprint,
+        protocol_hash=protocol_hash(state.protocol_body()),
+        rules_version=RULES_VERSION,
+        trace_head=stamp.trace_head,
+        trace_steps=len(getattr(trace, "history", None) or []),
+        imputation=imputation,
+    )
 
 
 def _outdated(value: Any) -> bool:
@@ -305,6 +365,7 @@ def add_to_report(key: str) -> None:
         value=stored.value,
         stamp=stored.stamp,
         added_at=datetime.now().isoformat(timespec="seconds"),
+        spec=stored.spec,
     )
 
 

@@ -19,7 +19,7 @@ from statsmodels.duration.hazard_regression import PHReg
 from statsmodels.duration.survfunc import SurvfuncRight
 
 from biostats._types import CI
-from biostats.design import design_matrix
+from biostats.design import design_matrix, indicator_counts, level_counts
 from biostats.references import REFERENCES
 from biostats.regression import extreme_estimates
 
@@ -98,6 +98,36 @@ def event_indicator(events: Sequence) -> np.ndarray:
     return values
 
 
+def event_coding(events: Sequence) -> dict[str, list[str]]:
+    """
+    The values of an event column as :func:`event_indicator` reads them: those that mean the event and those that
+    mean censored (1 and 0, or the words of EVENT_WORDS and CENSORED_WORDS in lower case). An analysis records it, so
+    that its reader knows which value was the event.
+    """
+    e = pd.Series(list(events)).dropna()
+    read = event_indicator(e)
+    numeric = pd.api.types.is_numeric_dtype(e.dtype) and not pd.api.types.is_bool_dtype(e.dtype)
+    text = e.map(lambda v: _code(float(v)) if numeric else str(v).strip().lower()).to_numpy()
+    return {
+        "event": sorted(set(text[read == 1])),
+        "censored": sorted(set(text[read == 0])),
+    }
+
+
+def rows_read(
+    df: pd.DataFrame, time_col: str, event_col: str, covariates: Sequence[str] = ()
+) -> pd.DataFrame:
+    """The rows a time-to-event analysis of these columns reads: every one of them recorded, a follow-up time that
+    is not negative, an event that is known."""
+    return _usable(df[[time_col, event_col, *covariates]].dropna(), time_col, event_col)[0]
+
+
+def _negative_times(frame: pd.DataFrame, time_col: str) -> int:
+    """The rows whose follow-up time is negative: left out of the analysis, and counted with its result."""
+    t = np.asarray(pd.to_numeric(frame[time_col], errors="coerce"), dtype=float)
+    return int((t < 0).sum())
+
+
 def _clean(times: Sequence, events: Sequence) -> tuple[np.ndarray, np.ndarray]:
     t = np.asarray(pd.to_numeric(pd.Series(list(times)), errors="coerce"), dtype=float)
     e = event_indicator(events)
@@ -144,6 +174,10 @@ class KMCurve:
     median_lower: float | None = None
     median_upper: float | None = None
     level: float = 0.95  # of the band and of the median's interval
+    # at each of ``times``: the events there, and the rows censored from there until the next event time (none in a
+    # curve computed before they were kept)
+    events_at: np.ndarray | None = None
+    censored_after: np.ndarray | None = None
     # the last follow-up time, an event's or a censoring's: a stretch at exactly 0.5 runs to it (km_quantile's last)
     last_time: float | None = None
 
@@ -156,6 +190,9 @@ class SurvivalComparison:
     logrank_p: float | None
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    skipped_rows: int = 0  # the rows of the groups too small to draw (fewer than 2 observations)
+    groups_skipped: int = 0  # those groups
+    rows_left_out: int = 0  # rows with a negative follow-up time, left out (a warning counts them)
 
 
 QUANTILE_TOLERANCE = 1e-8  # a survival equal to 1 - p within this is on a flat stretch at 1 - p
@@ -219,6 +256,10 @@ def kaplan_meier(
     )  # the curve's times are its event times; a stretch at 0.5 may run past the last one
     median = km_quantile(unique_times, surv, last=last)
     at_risk = np.array([(t >= u).sum() for u in unique_times])
+    events_at = np.array([int(((t == u) & (e == 1)).sum()) for u in unique_times])
+    # the rows that leave between two event times without the event: at risk here, minus the events here, minus
+    # those still at risk at the next event time
+    censored_after = at_risk - events_at - np.append(at_risk[1:], 0)
     return KMCurve(
         label=str(label),
         times=unique_times,
@@ -235,6 +276,8 @@ def kaplan_meier(
         median_upper=km_quantile(unique_times, upper, last=last),
         level=1 - alpha,
         last_time=last,
+        events_at=events_at,
+        censored_after=censored_after,
     )
 
 
@@ -247,9 +290,9 @@ def compare_survival(
     alpha: float = 0.05,
 ) -> SurvivalComparison:
     """Kaplan-Meier per group and the log-rank test (Mantel 1966) when there are two or more groups."""
-    frame, warnings = _usable(
-        df[[time_col, event_col] + ([group_col] if group_col else [])].dropna(), time_col, event_col
-    )
+    recorded = df[[time_col, event_col] + ([group_col] if group_col else [])].dropna()
+    frame, warnings = _usable(recorded, time_col, event_col)
+    left_out = _negative_times(recorded, time_col)
     curves: list[KMCurve] = []
     if not group_col:
         curves.append(kaplan_meier(frame[time_col], frame[event_col], "all", alpha=alpha))
@@ -260,16 +303,19 @@ def compare_survival(
             logrank_p=None,
             references=[REFERENCES["kaplan1958"], REFERENCES["brookmeyer1982"]],
             warnings=warnings,
+            rows_left_out=left_out,
         )
     groups = [
         (str(level), part) for level, part in frame.groupby(group_col, observed=True, sort=True)
     ]
     skipped = 0  # counted, not named: a level held by one row is a participant's value, and the dossier travels
+    skipped_rows = 0
     for label, part in groups:
         if len(part) >= 2:
             curves.append(kaplan_meier(part[time_col], part[event_col], label, alpha=alpha))
         else:
             skipped += 1
+            skipped_rows += len(part)
     if skipped:
         warnings.append(
             f"{skipped} group{'s' if skipped > 1 else ''} with fewer than 2 observations "
@@ -284,6 +330,9 @@ def compare_survival(
             logrank_p=None,
             references=[REFERENCES["kaplan1958"], REFERENCES["brookmeyer1982"]],
             warnings=warnings + ["log-rank needs at least two groups"],
+            skipped_rows=skipped_rows,
+            groups_skipped=skipped,
+            rows_left_out=left_out,
         )
     # the test compares the groups that are drawn: a group of one row has no curve, and left in the test it gave a
     # statistic of one group more than the degrees of freedom said (on the tutorial cohort by site as recorded, one
@@ -305,6 +354,9 @@ def compare_survival(
             REFERENCES["mantel1966"],
         ],
         warnings=warnings,
+        skipped_rows=skipped_rows,
+        groups_skipped=skipped,
+        rows_left_out=left_out,
     )
 
 
@@ -325,6 +377,15 @@ class CoxResult:
     vcov: pd.DataFrame | None = None
     df_resid: float | None = None
     reference_levels: dict[str, str] = field(default_factory=dict)  # factor -> its reference level
+    # factor -> level -> (rows, events, rows with an event) among the rows the model read
+    # (biostats.design.level_counts)
+    level_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    # the same for a numeric or True/False covariate that holds two values (biostats.design.indicator_counts)
+    indicator_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    converged: bool = (
+        True  # False: the estimates may not be the maximum of the likelihood (a warning says so)
+    )
+    rows_left_out: int = 0  # rows with a negative follow-up time, left out (a warning counts them)
 
 
 class _Skipped(Exception):
@@ -341,16 +402,20 @@ def cox_regression(
     ties: str = "efron",
     levels: Mapping[str, Sequence[str]] | None = None,
     diagnostics: bool = True,
+    drop_constant: bool | None = None,
 ) -> CoxResult:
     """
     Cox proportional-hazards model (Efron ties by default); categorical covariates are one-hot coded (first level reference).
 
     ``levels`` fixes the factor levels (the same terms in every imputed dataset). ``diagnostics=False`` skips the
     proportional-hazards test and the concordance (lifelines), which pooled analyses run on a few imputations only.
+    ``drop_constant``: as :func:`biostats.design.design_matrix`.
     """
     frame, warnings = _usable(df[[time_col, event_col, *covariates]].dropna(), time_col, event_col)
     t, e = _clean(frame[time_col], frame[event_col])
-    x, refs = design_matrix(frame, covariates, levels=levels, intercept=False)
+    x, refs = design_matrix(
+        frame, covariates, levels=levels, intercept=False, drop_constant=drop_constant
+    )
     if x.shape[1] == 0:
         raise ValueError("no covariate with variation")
     if np.linalg.matrix_rank(x.to_numpy(dtype=float)) < x.shape[1]:
@@ -362,7 +427,8 @@ def cox_regression(
     with catch_warnings(record=True) as caught:
         simplefilter("always")
         res = model.fit()
-    if any("Convergence" in type(w.message).__name__ for w in caught):
+    converged = not any("Convergence" in type(w.message).__name__ for w in caught)
+    if not converged:
         warnings.append(
             "the fit did not converge: its estimates may not be the maximum of the likelihood"
         )
@@ -456,6 +522,10 @@ def cox_regression(
         ),
         df_resid=float(e.sum() - x.shape[1]),  # events - parameters, as mice for coxph
         reference_levels=refs,
+        level_counts=level_counts(frame, covariates, e, levels=levels),
+        indicator_counts=indicator_counts(frame, covariates, e, levels=levels),
+        converged=converged,
+        rows_left_out=_negative_times(df[[time_col, event_col, *covariates]].dropna(), time_col),
     )
 
 
@@ -466,6 +536,8 @@ __all__ = [
     "SurvivalComparison",
     "compare_survival",
     "cox_regression",
+    "event_coding",
     "kaplan_meier",
     "km_quantile",
+    "rows_read",
 ]

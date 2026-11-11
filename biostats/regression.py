@@ -12,7 +12,7 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
 
-from biostats.design import design_matrix
+from biostats.design import design_matrix, indicator_counts, level_counts
 from biostats.references import REFERENCES
 
 logger = logging.getLogger(__name__)
@@ -56,12 +56,26 @@ class RegressionResult:
     params: pd.Series | None = None
     vcov: pd.DataFrame | None = None
     df_resid: float | None = None
+    # factor -> level -> (rows, events, rows with an event) among the rows the model read
+    # (biostats.design.level_counts)
+    level_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    # the same for a numeric or True/False covariate that holds two values (biostats.design.indicator_counts)
+    indicator_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    # a logistic model's two outcome levels as read, sorted: the event is one of them
+    outcome_levels: tuple[str, ...] = ()
+    converged: bool = (
+        True  # False: the estimates may not be the maximum of the likelihood (a warning says so)
+    )
+    dispersion_se: float | None = None  # of a negative binomial model's dispersion
 
 
 def _design(
-    df: pd.DataFrame, covariates: Sequence[str], levels: Mapping[str, Sequence[str]] | None = None
+    df: pd.DataFrame,
+    covariates: Sequence[str],
+    levels: Mapping[str, Sequence[str]] | None = None,
+    drop_constant: bool | None = None,
 ) -> tuple[pd.DataFrame, dict[str, str]]:
-    return design_matrix(df, covariates, levels=levels)
+    return design_matrix(df, covariates, levels=levels, drop_constant=drop_constant)
 
 
 EXTREME_LOG = 10.0  # a log ratio beyond this (a ratio below 5e-5 or above 22,000) with...
@@ -130,12 +144,14 @@ def logistic_regression(
     event_level=None,
     alpha: float = 0.05,
     levels: Mapping[str, Sequence[str]] | None = None,
+    drop_constant: bool | None = None,
 ) -> RegressionResult:
     """
     Binary logistic regression; odds ratios with Wald CIs, DeLong AUC of the fitted probabilities (apparent: computed
     on the data the model was fitted to).
 
-    ``levels`` fixes the factor levels (the same terms in every imputed dataset).
+    ``levels`` fixes the factor levels (the same terms in every imputed dataset); ``drop_constant``: as
+    :func:`biostats.design.design_matrix`.
     """
     frame = df[[outcome_col, *covariates]].dropna()
     y_raw = frame[outcome_col]
@@ -144,13 +160,14 @@ def logistic_regression(
         raise ValueError("the outcome must have exactly two levels")
     event_level = str(event_level) if event_level is not None else outcome_levels[1]
     y = (y_raw.astype(str) == event_level).astype(float).to_numpy()
-    x, refs = _design(frame, covariates, levels)
+    x, refs = _design(frame, covariates, levels, drop_constant)
     warnings: list[str] = []
     try:
         res = sm.Logit(y, x).fit(disp=0, maxiter=200)
     except Exception as exc:
         raise ValueError(f"the model did not converge: {exc}") from exc
-    if not res.mle_retvals.get("converged", True):
+    converged = bool(res.mle_retvals.get("converged", True))
+    if not converged:
         warnings.append(
             "the optimiser reported non-convergence; check for separation (a covariate perfectly predicting the outcome)"
         )
@@ -193,6 +210,10 @@ def logistic_regression(
         params=params,
         vcov=vcov,
         df_resid=float(len(y) - x.shape[1]),
+        level_counts=level_counts(frame, covariates, y, levels=levels),
+        indicator_counts=indicator_counts(frame, covariates, y, levels=levels),
+        outcome_levels=tuple(outcome_levels),
+        converged=converged,
     )
 
 
@@ -205,16 +226,18 @@ def count_regression(
     family: str = "poisson",
     alpha: float = 0.05,
     levels: Mapping[str, Sequence[str]] | None = None,
+    drop_constant: bool | None = None,
 ) -> RegressionResult:
     """
     Poisson (or negative binomial) regression for counts, with an optional exposure offset; incidence-rate ratios.
 
-    ``levels`` fixes the factor levels (the same terms in every imputed dataset).
+    ``levels`` fixes the factor levels (the same terms in every imputed dataset); ``drop_constant``: as
+    :func:`biostats.design.design_matrix`.
     """
     cols = [count_col, *covariates] + ([exposure_col] if exposure_col else [])
     frame = df[cols].dropna()
     y = pd.to_numeric(frame[count_col], errors="coerce").to_numpy(dtype=float)
-    x, refs = _design(frame, covariates, levels)
+    x, refs = _design(frame, covariates, levels, drop_constant)
     offset = None
     if exposure_col:
         exposure = pd.to_numeric(frame[exposure_col], errors="coerce").to_numpy(dtype=float)
@@ -222,6 +245,7 @@ def count_regression(
             raise ValueError("exposure must be positive")
         offset = np.log(exposure)
     warnings: list[str] = []
+    converged, dispersion_se = True, None
     if family == "poisson":
         # statsmodels stops on the deviance and takes the covariance from the weights of the step before the last:
         # the standard errors then sit some 1e-7 (relative) from those at the optimum, at a point that moves with
@@ -229,6 +253,7 @@ def count_regression(
         model = sm.GLM(y, x, family=sm.families.Poisson(), offset=offset)
         res = model.fit(tol=1e-10)
         res = model.fit(start_params=np.asarray(res.params, dtype=float), tol=1e-10)
+        converged = bool(getattr(res, "converged", True))
         dispersion = float(res.pearson_chi2 / res.df_resid) if res.df_resid > 0 else None
         if dispersion is not None and dispersion > 1.5:
             warnings.append(
@@ -259,13 +284,16 @@ def count_regression(
             Exception
         ) as exc:  # a dispersion at its boundary has no Hessian to step with: the BFGS fit stands
             logger.debug("negative binomial: Newton steps not taken: %s", type(exc).__name__)
-        if not res.mle_retvals.get("converged", True):
+        converged = bool(res.mle_retvals.get("converged", True))
+        if not converged:
             warnings.append(
                 "the optimiser reported non-convergence: the estimates may not be the maximum of the likelihood"
             )
         dispersion = float(
             np.asarray(res.params, dtype=float)[-1]
         )  # NB2 alpha: variance = mu + alpha mu^2
+        spread = float(np.asarray(res.bse, dtype=float)[-1])
+        dispersion_se = spread if np.isfinite(spread) else None
     else:
         raise ValueError("family must be 'poisson' or 'negative_binomial'")
     if family == "negative_binomial":
@@ -308,6 +336,10 @@ def count_regression(
         params=params,
         vcov=vcov,
         df_resid=float(len(y) - x.shape[1]),
+        level_counts=level_counts(frame, covariates, y, levels=levels),
+        indicator_counts=indicator_counts(frame, covariates, y, levels=levels),
+        converged=converged,
+        dispersion_se=dispersion_se,
     )
 
 

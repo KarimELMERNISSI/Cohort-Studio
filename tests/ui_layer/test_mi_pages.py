@@ -86,6 +86,44 @@ def test_survival_page_pools_kaplan_meier_and_cox(app: AppTest) -> None:
     ]
 
 
+def test_a_pooled_result_keeps_its_spec_and_names_its_imputation(app: AppTest) -> None:
+    """After the run above: the pooled results keep their spec, which names the imputation by the fingerprint of its
+    imputed cells and by its step of the trace; run on the imputed data again, the spec gives the same numbers."""
+    from biostats import plan
+    from biostats.mi.binding import restrict
+
+    kept = app.session_state["_mi"]
+    mi = restrict(kept, app.session_state["working_df"].index)
+    for key in ("survival_mi", "cox_mi"):
+        stored = app.session_state["_results"][key]
+        spec = stored.spec
+        assert spec is not None and spec.pooled and spec.data.mode == "imputed", key
+        used = spec.data.imputation
+        assert used.cells_fp == kept.cells_fp == kept.mi.fingerprint()
+        assert used.m == 3 and used.subset is False
+        step = app.session_state["transformation_manager"].history[used.step_index - 1]
+        assert step["function"] == "mi_impute" and step["hash"] == used.step_hash
+        assert step["params"]["cells_fp"] == used.cells_fp
+        again = plan.run(spec, mi=mi)
+        assert (
+            plan.record(key, again.result).to_json() == plan.record(key, stored.value).to_json()
+        ), key
+        assert again.spec.decided == spec.decided
+        assert spec.data.shareable()["imputation"] == {
+            "m": 3,
+            "subset": False,
+            "step_index": used.step_index,
+        }
+    cox = app.session_state["_results"]["cox_mi"].spec
+    assert cox.options["ph_test_imputations"] == 5 and cox.backend["imputation_engine"]
+    assert cox.variables == {
+        "time": "fu_days",
+        "event": "death",
+        "compare": "arm",
+        "adjust": ["age", "hba1c_pct"],
+    }
+
+
 def test_analyze_page_pools_group_comparisons_and_ancova(app: AppTest) -> None:
     app.session_state["analysis_data_mode"] = "multiple"
     app.session_state["epi_analysis_mode"] = "Univariate (Group Comparison)"

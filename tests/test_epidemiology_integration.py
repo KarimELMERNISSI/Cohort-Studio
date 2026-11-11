@@ -188,3 +188,25 @@ def test_a_two_group_difference_has_one_direction_whatever_the_order_of_the_rows
     assert first["Estimate"] == pytest.approx(reordered["Estimate"], abs=1e-12)
     low, high = sorted(map(str, df["group"].dropna().unique()))
     assert first["Estimate of"] == f"mean difference ({high} - {low})" == reordered["Estimate of"]
+
+
+def test_a_comparison_gives_the_rows_each_variable_is_analysed_on(clinical_cohort_df) -> None:
+    """The number analysed of a comparison was the rows of the selected groups, whatever each variable lacked: a
+    variable is analysed on the rows where it and the group are recorded, in all and in each group."""
+    df = clinical_cohort_df.copy()
+    lacking = df.index[::7]
+    df.loc[lacking, "biomarker"] = np.nan
+    kwargs = dict(
+        group_col="group",
+        numeric_cols=["biomarker", "sbp"],
+        categorical_cols=["stage"],
+        binary_cols=["adverse_event"],
+    )
+    numeric = analyze_variable(df=df, target="biomarker", **kwargs)
+    read = df[["group", "biomarker"]].dropna()
+    assert numeric["N"] == len(read) == len(df) - len(lacking)
+    assert numeric["N per group"] == {str(k): int(v) for k, v in read["group"].value_counts().sort_index().items()}
+    assert sum(numeric["N per group"].values()) == numeric["N"]
+    categorical = analyze_variable(df=df, target="stage", **kwargs)
+    assert categorical["N"] == len(df[["group", "stage"]].dropna())
+    assert list(numeric)[:3] == ["Variable", "N", "N per group"]  # beside the variable's name in the table

@@ -185,6 +185,42 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   recompute (data replaced outside the app, the single imputation adopted from the former panel) is still taken from
   the table recorded with it, and the page says so ("1 step(s) taken from their recorded tables: not reproduced"),
   where it said "Reproduced exactly".
+- **A group comparison gives the number analysed of each variable.** Its caption and the dossier's flow box gave the
+  rows of the selected groups, whatever each variable lacked: on the tutorial cohort, 928 for `sbp_6m`, which is
+  recorded for 778 of them. The summary table and the dossier's table now have a column **n** (the rows where the
+  variable and the group are recorded; the summary also gives them per group), and the caption and the flow box give
+  the range ("N analysed 778 to 928 by variable"). No test or estimate changes.
+- **Rows left out for another reason than a missing value are no longer called missing values.** A comparison of two
+  groups among three read "87 not used: missing values" of the third group's rows, and a Kaplan-Meier plot the same
+  of a group too small to draw. The caption, the flow box and the dossier now say "87 not in the compared groups"
+  or "1 in a group too small to draw", apart from the rows that lack a value.
+- **Each result of Survival & regression is kept with its specification** (`biostats/plan.py`): the variables by
+  their role (which one is compared, which ones adjust for it), the options, what was read on the data when it ran
+  (each factor's levels with the reference first, the values read as an event, the event's level, a covariate
+  dropped because it is constant), the libraries' versions, and what it was computed on. The page computes the
+  Kaplan-Meier curves, the Cox, logistic and count models through that specification, observed and pooled, so the
+  study package will compute a result again by the same call, with the factor levels it recorded. The numbers do
+  not change. "Compare arm, adjust for age" and "adjust for arm and age" fit the same model but are two requests:
+  each result now says which it answers, where the second showed the first's result as current.
+- **A specification has two names.** Its request id covers what was asked (kind, variables, options): the same on
+  every machine, and what a package meant to travel will carry. Its fingerprint also covers what it ran on (the
+  fingerprints of the data and of the population's rows, the study definition's hash, the trace's head and its
+  number of steps; for a pooled result the imputation by the fingerprint of its imputed cells and its step of the
+  trace): it stays in the session and in a package that holds the data, since a guess of the excluded rows could be
+  tried against it. What a result was computed on is a typed record with a view that holds none of these.
+- **A result can be written as a record of named numbers** (the same module): each number with how closely a value
+  computed again must agree (counts exactly, closed-form statistics to rounding error, fitted models to a small part
+  of their standard error), and each part with the counts behind it. A part's id holds no value of the data: a
+  factor's term is named by its factor and its level's place, the level's own name being a label that a shared
+  package can drop. The Cox, logistic and count models count the rows and events at each level of each factor, and
+  at each value of a covariate coded with two values (0 and 1, True and False): such a covariate is read as a
+  number, so one participant coded 1 carried the whole model's counts. A count model also counts the rows with an
+  event, since its events are not people. Pooled, the counts are the smallest over the imputed datasets. A record
+  holds no residual and no point of a figure; the steps of a Kaplan-Meier curve, its median and the last follow-up
+  time, which are one participant's, are marked so that a shared package coarsens or leaves them out. Whether a fit
+  converged, whether a term's estimate is extreme and how many groups were skipped are numbers of the record, no
+  longer only words of a warning.
+- The titles of the stored results come from one catalogue of analysis kinds (the same 20 titles).
 
 ### Statistics: results corrected (follow-up programme M5)
 

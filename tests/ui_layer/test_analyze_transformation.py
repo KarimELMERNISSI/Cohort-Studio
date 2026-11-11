@@ -79,3 +79,27 @@ def test_the_group_comparison_stored_is_the_one_shown_after_a_log1p_run(app: App
     stored = app.session_state["_results"]["univariate"]
     assert stored.value["results"][0]["Estimate"] == shown != raw
     assert LOG in str(stored.config)  # its settings name the transformation and its columns
+
+
+def test_the_group_comparison_counts_the_rows_of_each_variable(app: AppTest) -> None:
+    """`sbp_6m` is recorded for 778 of the tutorial's 1,206 rows: the comparison said 1,206 analysed."""
+    app.selectbox(key="epi_transformation").select(RAW).run()
+    app.multiselect(key="target_cols").set_value(["sbp_6m", "age"]).run()
+    app.button(key="univariate_run").click().run()
+    _ok(app)
+    stored = app.session_state["_results"]["univariate"]
+    frame = app.session_state["working_df"]
+    by_variable = {row["Variable"]: row["N"] for row in stored.value["results"]}
+    assert by_variable == {
+        "sbp_6m": int(frame[["arm", "sbp_6m"]].dropna().shape[0]),
+        "age": int(frame[["arm", "age"]].dropna().shape[0]),
+    }
+    assert by_variable["sbp_6m"] < by_variable["age"]
+    assert (
+        stored.stamp.n_analysed == by_variable["sbp_6m"]
+        and stored.stamp.n_most == by_variable["age"]
+    )
+    assert (
+        f"N analysed {by_variable['sbp_6m']:,} to {by_variable['age']:,} by variable"
+        in stored.stamp.caption
+    )

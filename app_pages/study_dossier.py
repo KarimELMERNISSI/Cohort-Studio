@@ -64,6 +64,10 @@ def analysis_counts(items: list[ReportItem]) -> list[AnalysisCount]:
             not_used=item.stamp.not_used,
             imputations=imputations_of(item.value),
             note=item.settings,
+            # a stamp kept from before these existed has none
+            n_most=getattr(item.stamp, "n_most", None),
+            n_left_out=getattr(item.stamp, "n_left_out", 0),
+            left_out=getattr(item.stamp, "left_out", ""),
         )
         for item in items
     ]

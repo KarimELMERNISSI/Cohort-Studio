@@ -130,6 +130,58 @@ def test_the_count_outcome_compares_rates_per_person_time(app: AppTest) -> None:
     app.selectbox(key="count_time").select("fu_days").run()
 
 
+def test_each_stored_result_keeps_the_spec_that_computes_it_again(app: AppTest) -> None:
+    """After the three runs above: each result is stored with its analysis spec (biostats.plan), and the spec run on
+    the analysis population gives the same numbers, which is what a study package's check does."""
+    from biostats import plan
+
+    frame = app.session_state["working_df"]
+    store = app.session_state["_results"]
+    trace = app.session_state["transformation_manager"]
+    for key in ("survival", "cox", "logistic", "count"):
+        stored = store[key]
+        spec = stored.spec
+        assert spec is not None and spec.kind == key and not spec.pooled, key
+        again = plan.run(spec, frame)
+        assert (
+            plan.record(key, again.result).to_json() == plan.record(key, stored.value).to_json()
+        ), key
+        assert again.spec.decided == spec.decided and again.spec.backend == spec.backend, key
+        assert dict(again.derived) == dict(spec.decided), (
+            key
+        )  # the data still give what was recorded
+        on = spec.data
+        assert on.mode == "observed" and on.imputation is None
+        assert on.n_analysed == stored.stamp.n_analysed and on.n_population == len(frame)
+        assert on.data_fp == stored.stamp.data_fp and len(on.rows_fp) >= 16
+        assert len(on.protocol_hash) == 64 and on.rules_version >= 2
+        assert on.trace_head == stored.stamp.trace_head and 0 < on.trace_steps <= len(trace.history)
+        # what a package meant to travel may say of it: no fingerprint of rows, no head of the trace
+        shared = on.shareable()
+        assert set(shared) == {
+            "mode",
+            "data_fp",
+            "n_population",
+            "n_analysed",
+            "rules_version",
+            "trace_steps",
+        }
+    cox = store["cox"].spec
+    assert cox.variables == {
+        "time": "fu_days",
+        "event": "died",
+        "compare": "arm",
+        "adjust": ["age"],
+    }
+    assert cox.options == {"alpha": 0.05, "ties": "efron"}
+    assert cox.decided["levels"] == {"arm": ["Placebo", "Treatment"]}
+    assert store["logistic"].spec.variables["adjust"] == ["age", "sex"]
+    assert store["count"].spec.options["family"] == "poisson"
+    assert store["count"].spec.variables["person_time"] is None  # the last run had no person-time
+    # the settings name the comparison and the adjustment apart: two requests of one model are two results
+    assert store["cox"].config == ("fu_days", "died", "arm", ("age",))
+
+
 def test_each_outcome_keeps_its_choices_and_only_the_open_one_runs(
     app: AppTest, monkeypatch: pytest.MonkeyPatch
 ) -> None:
