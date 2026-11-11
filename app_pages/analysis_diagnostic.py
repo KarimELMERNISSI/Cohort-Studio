@@ -7,8 +7,15 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from biostats._types import YOUDEN_BOOTSTRAP
 from biostats.agreement import bland_altman
-from biostats.diagnostic import confusion_at, delong_auc, diagnostic_accuracy, youden_cutoff
+from biostats.diagnostic import (
+    YOUDEN_MIN_CLASS,
+    confusion_at,
+    delong_auc,
+    diagnostic_accuracy,
+    youden_cutoff,
+)
 from ui.components import error_card, help_popover, section, status_chip
 from ui.results import provenance, recall, remember
 
@@ -76,13 +83,21 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                                      step=0.01, persist_state="page", key="diag_prev",
                                      help="PPV and NPV depend on the prevalence; enter the prevalence of the target population "
                                           "(default: the proportion observed in this dataset).")
-        diag_config = (outcome, score, str(pos_label), mode, float(manual), float(prevalence))
+        # the cut-off's range is drawn at random in Youden mode only, and only when each level has enough rows:
+        # recorded there, so that a result drawn with another seed is another result; a manual cut-off, or a level
+        # too small for a range, draws nothing and records nothing
+        by_youden = mode.startswith("Youden")
+        positives = int((clean[outcome] == pos_label).sum())
+        drawn = by_youden and min(positives, len(clean) - positives) >= YOUDEN_MIN_CLASS
+        diag_config = (outcome, score, str(pos_label), mode, float(manual), float(prevalence),
+                       *((YOUDEN_BOOTSTRAP.setting,) if drawn else ()))
         if st.button("Run diagnostic accuracy", type="primary", key="diag_run"):
             try:
                 if int(clean[outcome].nunique()) != 2:
                     raise ValueError("the reference standard must have exactly two levels after dropping missing values")
                 auc = delong_auc(clean[outcome].tolist(), clean[score].tolist(), pos_label=pos_label)
-                youden = youden_cutoff(clean[outcome].tolist(), clean[score].tolist(), pos_label=pos_label, n_boot=300)
+                youden = youden_cutoff(clean[outcome].tolist(), clean[score].tolist(), pos_label=pos_label,
+                                       **(YOUDEN_BOOTSTRAP.arguments() if drawn else {"n_boot": 0}))
                 cutoff = youden["cutoff"] if mode.startswith("Youden") else float(manual)
                 tp, fp, fn, tn = confusion_at(clean[outcome].tolist(), clean[score].tolist(), cutoff, pos_label=pos_label)
                 acc = diagnostic_accuracy(tp, fp, fn, tn, prevalence=float(prevalence))
@@ -102,7 +117,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                 m1.caption(f"95% CI {_ci_text(auc['ci'])}")
                 m2.metric("Cut-off", f"{res['cutoff']:.3g}", help=res["mode"])
                 if res["mode"].startswith("Youden") and res["youden"]["ci"] is not None:
-                    m2.caption(f"bootstrap 95% CI {_ci_text(res['youden']['ci'])}")
+                    m2.caption(f"middle 95% of the bootstrap cut-offs: {_ci_text(res['youden']['ci'])}")
                 m3.metric("Sensitivity", f"{acc.sensitivity:.3f}")
                 m3.caption(f"95% CI {_ci_text(acc.sensitivity_ci)}")
                 m4.metric("Specificity", f"{acc.specificity:.3f}")
@@ -127,6 +142,8 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer) -> None:
                 for w in acc.warnings:
                     st.warning(w)
                 if res["mode"].startswith("Youden"):
+                    if res["youden"].get("caution"):
+                        st.warning(res["youden"]["caution"])
                     st.caption(res["youden"]["note"])
                 st.caption("Method: " + " | ".join(acc.references + auc["references"]))
                 help_popover("Sensitivity and specificity describe the test; predictive values describe the patient and change with the "

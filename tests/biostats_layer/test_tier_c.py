@@ -215,7 +215,7 @@ def test_paired_tests() -> None:
     assert t.estimate == pytest.approx(1.5) and t.p_value < 0.001
     assert t.estimate_ci is not None and t.estimate_ci.lower < 1.5 < t.estimate_ci.upper
     assert t.effect_sizes[0].name == "Cohen's d_z" and t.effect_sizes[0].ci is not None
-    w = wilcoxon_signed_rank(after, before, n_boot=200)
+    w = wilcoxon_signed_rank(after, before)
     assert w.p_value < 0.01 and w.estimate > 0 and w.estimate_ci is not None
     one = one_sample_t(after, 12)
     assert one.estimate == pytest.approx(np.mean(after) - 12)

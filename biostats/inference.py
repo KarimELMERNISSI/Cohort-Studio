@@ -12,9 +12,10 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.oneway import anova_oneway
 
-from biostats._types import CI, RANDOM_STATE, AssumptionCheck, EffectSize, TestResult
+from biostats._types import CI, AssumptionCheck, EffectSize, TestResult
 from biostats.effect_sizes import cohens_d, eta_squared, eta_squared_h, rank_biserial
 from biostats.normality import normality_check
+from biostats.rank_intervals import disagreement, hodges_lehmann
 from biostats.references import cite
 
 ArrayLike = Sequence[float] | np.ndarray | pd.Series
@@ -51,29 +52,6 @@ def groups_from_frame(
     clean = df[[group_col, value_col]].dropna()
     order = list(levels) if levels is not None else list(pd.unique(clean[group_col]))
     return {str(level): _clean(clean.loc[clean[group_col] == level, value_col]) for level in order}
-
-
-def _hodges_lehmann(x: np.ndarray, y: np.ndarray) -> float:
-    diffs = np.subtract.outer(x, y)
-    return float(np.median(diffs))
-
-
-def _bootstrap_ci(
-    stat_fn, x: np.ndarray, y: np.ndarray, *, alpha: float, n_boot: int, seed: int
-) -> CI | None:
-    if len(x) < 3 or len(y) < 3 or n_boot <= 0:
-        return None
-    rng = np.random.default_rng(seed)
-    boots = np.array(
-        [
-            stat_fn(rng.choice(x, len(x), replace=True), rng.choice(y, len(y), replace=True))
-            for _ in range(n_boot)
-        ]
-    )
-    lo, hi = np.percentile(boots, [100 * alpha / 2, 100 * (1 - alpha / 2)])
-    return CI(
-        lower=float(lo), upper=float(hi), level=1 - alpha, method=f"bootstrap percentile ({n_boot})"
-    )
 
 
 def _assumptions(groups: Mapping[str, np.ndarray], *, alpha: float) -> list[AssumptionCheck]:
@@ -146,6 +124,53 @@ def recommend(
     return ("welch" if k == 2 else "welch_anova"), reasons
 
 
+def _rank_notes(
+    x: np.ndarray,
+    y: np.ndarray,
+    p_value: float,
+    interval: CI | None,
+    r: EffectSize,
+    checks: Sequence[AssumptionCheck],
+    alpha: float,
+) -> list[str]:
+    """
+    What a Mann-Whitney result says beside its numbers: infinite values left out of the shift, a test and an
+    interval that part, an r without an interval, and spreads that differ between groups of unequal size (the
+    interval then holds 87% for a nominal 95% when the smaller group is the more spread, at any size, and 98% the
+    other way round; the rank-biserial interval holds 95%).
+    """
+    notes: list[str] = []
+    infinite = int(np.sum(~np.isfinite(x)) + np.sum(~np.isfinite(y)))
+    if infinite:
+        one = infinite == 1
+        notes.append(
+            f"{infinite} infinite value{'' if one else 's'}: the test ranks {'it' if one else 'them'} as the "
+            "largest or the smallest, and the Hodges-Lehmann shift and its interval are those of the other values."
+        )
+    parted = disagreement(p_value, interval, alpha)
+    if parted:
+        notes.append(parted)
+    if r.ci is None and abs(r.estimate) == 1 and min(len(x), len(y)) >= 3:
+        notes.append(
+            "One group is wholly above the other (r is 1 or -1): no standard error, so no interval for r."
+        )
+    violated = any(c.name.startswith("equal variances") and c.status == "violated" for c in checks)
+    if violated and not infinite and len(x) != len(y):
+        small, large = (x, y) if len(x) < len(y) else (y, x)
+        narrow = np.var(small, ddof=1) > np.var(large, ddof=1)
+        notes.append(
+            "The spreads differ and the groups are of unequal size: the Mann-Whitney p-value and the "
+            "Hodges-Lehmann interval assume two distributions of the same shape. Here the "
+            + (
+                "smaller group is the more spread: the p-value is too small and the interval too narrow"
+                if narrow
+                else "larger group is the more spread: the p-value is too large and the interval too wide"
+            )
+            + ", the more so the more the sizes differ. The rank-biserial r and its interval do not assume it."
+        )
+    return notes
+
+
 def compare_groups(
     groups: Mapping[str, ArrayLike],
     *,
@@ -153,15 +178,15 @@ def compare_groups(
     reference: str | None = None,
     alpha: float = 0.05,
     nonparametric: bool = False,
-    n_boot: int = 1000,
-    seed: int = RANDOM_STATE,
     effect_sizes: bool = True,
 ) -> TestResult:
     """
     Compare 2 or more independent groups. ``groups`` maps level -> values; ``reference`` names the
     reference level for two-group estimates (default: the first level). ``kind`` is one of KINDS.
-    ``effect_sizes=False`` skips the standardised effect sizes of the t-tests (their bootstrap is the
-    costly part); pooled analyses over imputed datasets report the mean difference instead.
+    ``effect_sizes=False`` skips the standardised effect sizes of the t-tests; pooled analyses over
+    imputed datasets report the mean difference instead. Nothing here is drawn at random: the interval
+    of the Hodges-Lehmann shift and that of the rank-biserial r are computed (biostats.rank_intervals,
+    biostats.effect_sizes.rank_biserial).
     """
     kind = LEGACY_NAMES.get(kind, kind)
     if kind not in KINDS:
@@ -210,7 +235,7 @@ def compare_groups(
             effects = (
                 [
                     cohens_d(x, y, alpha=alpha, hedges=True),
-                    rank_biserial(x, y, alpha=alpha, n_boot=min(n_boot, 1000), seed=seed),
+                    rank_biserial(x, y, alpha=alpha),
                 ]
                 if effect_sizes
                 else []
@@ -243,12 +268,12 @@ def compare_groups(
                 alpha=alpha,
             )
         res = stats.mannwhitneyu(x, y, alternative="two-sided")
-        hl = _hodges_lehmann(x, y)
-        hl_ci = _bootstrap_ci(_hodges_lehmann, x, y, alpha=alpha, n_boot=n_boot, seed=seed)
+        hl, hl_ci = hodges_lehmann(x, y, alpha=alpha)
         effects = [
-            rank_biserial(x, y, alpha=alpha, n_boot=min(n_boot, 1000), seed=seed),
+            rank_biserial(x, y, alpha=alpha),
             cohens_d(x, y, alpha=alpha, hedges=True),
         ]
+        warnings += _rank_notes(x, y, float(res.pvalue), hl_ci, effects[0], checks, alpha)
         return TestResult(
             name=DISPLAY_NAMES["mannwhitney"],
             family="nonparametric",
@@ -261,7 +286,7 @@ def compare_groups(
             effect_sizes=effects,
             assumptions=checks,
             warnings=warnings,
-            references=cite("mann1947", "hodges1963"),
+            references=cite("mann1947", "hodges1963", "lehmann1963", "bauer1972"),
             groups=labels,
             n_per_group=sizes,
             reference_group=ref_label,

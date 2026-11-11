@@ -3,8 +3,8 @@ Effect sizes with confidence intervals.
 
 Conventions (audit S8): every effect is *comparison minus reference*, so the sign of Hedges' g, the
 Vargha-Delaney A and the rank-biserial r agree. CIs: noncentral-t inversion for d/g (Steiger 2004),
-noncentral-F inversion for eta squared, bootstrap percentile intervals for rank-based measures and
-the bias-corrected Cramer's V.
+noncentral-F inversion for eta squared, DeLong's standard error on the logit scale for the
+rank-biserial r, a bootstrap percentile interval for the bias-corrected Cramer's V.
 """
 
 from __future__ import annotations
@@ -146,10 +146,15 @@ def rank_biserial(
     reference: ArrayLike,
     *,
     alpha: float = 0.05,
-    n_boot: int = 2000,
-    seed: int = RANDOM_STATE,
+    interval: bool = True,
 ) -> EffectSize:
-    """r = 2A - 1 (Kerby 2014): positive when the comparison group tends to be larger. Bootstrap percentile CI."""
+    """
+    r = 2A - 1 (Kerby 2014): positive when the comparison group tends to be larger. A is the probability that a
+    value of the comparison group is above one of the reference group (ties count one half), which is the area under
+    the ROC curve: its interval is DeLong's (1988), on the logit scale so that it stays between 0 and 1 and holds its
+    level in small groups, and r's is twice that minus one. No interval when a group has fewer than 3 values, or when
+    every value of one group is above every value of the other (A is 0 or 1: no standard error).
+    """
     x, y = _clean(comparison), _clean(reference)
     if len(x) == 0 or len(y) == 0:
         return EffectSize(
@@ -161,27 +166,27 @@ def rank_biserial(
         )
     estimate = 2 * vargha_delaney_a(x, y) - 1
     ci = None
-    if len(x) >= 3 and len(y) >= 3 and n_boot > 0:
-        rng = np.random.default_rng(seed)
-        boots = np.empty(n_boot)
-        for b in range(n_boot):
-            bx = rng.choice(x, size=len(x), replace=True)
-            by = rng.choice(y, size=len(y), replace=True)
-            boots[b] = 2 * vargha_delaney_a(bx, by) - 1
-        lo, hi = np.percentile(boots, [100 * alpha / 2, 100 * (1 - alpha / 2)])
-        ci = CI(
-            lower=float(lo),
-            upper=float(hi),
-            level=1 - alpha,
-            method=f"bootstrap percentile ({n_boot})",
-        )
+    if interval and len(x) >= 3 and len(y) >= 3:
+        from biostats.diagnostic import delong_auc
+
+        area = delong_auc([1] * len(x) + [0] * len(y), np.concatenate([x, y]), pos_label=1)
+        a, se = float(area["auc"]), float(area["se"])
+        if 0 < a < 1 and se > 0:
+            z = stats.norm.ppf(1 - alpha / 2)
+            centre, spread = math.log(a / (1 - a)), z * se / (a * (1 - a))
+            ci = CI(
+                lower=float(2 / (1 + math.exp(-(centre - spread))) - 1),
+                upper=float(2 / (1 + math.exp(-(centre + spread))) - 1),
+                level=1 - alpha,
+                method="DeLong, logit scale",
+            )
     return EffectSize(
         name="rank-biserial r",
         kind="r",
         estimate=float(estimate),
         ci=ci,
         n=len(x) + len(y),
-        reference="; ".join(cite("vargha2000", "kerby2014")),
+        reference="; ".join(cite("vargha2000", "kerby2014", "delong1988")),
     )
 
 

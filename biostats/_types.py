@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -22,6 +23,32 @@ def seed_from(value: str | None) -> int:
 
 
 RANDOM_STATE: int = seed_from(os.getenv("CMP_RANDOM_SEED"))
+
+
+@dataclass(frozen=True)
+class Bootstrap:
+    """
+    The draws of a bootstrap interval: what the computation is given (:meth:`arguments`) and what the result's stored
+    settings say (``setting``) come from the same two numbers, so that a result computed with another number of
+    resamples or another seed is another result, never shown as this one.
+    """
+
+    resamples: int
+    seed: int = RANDOM_STATE
+
+    def arguments(self) -> dict[str, int]:
+        return {"n_boot": self.resamples, "seed": self.seed}
+
+    @property
+    def setting(self) -> str:
+        """One setting in a line of settings separated by commas: no comma of its own."""
+        return f"bootstrap of {self.resamples} resamples (seed {self.seed})"
+
+
+# The one stored interval drawn at random: the range of the Youden cut-off (a percentile bootstrap; at 2,000 resamples
+# an end moves with the seed by a few per cent of the interval's half-width). The rank-based intervals are computed
+# without draws (biostats.rank_intervals).
+YOUDEN_BOOTSTRAP = Bootstrap(2000)
 
 
 class CI(BaseModel):
@@ -156,4 +183,13 @@ class TestResult(BaseModel):
         return None if p is None else bool(p < self.alpha)
 
 
-__all__ = ["CI", "RANDOM_STATE", "AssumptionCheck", "EffectSize", "MIInfo", "TestResult"]
+__all__ = [
+    "CI",
+    "RANDOM_STATE",
+    "YOUDEN_BOOTSTRAP",
+    "AssumptionCheck",
+    "Bootstrap",
+    "EffectSize",
+    "MIInfo",
+    "TestResult",
+]

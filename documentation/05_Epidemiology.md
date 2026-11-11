@@ -86,11 +86,31 @@ The application guides test selection based on the analysis configuration:
 | Measure | Applies To |
 | --- | --- |
 | **Hedges' g** | Two-group mean differences (Welch or Student t-test). |
-| **Rank-biserial r** | Mann-Whitney U. |
+| **Rank-biserial r** | Mann-Whitney U. Its interval is DeLong's, on the logit scale. |
 | **Eta-squared (η²)** | ANOVA / multi-group comparisons. |
 | **Cramér's V** | Chi-squared / categorical associations. |
 
 Results include effect size magnitude labels (small / medium / large) based on standard thresholds.
+
+The Mann-Whitney test comes with the **Hodges-Lehmann shift** (the median of the differences between every value of
+one group and every value of the other) and its 95% interval. The interval is computed from the ordered differences
+and the distribution of the Mann-Whitney statistic, as R's `wilcox.test(conf.int = TRUE)` does (exact below 50 per
+group without ties, a normal approximation otherwise). Nothing is drawn at random: the same data give the same
+interval. To read it:
+
+- It holds the shifts that the test does not reject, and its two ends. With tied values (whole numbers, scores) an
+  end can be a shift that the test itself rejects: the interval can then touch 0 beside p < 0.05, and the result
+  says so. The rank-biserial r gives the size of the difference in that case.
+- The estimate is the median of the differences. R reports another point between the two middle differences when
+  their number is even and the groups are large or tied; the two ends are R's.
+- Like the test, it assumes two distributions of the same shape. When the spreads differ and the groups are of
+  unequal size it is too narrow if the smaller group is the more spread (87% for a nominal 95%) and too wide the
+  other way round; the result says which. The rank-biserial r and its interval do not assume it.
+- Groups of 3 and 3 or 3 and 4 values are too small for a 95% interval: none is given.
+
+The Wilcoxon signed-rank test comes with the **pseudo-median** of the differences and its interval, built the same
+way. The pairs without a difference are left out of the test, by its rule, and so of the pseudo-median and of its
+interval: the result says how many. Five differences are too few for a 95% interval.
 
 ---
 
@@ -238,7 +258,7 @@ analysis.
 
 | Method | What it gives |
 | --- | --- |
-| Paired t-test / Wilcoxon signed-rank | mean or pseudo-median within-pair difference with 95% CI, Cohen's d_z, matched-pairs rank-biserial r |
+| Paired t-test / Wilcoxon signed-rank | mean or pseudo-median within-pair difference with 95% CI (for the pseudo-median, from the ordered averages of every pair of differences, as R's `wilcox.test`), Cohen's d_z, matched-pairs rank-biserial r |
 | One-sample t / Wilcoxon / exact binomial | difference from a reference value, Wilson interval for a proportion |
 | McNemar (exact) | paired binary outcomes from the discordant pairs |
 | Incidence rates | exact Poisson intervals; rate ratio with the exact conditional interval and test (Clopper-Pearson, as R's `poisson.test`), which agree: the interval excludes 1 exactly when p < 0.05 |

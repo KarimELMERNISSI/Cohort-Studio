@@ -68,6 +68,44 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   mode whatever the number of processors (they were built to use every processor without it), and the seed it draws
   with is recorded with the imputation step and used by the replay (a step recorded before draws with the process's
   seed, as before). A new MissForest run gives other values than an earlier version's.
+- **The intervals of the rank-based estimates are computed, no longer drawn at random.** The Hodges-Lehmann shift
+  of a Mann-Whitney comparison, the pseudo-median of a Wilcoxon signed-rank test (paired or one sample) and the
+  rank-biserial r had percentile bootstrap intervals of 200 to 1,000 resamples. At 300 resamples an end moved with
+  the seed by 0.15 standard error: on the tutorial cohort, troponin by arm (Mann-Whitney p = 0.068) had an interval
+  that excluded 0 for 4 seeds of 30. The shift and the pseudo-median now have the interval that belongs to their
+  test, from the ordered pairwise differences (or averages) and the test's null distribution, as R's
+  `wilcox.test(conf.int = TRUE)`: exact below 50 per group without ties, a normal approximation corrected for
+  continuity and ties otherwise. It holds the shifts that the test does not reject, and its two ends: with tied
+  values an end can be a shift that the test itself rejects, so the interval can touch 0 beside p < 0.05 (on the
+  tutorial, hospital visits by arm: p = 0.00003, -1 to 0), and the result then says so. The rank-biserial r has
+  DeLong's interval on the logit scale. **These intervals change**: slightly in large groups (NT-proBNP by arm on
+  the tutorial's analysis population: -194 to 169, where it read -199.2 to 194.5), by up to a third wider in groups
+  of 4 to 10, where the bootstrap held 89 to 92% for a nominal 95%. A sample too small for 95% (groups of 3 and 3
+  or 3 and 4, 5 differences) and an r of 1 or -1 get no interval. The intervals of Validate's missingness check are
+  these too. The estimates and the p-values do not change. The same data give the same interval, in any order of
+  the rows, and a comparison of two groups of 5,000 takes half a second where it took minutes; groups of 50,000 no
+  longer need 20 GB of memory. A result now also says:
+  - when the spreads differ between two groups of unequal size: the Mann-Whitney p-value and the Hodges-Lehmann
+    interval assume two distributions of the same shape, and the interval holds 87% for a nominal 95% when the
+    smaller group is the more spread (the bootstrap held 92 to 94% there); the rank-biserial r does not assume it;
+  - how many pairs without a difference (or values equal to the reference) a signed-rank test left out: its
+    pseudo-median and its interval are those of the others (on the tutorial's paired blood pressures, 34 of 778);
+  - when infinite values (a ratio with a zero denominator) were left out of the shift, which the test ranks.
+- **A group comparison's result card and its summary table give the same numbers.** The card took the groups in the
+  order their rows came and the table in sorted order: on the tutorial's analysis population, whose first row is an
+  Intervention row, the table read "mean difference (Intervention - Control) -6.637" and the card "(Control -
+  Intervention) +6.637", each with its own bootstrap interval. Both take their groups from one function, the first
+  group in sorted order being the reference.
+- **The Youden cut-off** keeps a bootstrap range, now of 2,000 resamples (it drew 300: its upper end ran from 38.7
+  to 42.3 over 30 seeds for troponin against adjudicated myocardial infarction), named for what it is: the middle
+  95% of the cut-offs found in the resamples, not a confidence interval. The rows are put in order before they are
+  resampled, so the same data give the same range in any order of the rows (the range of a result computed before
+  can differ a little). The resamples and the seed are recorded in the result's settings ("bootstrap of 2000
+  resamples (seed 20260101)") when a range is drawn (Youden mode, 5 rows or more of each level), so a result drawn
+  with another seed (`CMP_RANDOM_SEED`) is another result; a manual cut-off draws nothing. The page and the dossier
+  say that the range is rough when the ROC curve is flat near its top, and the dossier now gives the range. A marker
+  that points the other way gave an infinite cut-off with a sensitivity of 0: the cut-off is always an observed
+  score, and the result says that the marker points the other way.
 
 ### Privacy: what today's documents leave out (M8, first steps)
 

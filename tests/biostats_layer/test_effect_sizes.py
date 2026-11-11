@@ -41,10 +41,10 @@ def test_cohens_d_and_hedges_g_with_noncentral_ci() -> None:
 
 def test_rank_based_effects_share_the_sign_of_d() -> None:
     assert vargha_delaney_a(COMPARISON, REFERENCE) == pytest.approx(0.82)
-    r = rank_biserial(COMPARISON, REFERENCE, n_boot=300)
+    r = rank_biserial(COMPARISON, REFERENCE)
     assert r.estimate == pytest.approx(0.64)
     assert r.ci is not None and r.ci.lower <= 0.64 <= r.ci.upper
-    assert rank_biserial(REFERENCE, COMPARISON, n_boot=0).estimate == pytest.approx(-0.64)
+    assert rank_biserial(REFERENCE, COMPARISON, interval=False).estimate == pytest.approx(-0.64)
 
 
 def test_cramers_v_bias_corrected_reference_value() -> None:

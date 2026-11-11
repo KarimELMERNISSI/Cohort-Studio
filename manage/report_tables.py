@@ -553,6 +553,20 @@ def result_blocks(value: Any) -> ResultBlocks:
                 ],
                 references=list(acc.references) + list(auc.get("references") or []),
             )
+            youden = value.get("youden") or {}
+            if str(value.get("mode") or "").startswith("Youden"):
+                # the cut-off was chosen on these data: its range (drawn at random; the settings give the draws) and
+                # the caution that goes with it
+                if youden.get("ci") is not None:
+                    resamples = youden.get("resamples")
+                    among = f"In {resamples:,} bootstrap resamples" if resamples else "In the bootstrap resamples"
+                    blocks.lines.append(
+                        f"Cut-off chosen by Youden's J. {among}, 95% of the cut-offs found lie in {_ci(youden['ci'])}."
+                    )
+                if youden.get("note"):
+                    blocks.lines.append(str(youden["note"]))
+                if youden.get("caution"):
+                    blocks.warnings.append(str(youden["caution"]))
             blocks.warnings.extend(acc.warnings)
             return blocks
         if "res" in value and "table" in value:

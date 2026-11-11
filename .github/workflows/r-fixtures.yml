@@ -2,8 +2,9 @@ name: R reference fixtures
 
 # Manual run (Actions > R reference fixtures > Run workflow). Computes the R reference values that the parity
 # tests compare against (mice / mitml: tests/biostats_layer/test_mi_r_parity.py; poisson.test:
-# tests/biostats_layer/test_rates_r_parity.py), and pushes them to the r-fixtures branch, from which they are
-# copied into main. The commit carries the repository owner's identity.
+# tests/biostats_layer/test_rates_r_parity.py; wilcox.test: tests/biostats_layer/test_rank_intervals_r_parity.py),
+# and pushes them to the r-fixtures branch, from which they are copied into main. The commit carries the repository
+# owner's identity.
 on:
   workflow_dispatch:
 
@@ -33,12 +34,13 @@ jobs:
           Rscript tests/reference/r/make_mi_fixtures.R tests/reference/fixtures/mi
           Rscript tests/reference/r/make_rates_fixtures.R tests/reference/fixtures/rates
           Rscript tests/reference/r/make_survival_fixtures.R tests/reference/fixtures/survival
+          Rscript tests/reference/r/make_rank_fixtures.R tests/reference/fixtures/rank
 
       - name: Push them to the r-fixtures branch
         run: |
           git config user.name "Karim Elmernissi"
           git config user.email "karim.elmernissi.75@gmail.com"
           git checkout -B r-fixtures
-          git add -f tests/reference/fixtures/mi tests/reference/fixtures/rates tests/reference/fixtures/survival
-          git commit -m "test: R reference values, mice/mitml, poisson.test and survfit quantiles (workflow run ${{ github.run_id }})"
+          git add -f tests/reference/fixtures/mi tests/reference/fixtures/rates tests/reference/fixtures/survival tests/reference/fixtures/rank
+          git commit -m "test: R reference values, mice/mitml, poisson.test, survfit quantiles and wilcox.test intervals (workflow run ${{ github.run_id }})"
           git push --force origin r-fixtures

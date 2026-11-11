@@ -655,7 +655,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         | Test | Effect Size | Small | Medium | Large |
         |:-----|:------------|:-----:|:------:|:-----:|
         | Welch / Student t-test | Hedges' g (95% CI, noncentral t) | 0.2 | 0.5 | 0.8 |
-        | Mann-Whitney | rank-biserial r (bootstrap CI) | 0.1 | 0.3 | 0.5 |
+        | Mann-Whitney | rank-biserial r (95% CI, DeLong) | 0.1 | 0.3 | 0.5 |
         | Welch ANOVA / ANOVA | eta squared (95% CI), omega squared | 0.01 | 0.06 | 0.14 |
         | Kruskal-Wallis | eta squared (H) | 0.01 | 0.06 | 0.14 |
         | Chi-square | bias-corrected Cramer's V | 0.1 | 0.3 | 0.5 |

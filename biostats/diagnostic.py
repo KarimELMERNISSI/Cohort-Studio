@@ -11,7 +11,7 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.proportion import proportion_confint
 
-from biostats._types import CI, RANDOM_STATE
+from biostats._types import CI, RANDOM_STATE, YOUDEN_BOOTSTRAP
 from biostats.references import cite
 
 
@@ -210,16 +210,28 @@ def confusion_at(
     return tp, fp, fn, tn
 
 
+YOUDEN_MIN_CLASS = 5  # rows of each level below which the cut-off's range is not drawn
+
+
 def youden_cutoff(
     y_true: Sequence,
     y_score: Sequence,
     *,
     pos_label=None,
     alpha: float = 0.05,
-    n_boot: int = 500,
+    n_boot: int = YOUDEN_BOOTSTRAP.resamples,
     seed: int = RANDOM_STATE,
 ) -> dict:
-    """Cut-off maximising Youden's J on the sample (optimistic by construction), with a bootstrap CI for the cut-off."""
+    """
+    Cut-off maximising Youden's J on the sample (optimistic by construction), with a percentile bootstrap range for
+    the cut-off: the middle of the cut-offs found in the resamples, not a confidence interval (the cut-off is the
+    place of a maximum, and the level such a range holds is not known). Where the ROC curve is flat near its top (a
+    marker that discriminates little), the resampled cut-offs jump between distant scores and the range is rough
+    whatever the number of resamples. The cut-off is always an observed score: the curve's first point, above every
+    score, is no cut-off. The rows are put in order (by score, then by level) before they are resampled, so that the
+    same data give the same range in any order of the rows. ``caution`` says when the marker points the other way
+    (an area under the curve below 0.5) or when the cut-off found is the smallest or the largest score.
+    """
     from sklearn.metrics import roc_curve
 
     scores = np.asarray(pd.to_numeric(pd.Series(list(y_score)), errors="coerce"), dtype=float)
@@ -230,16 +242,37 @@ def youden_cutoff(
     if pos_label is None:
         pos_label = sorted(set(labels), key=str)[1]
     y = _binary(labels, pos_label).astype(int)
+    order = np.lexsort((y, scores))
+    scores, y = scores[order], y[order]
 
     def _best(yy: np.ndarray, ss: np.ndarray) -> tuple[float, float, float]:
         fpr, tpr, thr = roc_curve(yy, ss)
-        j = tpr - fpr
+        # the first threshold is infinite (nobody is called positive): for a marker that points the other way it won
+        # the maximum, with a sensitivity of 0
+        j = np.where(np.isfinite(thr), tpr - fpr, -np.inf)
         i = int(np.argmax(j))
         return float(thr[i]), float(tpr[i]), float(1 - fpr[i])
 
     cutoff, sens, spec = _best(y, scores)
+    caution = ""
+    if 0 < y.sum() < len(y):
+        fpr, tpr, _ = roc_curve(y, scores)
+        area = float(np.trapezoid(tpr, fpr))
+        if area < 0.5 - 1e-9:  # a half computed as 0.49999999999999994 is a half
+            caution = (
+                f"The marker points the other way (area under the curve {area:.3f}, below 0.5): higher values go "
+                "with the other level, and no cut-off of the form 'score >= cut-off' separates the two. Take the "
+                "other level as positive, or reverse the marker."
+            )
+        elif cutoff in (float(scores.min()), float(scores.max())):
+            lowest = cutoff == float(scores.min())
+            caution = (
+                f"The cut-off found is the {'smallest' if lowest else 'largest'} observed score: nearly "
+                f"{'everyone' if lowest else 'no one'} is called positive. The marker hardly separates the two levels."
+            )
     ci = None
-    if n_boot > 0 and y.sum() >= 5 and (len(y) - y.sum()) >= 5:
+    drawn = 0
+    if n_boot > 0 and min(y.sum(), len(y) - y.sum()) >= YOUDEN_MIN_CLASS:
         rng = np.random.default_rng(seed)
         boots = []
         idx = np.arange(len(y))
@@ -249,6 +282,7 @@ def youden_cutoff(
                 continue
             boots.append(_best(y[b], scores[b])[0])
         if len(boots) > 50:
+            drawn = len(boots)
             lo, hi = np.percentile(boots, [100 * alpha / 2, 100 * (1 - alpha / 2)])
             ci = CI(
                 lower=float(lo),
@@ -262,14 +296,19 @@ def youden_cutoff(
         "specificity": spec,
         "youden": sens + spec - 1,
         "ci": ci,
+        "resamples": drawn,
+        "caution": caution,
         "pos_label": pos_label,
         "note": "Chosen on the same data it is evaluated on: sensitivity and specificity at this cut-off are optimistic; "
-        "confirm on independent data.",
+        "confirm on independent data. Its range is the middle of the cut-offs found in bootstrap resamples: not a "
+        "confidence interval (its level is not known), and rough when the ROC curve is flat near its top, where the "
+        "best cut-off jumps between distant scores from one resample to the next.",
         "references": cite("youden1950"),
     }
 
 
 __all__ = [
+    "YOUDEN_MIN_CLASS",
     "DiagnosticAccuracy",
     "confusion_at",
     "delong_auc",

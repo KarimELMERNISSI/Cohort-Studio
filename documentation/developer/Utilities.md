@@ -175,6 +175,17 @@ _No module description._
 **Imports**:
 `logging`, `numpy`, `pandas`, `scipy.stats`, `biostats.inference.LEGACY_NAMES`, `biostats.inference.compare_groups`, `biostats.inference.groups_from_frame`, `biostats.inference.recommend`, `biostats.posthoc.default_method`, `biostats.posthoc.pairwise_comparisons`
 
+### def `ordered_groups` (analysis_utils.py)
+
+- **Arguments**: `df, group_col, target`
+
+- **Returns**: `None`
+
+The groups of a numeric comparison in a fixed order, the first the reference: sorted by their labels. In order of
+appearance, the difference's sign followed the rows' order (+6.64 in the file's order, -6.64 sorted by arm), and
+the summary table and the result card, which each took their own order, could read one comparison in opposite
+directions. Both take their groups here.
+
 ### def `analyze_variable` (analysis_utils.py)
 
 - **Arguments**: `df, group_col, target, numeric_cols, categorical_cols, binary_cols, manual_test`
@@ -201,7 +212,8 @@ Recommended test and reasoning: Welch-first for numeric outcomes (audit S7); chi
 
 - **Returns**: `None`
 
-Full :class:`biostats.TestResult` for a numeric variable (used by the result card).
+Full :class:`biostats.TestResult` for a numeric variable (used by the result card): the summary row's groups,
+reference and numbers.
 
 ### def `perform_post_hoc` (analysis_utils.py)
 

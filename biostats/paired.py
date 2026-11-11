@@ -10,8 +10,9 @@ from scipy import stats
 from statsmodels.stats.contingency_tables import mcnemar as _mcnemar
 from statsmodels.stats.proportion import proportion_confint
 
-from biostats._types import CI, RANDOM_STATE, AssumptionCheck, EffectSize, TestResult
+from biostats._types import CI, AssumptionCheck, EffectSize, TestResult
 from biostats.normality import normality_check
+from biostats.rank_intervals import disagreement, pseudo_median
 from biostats.references import REFERENCES, cite
 
 REFERENCES.setdefault(
@@ -101,17 +102,23 @@ def paired_t(after: Sequence, before: Sequence, *, alpha: float = 0.05) -> TestR
     )
 
 
-def wilcoxon_signed_rank(
-    after: Sequence,
-    before: Sequence,
+def _signed_rank(
+    differences: np.ndarray,
     *,
-    alpha: float = 0.05,
-    n_boot: int = 1000,
-    seed: int = RANDOM_STATE,
+    alpha: float,
+    label: str,
+    without: tuple[str, str],
+    kept: str,
 ) -> TestResult:
-    """Wilcoxon signed-rank test with the Hodges-Lehmann pseudo-median of the differences (bootstrap CI)."""
-    x, y = _pairs(after, before)
-    d = x - y
+    """
+    The signed-rank test of ``differences`` against 0, with their pseudo-median and its interval from the ordered
+    Walsh averages (biostats.rank_intervals): nothing is drawn at random. The differences of 0 are left out of all
+    three, by the test's rule, and the result says how many: ``without`` names one and several of them ("pair
+    without a difference"), ``kept`` the others ("pairs that differ").
+    """
+    d = np.asarray(differences, dtype=float)
+    d = d[~np.isnan(d)]  # an infinite value on both sides: no difference to rank
+    zeros = int((d == 0).sum())
     d = d[d != 0]
     n = len(d)
     if n < 2:
@@ -122,23 +129,23 @@ def wilcoxon_signed_rank(
             warnings=["fewer than two non-zero differences"],
         )
     res = stats.wilcoxon(d, alternative="two-sided", zero_method="wilcox")
-    walsh = (d[:, None] + d[None, :]) / 2
-    hl = float(np.median(walsh[np.triu_indices(n)]))
-    ci = None
-    if n >= 5 and n_boot > 0:
-        rng = np.random.default_rng(seed)
-        boots = []
-        for _ in range(n_boot):
-            s = rng.choice(d, n, replace=True)
-            w = (s[:, None] + s[None, :]) / 2
-            boots.append(np.median(w[np.triu_indices(n)]))
-        lo, hi = np.percentile(boots, [100 * alpha / 2, 100 * (1 - alpha / 2)])
-        ci = CI(
-            lower=float(lo),
-            upper=float(hi),
-            level=1 - alpha,
-            method=f"bootstrap percentile ({n_boot})",
+    hl, ci = pseudo_median(d, alpha=alpha, zeros=zeros > 0)
+    notes: list[str] = []
+    if zeros:
+        notes.append(
+            f"{zeros} {without[zeros > 1]} {'were' if zeros > 1 else 'was'} left out, by the signed-rank test's "
+            f"rule: the test, the pseudo-median and its interval are those of the {n} {kept}."
         )
+    infinite = int(np.sum(~np.isfinite(d)))
+    if infinite:
+        notes.append(
+            f"{infinite} infinite difference{'s' if infinite > 1 else ''}: the test ranks "
+            f"{'them' if infinite > 1 else 'it'} as the largest, and the pseudo-median and its interval are those "
+            "of the other differences."
+        )
+    parted = disagreement(float(res.pvalue), ci, alpha)
+    if parted:
+        notes.append(parted)
     r = float(1 - 2 * res.statistic / (n * (n + 1) / 2))  # matched-pairs rank-biserial (Kerby 2014)
     return TestResult(
         name="Wilcoxon signed-rank",
@@ -147,7 +154,7 @@ def wilcoxon_signed_rank(
         statistic_label="W",
         p_value=float(res.pvalue),
         estimate=hl,
-        estimate_label="pseudo-median difference (after - before)",
+        estimate_label=label,
         estimate_ci=ci,
         effect_sizes=[
             EffectSize(
@@ -158,10 +165,28 @@ def wilcoxon_signed_rank(
                 reference=cite("kerby2014")[0],
             )
         ],
-        references=cite("wilcoxon1945"),
+        warnings=notes,
+        references=cite("wilcoxon1945", "hollander2014"),
         groups=["pairs"],
         n_per_group=[n],
         alpha=alpha,
+    )
+
+
+def wilcoxon_signed_rank(
+    after: Sequence,
+    before: Sequence,
+    *,
+    alpha: float = 0.05,
+) -> TestResult:
+    """Wilcoxon signed-rank test with the Hodges-Lehmann pseudo-median of the differences and its interval."""
+    x, y = _pairs(after, before)
+    return _signed_rank(
+        x - y,
+        alpha=alpha,
+        label="pseudo-median difference (after - before)",
+        without=("pair without a difference", "pairs without a difference"),
+        kept="pairs that differ",
     )
 
 
@@ -216,7 +241,13 @@ def one_sample_wilcoxon(
 ) -> TestResult:
     x = np.asarray(pd.to_numeric(pd.Series(list(values)), errors="coerce"), dtype=float)
     x = x[~np.isnan(x)] - reference_value
-    return wilcoxon_signed_rank(x, np.zeros_like(x), alpha=alpha)
+    return _signed_rank(
+        x,
+        alpha=alpha,
+        label=f"pseudo-median minus reference ({reference_value:g})",
+        without=("value equal to the reference", "values equal to the reference"),
+        kept="values that differ from it",
+    )
 
 
 def mcnemar_test(

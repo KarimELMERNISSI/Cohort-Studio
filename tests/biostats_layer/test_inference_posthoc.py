@@ -61,9 +61,7 @@ def test_two_group_estimate_is_comparison_minus_reference() -> None:
     flipped = compare_groups({"ctrl": CTRL, "trt2": TRT2}, kind="welch", reference="trt2")
     assert flipped.estimate == pytest.approx(-res.estimate)
     assert flipped.primary_effect.estimate == pytest.approx(-res.primary_effect.estimate)
-    mw = compare_groups(
-        {"ctrl": CTRL, "trt2": TRT2}, kind="mannwhitney", reference="ctrl", n_boot=200
-    )
+    mw = compare_groups({"ctrl": CTRL, "trt2": TRT2}, kind="mannwhitney", reference="ctrl")
     assert mw.estimate_label.startswith("Hodges-Lehmann") and mw.estimate_ci is not None
     assert mw.effect_sizes[0].name == "rank-biserial r"
 

@@ -11,6 +11,17 @@ from biostats.posthoc import default_method, pairwise_comparisons
 logger = logging.getLogger(__name__)
 
 
+def ordered_groups(df, group_col, target):
+    """
+    The groups of a numeric comparison in a fixed order, the first the reference: sorted by their labels. In order of
+    appearance, the difference's sign followed the rows' order (+6.64 in the file's order, -6.64 sorted by arm), and
+    the summary table and the result card, which each took their own order, could read one comparison in opposite
+    directions. Both take their groups here.
+    """
+    present = df[[group_col, target]].dropna()[group_col]
+    return groups_from_frame(df, group_col, target, levels=sorted(pd.unique(present), key=str))
+
+
 def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, binary_cols, manual_test="Auto-Detect",
                      *, exposure_ref=None, event_level=None, design="unknown"):
     """
@@ -44,13 +55,10 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
     effect_ci_text = ""
     if is_numeric:
         # Welch-first policy; assumptions are diagnostics, not gates (audit S7/S8). Engine: biostats.inference
-        # the groups in a fixed order, the first the reference: in order of appearance, the difference's sign followed
-        # the rows' order (+6.64 in the file's order, -6.64 sorted by arm) and the dossier did not say which was which
-        present = df[[group_col, target]].dropna()[group_col]
-        groups = groups_from_frame(df, group_col, target, levels=sorted(pd.unique(present), key=str))
+        groups = ordered_groups(df, group_col, target)
         kind = LEGACY_NAMES.get(manual_test, "auto")
         reference = str(exposure_ref) if exposure_ref is not None and str(exposure_ref) in groups else None
-        test_result = compare_groups(groups, kind=kind, reference=reference, n_boot=200)
+        test_result = compare_groups(groups, kind=kind, reference=reference)
         test_name = test_result.name
         statistic = test_result.statistic if test_result.statistic is not None else np.nan
         p_value = test_result.p_value if test_result.p_value is not None else np.nan
@@ -166,11 +174,12 @@ def recommend_statistical_test(df, group_col, target_col, numeric_cols, categori
 
 
 def compare_variable_result(df, group_col, target, manual_test="Auto-Detect", reference=None):
-    """Full :class:`biostats.TestResult` for a numeric variable (used by the result card)."""
-    groups = groups_from_frame(df, group_col, target)
+    """Full :class:`biostats.TestResult` for a numeric variable (used by the result card): the summary row's groups,
+    reference and numbers."""
+    groups = ordered_groups(df, group_col, target)
     if len([v for v in groups.values() if len(v) > 0]) < 2:
         return None
-    return compare_groups(groups, kind=LEGACY_NAMES.get(manual_test, "auto"), reference=reference, n_boot=300)
+    return compare_groups(groups, kind=LEGACY_NAMES.get(manual_test, "auto"), reference=reference)
 
 
 def perform_post_hoc(df, group_col, target_col, test_type, adjust_method="holm"):
