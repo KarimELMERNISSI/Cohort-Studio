@@ -388,9 +388,13 @@ def participant_flow(
     analysis_boxes = []
     for j, a in enumerate(analyses):
         if a.imputations:
-            n, detail = (
-                a.n_population,
-                (f"pooled over {a.imputations} imputed datasets of the {a.n_population:,} rows",),
+            # the rows its imputed datasets could fit, when they were counted (the fewest over them): never more
+            # than the rows it did not leave out; the others lack a value that no imputation fills
+            rest = a.n_population - a.n_left_out
+            n = rest if a.n_analysed is None else min(a.n_analysed, rest)
+            detail = (
+                f"pooled over {a.imputations} imputed datasets of the {a.n_population:,} rows",
+                *not_used_words(a.n_population, n, None, a.n_left_out, a.left_out, a.not_used),
             )
         else:
             n = a.n_analysed if a.n_analysed is not None else a.n_population

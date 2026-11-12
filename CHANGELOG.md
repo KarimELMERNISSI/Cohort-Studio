@@ -208,6 +208,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   of a group too small to draw. The caption, the flow box and the dossier now say "87 not in the compared groups"
   or "1 in a group too small to draw", apart from the rows that lack a value. A row with a follow-up time below
   zero is counted the same way ("2 with a follow-up time below zero").
+- **A pooled result gives the rows its imputed datasets read.** Its caption and its flow box gave every row of the
+  population, whatever the fits read: where the event is missing for 20 rows of 400 and no imputation fills it, the
+  page said 400 analysed beside curves of 380. The number analysed is now the fewest rows a dataset's fit read
+  (survival curves, Cox, logistic and count models), and the others are counted as missing values ("20 not used:
+  missing values"). No estimate changes.
 - **Each result of Survival & regression is kept with its specification** (`biostats/plan.py`): the variables by
   their role (which one is compared, which ones adjust for it), the options, what was read on the data when it ran
   (each factor's levels with the reference first, the values read as an event, the event's level, a covariate

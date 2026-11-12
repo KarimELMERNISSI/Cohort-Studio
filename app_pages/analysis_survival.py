@@ -305,6 +305,19 @@ def left_out_of(result, *, pooled: bool) -> tuple[int, str]:
     return sum(n for n, _ in counts), " or ".join(words for n, words in counts if n)
 
 
+def analysed_by(result, *, pooled: bool) -> int:
+    """
+    The rows an analysis read: a model's, or those of the curves drawn. A pooled result's are the fewest that one of
+    its imputed datasets read. Every row of the data was called analysed: where the event is missing for 20 rows
+    of 400 and no imputation fills it, the page said 400 beside curves of 380. The rows a dataset could not read
+    for a value no imputation fills are missing values, and are now counted as such.
+    """
+    if pooled:
+        held = result.extra
+        return int(held["total"]["rows"] if "total" in held else held["n"][0])
+    return int(sum(c.n for c in result.curves) if hasattr(result, "curves") else result.n)
+
+
 def _fit_curves(df, mi, key, config, time_col, event_col, group) -> None:
     """Kaplan-Meier curves and the log-rank test, computed from their spec (biostats.plan) and stored with it."""
     try:
@@ -313,13 +326,11 @@ def _fit_curves(df, mi, key, config, time_col, event_col, group) -> None:
         )
         done = run(spec, df, mi=mi)
         n_left_out, left_out = left_out_of(done.result, pooled=mi is not None)
-        drawn = sum(c.n for c in done.result.curves) if mi is None else None
         remember(
             key,
             done.result,
             config=config,
-            # pooled: every row that was not left out, the imputation filling the missing values
-            n_analysed=len(mi.base) - n_left_out if drawn is None else drawn,
+            n_analysed=analysed_by(done.result, pooled=mi is not None),
             columns=[time_col, event_col, group or ""],
             spec=done.spec,
             n_left_out=n_left_out,
@@ -348,7 +359,7 @@ def _fit_cox(df, mi, key, config, time_col, event_col, compare, adjust) -> None:
             key,
             done.result,
             config=config,
-            n_analysed=len(mi.base) - n_left_out if mi is not None else done.result.n,
+            n_analysed=analysed_by(done.result, pooled=mi is not None),
             columns=[time_col, event_col, *spec.covariates()],
             spec=done.spec,
             n_left_out=n_left_out,
@@ -533,7 +544,7 @@ def _binary(df, numeric, binary, groups, *, mi, token, guided) -> None:
                 key,
                 done.result,
                 config=config,
-                n_analysed=len(mi.base) if pooled else done.result.n,
+                n_analysed=analysed_by(done.result, pooled=pooled),
                 columns=[outcome, *covs],
                 spec=done.spec,
             )
@@ -627,7 +638,7 @@ def _count(df, numeric, binary, groups, *, mi, token, guided) -> None:
                 key,
                 done.result,
                 config=config,
-                n_analysed=len(mi.base) if pooled else done.result.n,
+                n_analysed=analysed_by(done.result, pooled=pooled),
                 columns=[count_col, *covs, exposure_col or ""],
                 spec=done.spec,
             )

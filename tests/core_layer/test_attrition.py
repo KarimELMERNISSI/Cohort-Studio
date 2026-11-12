@@ -91,6 +91,36 @@ def test_the_tutorial_flow_matches_the_known_counts(tutorial) -> None:
     assert pooled.n == 928 and "pooled over 20 imputed datasets" in pooled.details[0]
 
 
+def test_a_pooled_analysis_counts_the_rows_its_datasets_read(tutorial) -> None:
+    """A pooled analysis was every row of the population, whatever its fits read: where the event is missing for 20
+    rows and no imputation fills it, the flow said 928 analysed beside curves of 908."""
+    session, config = tutorial
+    population = session.population(config)
+    n = population.n_included
+    small, below = "in a group too small to draw", "with a follow-up time below zero"
+    flow = participant_flow(
+        population,
+        dataset="tutorial_cohort",
+        analyses=[
+            AnalysisCount("Kaplan-Meier, pooled", n, n - 20, imputations=20),
+            AnalysisCount(
+                "Kaplan-Meier, pooled", n, n - 23, imputations=20, n_left_out=3, left_out=small
+            ),
+            # its rows were not counted: every row it did not leave out
+            AnalysisCount("Cox model, pooled", n, imputations=20, n_left_out=3, left_out=below),
+            # and never more than those
+            AnalysisCount("Cox model, pooled", n, n, imputations=20, n_left_out=3, left_out=below),
+        ],
+    )
+    pooled = "pooled over 20 imputed datasets of the 928 rows"
+    assert [(box.n, box.details) for box in flow.analyses] == [
+        (908, (pooled, "20 not used: missing values")),
+        (905, (pooled, f"3 {small}", "20 not used: missing values")),
+        (925, (pooled, f"3 {below}")),
+        (925, (pooled, f"3 {below}")),
+    ]
+
+
 def test_malformed_lines_and_rows_removed_by_a_step_have_their_own_boxes() -> None:
     session = DataSession(trace=Sink())
     session.install(pd.DataFrame({"age": [12, 40, 150, 60, 30]}), params={"filename": "c.csv"})

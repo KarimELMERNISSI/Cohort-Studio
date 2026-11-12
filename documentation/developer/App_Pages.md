@@ -510,6 +510,17 @@ with a characteristic, where the rows that lack a value are given exactly: calle
 would have shown them as they are. A pooled result counts the most that an imputed dataset left out: a group
 read from imputed values is too small to draw in some datasets only.
 
+### def `analysed_by` (analysis_survival.py)
+
+- **Arguments**: `result`
+
+- **Returns**: `int`
+
+The rows an analysis read: a model's, or those of the curves drawn. A pooled result's are the fewest that one of
+its imputed datasets read. Every row of the data was called analysed: where the event is missing for 20 rows
+of 400 and no imputation fills it, the page said 400 beside curves of 380. The rows a dataset could not read
+for a value no imputation fills are missing values, and are now counted as such.
+
 ### def `_fit_curves` (analysis_survival.py)
 
 - **Arguments**: `df, mi, key, config, time_col, event_col, group`

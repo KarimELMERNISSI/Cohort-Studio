@@ -397,3 +397,24 @@ def test_rows_with_a_follow_up_time_below_zero_are_no_missing_values(
     assert (kept["n_analysed"], kept["n_left_out"]) == (197, 3)
     page._fit_cox(df, mi, "cox_mi", {}, "days", "died", "arm", ["age"])
     assert (kept["n_analysed"], kept["n_left_out"]) == (198, 2)
+    assert (
+        page.analysed_by(curves, pooled=False) == 197
+        and page.analysed_by(cox, pooled=False) == cox.n
+    )
+    assert page.analysed_by(pooled.result, pooled=True) == 197
+    # the event is missing for 20 rows, and no imputation fills it: every dataset reads 20 rows fewer, which the
+    # page counted as analysed (they are missing values)
+    lacking = df.copy()
+    lacking["died"] = lacking["died"].astype(float)
+    lacking.loc[30:49, "died"] = np.nan
+    filled = lacking.copy()
+    filled.loc[11, "age"] = 61.0
+    mi = MIData.from_completed(lacking, [filled.copy() for _ in range(5)], methods={"age": "pmm"})
+    page._fit_curves(lacking, mi, "survival_mi", {}, "days", "died", "arm")
+    assert (kept["n_analysed"], kept["n_left_out"]) == (177, 3)
+    page._fit_cox(lacking, mi, "cox_mi", {}, "days", "died", "arm", ["age"])
+    assert (kept["n_analysed"], kept["n_left_out"]) == (178, 2)
+    assert not_used_words(200, 177, n_left_out=3, left_out="left out") == (
+        "3 left out",
+        "20 not used: missing values",
+    )
