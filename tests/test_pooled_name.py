@@ -56,9 +56,11 @@ def test_what_changed_since_a_step_was_drawn_is_named() -> None:
     assert drawn_with_changes(now, now) == []
     older = {
         "versions": {**now["versions"], "scipy": "1.15.0"},
+        # a system and a machine that no test runs on: an unchanged value is, rightly, not listed (recorded as
+        # "Linux, aarch64", this test failed on a Linux runner, and would have on an ARM one)
         "platform": {
-            "system": "Linux",
-            "machine": "aarch64",
+            "system": "SunOS",
+            "machine": "sparc64",
             "blas": [
                 {
                     "library": "openblas",
@@ -72,8 +74,8 @@ def test_what_changed_since_a_step_was_drawn_is_named() -> None:
     }
     changes = drawn_with_changes(older, now)
     assert changes[0] == f"scipy 1.15.0 -> {now['versions']['scipy']}"
-    assert f"system Linux -> {now['platform']['system']}" in changes
-    assert f"machine aarch64 -> {now['platform']['machine']}" in changes
+    assert f"system SunOS -> {now['platform']['system']}" in changes
+    assert f"machine sparc64 -> {now['platform']['machine']}" in changes
     assert any(
         c.startswith("BLAS openblas 0.3.27 neoversen1 (pthreads, 8 threads) -> ") for c in changes
     )
@@ -126,14 +128,14 @@ def test_a_replay_whose_imputation_differs_says_what_changed() -> None:
         [
             step(
                 versions={**drawn["versions"], "scipy": "1.15.0"},
-                platform={**drawn["platform"], "machine": "aarch64"},
+                platform={**drawn["platform"], "machine": "sparc64"},
             )
         ],
     )
     (warning,) = elsewhere.warnings
     assert warning.endswith(
         f"(changed since: scipy 1.15.0 -> {drawn['versions']['scipy']}, "
-        f"machine aarch64 -> {drawn['platform']['machine']})"
+        f"machine sparc64 -> {drawn['platform']['machine']})"
     )
     earlier = apply_steps(
         df, [step(versions={"numpy": "1.26.0", "scikit-learn": drawn["versions"]["scikit-learn"]})]
