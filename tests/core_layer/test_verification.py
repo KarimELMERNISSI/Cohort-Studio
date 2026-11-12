@@ -787,7 +787,6 @@ def test_a_change_is_a_failure_however_large_the_table() -> None:
         assert compare_profiles(recorded, frame_profile(swapped)).outcome == FAILED, (first, second)
 
     rows = pd.DataFrame({"bmi": rng.normal(27, 4, 100_000).round(1)})
-    recorded = frame_profile(rows)
     exchanged = rows.copy()
     exchanged.iloc[5, 0], exchanged.iloc[70_000, 0] = 28.0, 27.9
     rows.iloc[5, 0], rows.iloc[70_000, 0] = 27.9, 28.0

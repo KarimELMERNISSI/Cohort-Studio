@@ -443,8 +443,6 @@ def _body_with_rows() -> dict:
 def test_a_shared_definition_holds_no_listed_row_and_no_note() -> None:
     """The rows a rule lists are participants, and a note is a user's own commentary: neither travels. The ticks of
     a criterion that was left out go with it."""
-    import json
-
     from core.population import catalogue
     from core.protocol import protocol_for_sharing
 
@@ -507,8 +505,6 @@ def test_a_family_counted_with_a_threshold_goes_whole_when_one_of_its_rules_list
 def test_a_shared_definition_names_what_it_rebuilt_without_the_keys_it_does_not_read() -> None:
     """A rule holding a key that no kind reads is rebuilt without it: the shared body no longer hashes to the
     session's, and nothing said of what."""
-    import json
-
     from core.criteria import expression_rule
     from core.protocol import protocol_for_sharing
 

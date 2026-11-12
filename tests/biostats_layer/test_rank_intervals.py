@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from scipy import stats
 
-import biostats.rank_intervals as ri
+from biostats import rank_intervals as ri
 from biostats.effect_sizes import rank_biserial
 from biostats.inference import compare_groups
 from biostats.paired import one_sample_wilcoxon, wilcoxon_signed_rank

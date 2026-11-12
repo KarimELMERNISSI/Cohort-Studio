@@ -93,7 +93,7 @@ def git_commit(root: Path = ROOT) -> str | None:
             if line.endswith(f" {ref}"):
                 return _commit(line.split(" ", 1)[0])
     except OSError:
-        pass
+        pass  # no git folder to read (an image, an archive): the commit recorded at build time is next
     try:
         return _commit((root / BUILD_COMMIT).read_text(encoding="utf-8"))
     except OSError:

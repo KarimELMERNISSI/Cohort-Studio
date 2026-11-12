@@ -113,7 +113,8 @@ def test_the_lock_checksum_ignores_line_endings(tmp_path: Path) -> None:
     (tmp_path / "b").mkdir()
     (tmp_path / "a" / "uv.lock").write_bytes(b"version = 1\n")
     (tmp_path / "b" / "uv.lock").write_bytes(b"version = 1\r\n")
-    assert lock_checksum(tmp_path / "a") == lock_checksum(tmp_path / "b") is not None
+    unix = lock_checksum(tmp_path / "a")
+    assert unix is not None and unix == lock_checksum(tmp_path / "b")
     assert lock_checksum(tmp_path) is None
 
 
