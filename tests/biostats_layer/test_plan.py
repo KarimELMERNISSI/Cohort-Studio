@@ -485,7 +485,8 @@ def test_a_cox_record_names_its_numbers_and_the_counts_behind_each_term() -> Non
     )
     assert third.number("p").rule == plan.LOG and third.number("extreme").value is False
     age = record.part("term:age")
-    assert age.labels == {"variable": "age"} and age.support == {
+    # a covariate of many values: a ratio for one unit more, with the model's counts behind it
+    assert age.labels == {"variable": "age", "per": "unit"} and age.support == {
         "rows": len(df),
         "events": int(df["died"].sum()),
         "censored": len(df) - int(df["died"].sum()),
@@ -554,9 +555,9 @@ def test_a_covariate_coded_0_and_1_has_the_counts_of_its_two_cells() -> None:
     assert reference.support["rows"] == len(df) - 6
     assert record.part("term:smoker").labels == {"variable": "smoker", "level": "True"}
     assert record.part("reference:smoker").support["rows"] == int((~df["smoker"]).sum())
-    assert record.part("term:age").labels == {
-        "variable": "age"
-    }  # more than two values: the model's counts
+    # many values: a ratio per unit, with the model's counts
+    assert record.part("term:age").labels == {"variable": "age", "per": "unit"}
+    assert record.part("term:age").support["rows"] == len(df)
     # the same variable as text has the same counts behind its term
     as_text = plan.record("logistic", logistic_regression(df, "died", ["as_text", "age"]))
     assert as_text is not None and as_text.part("term:as_text#1").support == term.support
@@ -807,6 +808,11 @@ def test_a_pooled_record_keeps_each_imputation_and_the_smallest_counts() -> None
     assert [(n.name, n.value, n.fine) for n in data.numbers] == [
         ("rows_skipped", 0, True),
         ("rows_left_out", 0, True),
+        (
+            "rows_min",
+            len(mi.base),
+            False,
+        ),  # the rows the analysis read, in the dataset that has the fewest
     ]
     # the events up to each time in each of the 5 datasets: the events between two times are counted in each
     each = drug.number("events_so_far_each")
@@ -827,37 +833,136 @@ def test_a_pooled_record_keeps_each_imputation_and_the_smallest_counts() -> None
     }  # every row, in every dataset
 
 
-def test_a_covariate_that_most_rows_hold_at_one_value_has_the_counts_on_and_off_it() -> None:
-    """A dose that is 0 for all but two participants is read as a number of many values: its term carried the whole
-    model's counts, while its coefficient is those two participants' outcome."""
-    from biostats.design import OTHER_VALUES, dominant_counts
+def test_a_covariate_of_a_few_values_has_the_counts_of_each_value() -> None:
+    """A dose that is 0 for all but two participants is read as a number: its term carried the whole model's counts,
+    while its coefficient is those two participants' outcome. A score from 0 to 8 is a table as well: each of its
+    values is a cell, which the written numbers of a model of such covariates give back."""
+    from biostats.design import FEW_VALUES, value_counts
 
     df = _cohort()
     df["dose"] = 0.0
     df.loc[df.index[:2], "dose"] = [1.0, 3.0]
-    df["packs"] = np.where(np.arange(len(df)) % 2 == 0, 0, 1 + np.arange(len(df)) % 7)
+    df["score"] = np.arange(len(df)) % 8  # 0 to 7
+    df.loc[df.index[:2], "score"] = 8  # and two participants at 8
     df["transplanted"] = (np.arange(len(df)) % 9 == 0).astype(int)
-    cells = dominant_counts(df, ["dose", "packs", "age", "transplanted", "arm"], df["died"])
-    # neither a factor, nor a covariate of two values (an indicator), nor one that no value holds for half
-    assert list(cells) == ["dose", "packs"]
-    died = int(df.loc[df.index[:2], "died"].sum())
+    cells = value_counts(df, ["dose", "score", "age", "transplanted", "arm"], df["died"])
+    # neither a factor, nor a covariate of two values (an indicator), nor one of more than twenty values
+    assert list(cells) == ["dose", "score"] and df["age"].nunique() > FEW_VALUES
+    died = [int(df.loc[row, "died"]) for row in df.index[:2]]
+    others = int(df["died"].sum()) - sum(died)
     assert cells["dose"] == {
-        "0": (len(df) - 2, int(df["died"].sum()) - died, int(df["died"].sum()) - died),
-        OTHER_VALUES: (2, died, died),
+        "0": (len(df) - 2, others, others),
+        "1": (1, died[0], died[0]),
+        "3": (1, died[1], died[1]),
     }
-    assert cells["packs"]["0"][0] == cells["packs"][OTHER_VALUES][0] == len(df) // 2  # exactly half
+    assert list(cells["score"]) == [str(value) for value in range(9)]  # in increasing order
+    assert cells["score"]["8"] == (2, sum(died), sum(died))
     record = plan.record("logistic", logistic_regression(df, "died", ["dose", "age"]))
     assert record is not None
-    assert record.part("term:dose").labels == {"variable": "dose"}  # a slope: no level of its own
-    assert record.part("term:dose").support == {"rows": 2, "events": died, "non_events": 2 - died}
-    assert record.part("reference:dose").labels == {"variable": "dose", "level": "0"}
+    # a slope: a ratio per unit, with the smallest of each count over its values behind it
+    term = record.part("term:dose")
+    assert term.labels == {"variable": "dose", "per": "unit"}
+    assert term.support == {"rows": 1, "events": min(died), "non_events": 1 - max(died)}
+    # the other cell says what it is: every value of the covariate is a cell, and the term is no contrast with it
+    reference = record.part("reference:dose")
+    assert reference.labels == {"variable": "dose", "level": "0", "of": "values"}
+    assert reference.support["rows"] == len(df) - 2
+    by_score = plan.record("logistic", logistic_regression(df, "died", ["score", "age"]))
+    assert by_score is not None and by_score.part("term:score").support["rows"] == 2
+    assert by_score.part("reference:score").labels == {
+        "variable": "score",
+        "level": "0",
+        "of": "values",
+    }
     for key, result in (
         ("cox", cox_regression(df, "days", "died", ["dose", "age"], diagnostics=False)),
         ("count", count_regression(df, "admissions", ["dose", "age"], exposure_col="years")),
     ):
         other = plan.record(key, result)
-        assert other is not None and other.part("term:dose").support["rows"] == 2, key
+        assert other is not None and other.part("term:dose").support["rows"] == 1, key
         assert other.part("reference:dose").support["rows"] == len(df) - 2, key
+
+
+def test_a_covariate_that_most_rows_hold_at_one_value_has_the_counts_on_and_off_it() -> None:
+    """A covariate of many values that is 0 for all but thirty participants: its coefficient is carried by the rows
+    off its commonest value, while its term would carry the whole model's counts."""
+    from biostats.design import OTHER_VALUES, dominant_counts
+
+    df = _cohort()
+    off = df.index[:30]
+    df["dose"] = 0.0
+    df.loc[off, "dose"] = 10.0 + np.arange(30)  # thirty values, one participant each
+    df["packs"] = np.where(np.arange(len(df)) % 2 == 0, 0.0, 1.0 + np.arange(len(df)))
+    df["score"] = np.arange(len(df)) % 9
+    cells = dominant_counts(df, ["dose", "packs", "age", "score", "arm"], df["died"])
+    # neither a factor, nor a covariate of a few values (counted value by value), nor one that no value holds for
+    # half of the rows
+    assert list(cells) == ["dose", "packs"]
+    died = int(df.loc[off, "died"].sum())
+    rest = int(df["died"].sum()) - died
+    assert cells["dose"] == {"0": (len(df) - 30, rest, rest), OTHER_VALUES: (30, died, died)}
+    assert cells["packs"]["0"][0] == cells["packs"][OTHER_VALUES][0] == len(df) // 2  # exactly half
+    record = plan.record("logistic", logistic_regression(df, "died", ["dose", "age"]))
+    assert record is not None
+    assert record.part("term:dose").labels == {"variable": "dose", "per": "unit"}
+    assert record.part("term:dose").support == {
+        "rows": 30,
+        "events": died,
+        "non_events": 30 - died,
+    }
+    assert record.part("reference:dose").labels == {
+        "variable": "dose",
+        "level": "0",
+        "of": "commonest",
+    }
+    for key, result in (
+        ("cox", cox_regression(df, "days", "died", ["dose", "age"], diagnostics=False)),
+        ("count", count_regression(df, "admissions", ["dose", "age"], exposure_col="years")),
+    ):
+        other = plan.record(key, result)
+        assert other is not None and other.part("term:dose").support["rows"] == 30, key
+        assert other.part("reference:dose").support["rows"] == len(df) - 30, key
+
+
+def test_two_values_that_are_not_one_unit_apart_make_a_ratio_per_unit() -> None:
+    """A dose coded 0 or 50 has two values, and its term read "50 against 0" beside an odds ratio for one unit of
+    dose: the ratio of 50 against 0 is that one to the power 50."""
+    df = _cohort()
+    df["dose"] = np.where(np.arange(len(df)) % 4 == 0, 50, 0)
+    df["exposed"] = (df["dose"] > 0).astype(int)
+    by_dose = plan.record("logistic", logistic_regression(df, "died", ["dose", "age"]))
+    by_flag = plan.record("logistic", logistic_regression(df, "died", ["exposed", "age"]))
+    assert by_dose is not None and by_flag is not None
+    term, flag = by_dose.part("term:dose"), by_flag.part("term:exposed")
+    assert term.labels == {"variable": "dose", "per": "unit"}
+    assert flag.labels == {
+        "variable": "exposed",
+        "level": "1",
+    }  # one unit apart: the higher against the lower
+    # the cell behind the term is the higher value's either way, and the other cell says that it is no reference
+    assert term.support == flag.support and term.support["rows"] == len(df) // 4
+    assert by_dose.part("reference:dose").labels == {
+        "variable": "dose",
+        "level": "0",
+        "of": "values",
+    }
+    assert by_flag.part("reference:exposed").labels == {"variable": "exposed", "level": "0"}
+    # one fit, written in two units
+    assert flag.number("coef").value == pytest.approx(50 * term.number("coef").value, rel=1e-4)
+    for key, result in (
+        ("cox", cox_regression(df, "days", "died", ["dose", "age"], diagnostics=False)),
+        ("count", count_regression(df, "admissions", ["dose", "age"], exposure_col="years")),
+    ):
+        other = plan.record(key, result)
+        assert other is not None, key
+        assert other.part("term:dose").labels == {"variable": "dose", "per": "unit"}, key
+        assert other.part("reference:dose").labels["of"] == "values", key
+    # True and False are one unit apart
+    df["smoker"] = np.arange(len(df)) % 3 == 0
+    smoker = plan.record("logistic", logistic_regression(df, "died", ["smoker", "age"]))
+    assert smoker is not None
+    assert smoker.part("term:smoker").labels == {"variable": "smoker", "level": "True"}
+    assert "of" not in smoker.part("reference:smoker").labels
 
 
 def test_a_pooled_term_s_cells_are_those_of_its_recorded_values() -> None:
@@ -899,9 +1004,16 @@ def test_a_pooled_term_s_cells_are_those_of_its_recorded_values() -> None:
         died = int(truth.loc[truth.index[5], "died"])
         assert term.support == {"rows": 1, "events": died, without: 1 - died}, kind
         assert record.part("reference:transplanted").support["rows"] == recorded - 1, kind
-        # more than two values, 0 for most rows: the rows off it, on recorded values too
-        assert record.part("term:prior").support["rows"] == 6, kind
-        assert record.part("reference:prior").labels == {"variable": "prior", "level": "0"}, kind
+        # a few values (0 to 3): each is a cell, on recorded values too, and the term has the smallest of each
+        # count over the values above the first (four rows at 1, one at 2, one at 3)
+        prior = record.part("term:prior")
+        assert prior.labels == {"variable": "prior", "per": "unit"}, kind
+        assert prior.support["rows"] == 1, kind
+        assert record.part("reference:prior").labels == {
+            "variable": "prior",
+            "level": "0",
+            "of": "values",
+        }, kind
         assert record.part("reference:prior").support["rows"] == recorded - 6, kind
     # a covariate whose two values every dataset keeps is counted in the datasets, as before
     kept = plan.run(
@@ -909,6 +1021,43 @@ def test_a_pooled_term_s_cells_are_those_of_its_recorded_values() -> None:
         mi=_imputed(),
     )
     assert "recorded_cells" in kept.result.extra
+
+
+def test_a_pooled_cell_counts_the_rows_whose_outcome_is_missing() -> None:
+    """The one participant coded 1 had no recorded outcome. Counted on the rows that record the outcome, the cell did
+    not exist: the covariate read as one value, and its term was written with the model's counts."""
+    truth = _cohort()
+    truth["transplanted"] = 0.0
+    truth.loc[truth.index[5], "transplanted"] = 1.0
+    rng = np.random.default_rng(9)
+    base = truth.copy()
+    gap = rng.random(len(base)) < 0.12
+    gap[:20] = False
+    base.loc[gap, "transplanted"] = np.nan
+    base["died"] = base["died"].astype(float)
+    base.loc[base.index[5], "died"] = np.nan  # the participant coded 1: no outcome recorded
+    completed = []
+    for _ in range(5):
+        one = base.copy()
+        one.loc[gap, "transplanted"] = rng.normal(0.0, 0.05, gap.sum())
+        one.loc[one.index[5], "died"] = float(rng.random() < 0.5)
+        completed.append(one)
+    mi = MIData.from_completed(base, completed, methods={"transplanted": "norm", "died": "logreg"})
+    for kind, roles, without in (
+        ("logistic", {"outcome": "died"}, "non_events"),
+        ("cox", {"time": "days", "event": "died"}, "censored"),
+    ):
+        done = plan.run(
+            specify(kind, pooled=True, compare="arm", adjust=["transplanted", "age"], **roles),
+            mi=mi,
+        )
+        record = plan.record(f"{kind}_mi", done.result)
+        assert record is not None
+        term = record.part("term:transplanted")
+        assert term.labels == {"variable": "transplanted", "level": "1"}, kind
+        # one row, no recorded event and no row recorded without one: no side of the cell reaches any k
+        assert term.support == {"rows": 1, "events": 0, without: 0}, kind
+        assert record.part("reference:transplanted").support["rows"] == int((~gap).sum()) - 1, kind
 
 
 def test_a_pooled_result_counts_the_rows_its_datasets_left_out() -> None:
@@ -935,6 +1084,8 @@ def test_a_pooled_result_counts_the_rows_its_datasets_left_out() -> None:
     assert record is not None
     data = record.part("data")
     assert (data.number("rows_skipped").value, data.number("rows_left_out").value) == (1, 2)
+    # the rows the analysis read: every row but the group of one and the two left out
+    assert data.number("rows_min").value == len(truth) - 3 and not data.number("rows_min").fine
     assert [p.labels["group"] for p in record.parts if p.id.startswith("curve#")] == ["a", "b"]
     cox = plan.run(
         specify("cox", pooled=True, time="days", event="died", compare="arm", adjust=["age"]), mi=mi

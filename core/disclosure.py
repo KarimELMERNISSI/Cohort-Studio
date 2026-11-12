@@ -29,43 +29,65 @@ kind:
 
 - a model (Cox, logistic, count) is withheld whole when its rows, its rows with the event, its rows without it or
   its residual degrees of freedom are below k (a count model's events are a sum of counts: the people behind them
-  are its rows with an event). A term that compares two cells is shown only when both hold at least k rows, k with
-  the event and k without: a factor's level, or the upper value of a covariate coded with two values, against the
-  reference; the rows off the commonest value of a numeric covariate that at least half of the rows hold at one
-  value, against the rows on it. The coefficient of a level held by one participant gives that participant's
-  outcome, and a level where nobody, or everybody, had the event says so of each of its participants. A term
-  without a maximum of the likelihood is not shown either;
+  are its rows with an event). A term with cells behind it is shown only when each holds at least k rows, k with
+  the event and k without: a factor's level, or the upper value of a covariate coded with two values, and the
+  reference; every value of a numeric covariate of three to twenty values (a score from 0 to 8 is a table: the
+  slope of a model of such covariates, its standard error and its likelihood give each value's cell back); the
+  rows on and off the commonest value of a numeric covariate of more values that at least half of the rows hold
+  at one value. The coefficient of a level held by one participant gives that participant's outcome, and a level
+  where nobody, or everybody, had the event says so of each of its participants. A term without a maximum of the
+  likelihood is not shown either. The term of a numeric covariate is a ratio per unit, and is labelled so; the
+  cell beside it is written as its reference only where its two values are one unit apart;
 - no count travels beside a term, but in a model of categories alone the numbers of a shown term are its two
   cells' counts in another form (the coefficient is their log odds ratio, the square of its standard error the sum
   of their reciprocals), and the model's totals, less the cells shown, give the withheld ones. So the cells
-  withheld of a variable hold k of each count together, or the smallest cell shown is withheld with them, and the
-  next, until they do or none is left. The numbers of the fit as a whole (likelihood, AIC, pseudo-R2, AUC,
-  concordance, dispersion, whether it converged) are equations in every cell of the model: they are written only
-  when no term is withheld. A model none of whose terms can be shown, or no term of whose comparison can, is
-  withheld whole. A withheld term is counted by its variable, never named by its level;
-- a Kaplan-Meier curve is given at times that are multiples of one step for the whole result: at least a
-  hundredth of the follow-up shown and five times the data's own unit, so that no time given is a participant's.
-  At least k events lie between two of them and none or at least k after the last (in every imputed dataset, for
-  a pooled curve), and k rows are still followed at the last. The result says until when k rows were followed;
-  the median is rounded up to the step, its lower limit down and its upper limit up, or said to be later than
-  that time. A group of fewer than k rows, events or rows without the event is withheld whole, and with it the
-  smallest groups shown until the groups withheld hold k of each together: the number analysed, less the groups
-  shown, gives their sum. A pooled result and its complete cases withhold the same groups. The log-rank test is
-  shown when every group is;
+  withheld of a variable hold k of each count together, or the cell shown that holds the fewest rows is withheld
+  with them (the first by name, of two that hold as many), and the next, until they do or none is left; when that
+  cell is the reference, every term of the variable is withheld. The groups of a Kaplan-Meier analysis are
+  withheld in the same order, so that the curves and a model of one grouping withhold the same cells, and
+  ``cover`` names cells to withhold first (those another result of the package withholds). The numbers of the
+  fit as a whole (likelihood, AIC, pseudo-R2, AUC, concordance, dispersion, whether it converged) are equations in
+  every cell of the model: they are written only when no term is withheld. A withheld term is counted by its
+  variable, never named by its level;
+- a model is withheld whole when none of its terms can be shown, or no term of its comparison; when one of its
+  terms is withheld for a cell, or a reference, of fewer than k rows, for one where nobody or everybody had the
+  event, or for an estimate without a maximum (those rows add nothing to the other terms, which are then the
+  terms of the model fitted without them: beside another model of the same package, their difference is those
+  rows' influence, the outcome, the arm and the age of a participant alone in a cell); and when a term is
+  withheld while every term written would compare categories (the model is then a table, and a cell withheld
+  of one variable comes back through the terms of another). A cell of k rows with few events withholds its
+  term only;
+- a Kaplan-Meier curve is given at times that are multiples of one step for the whole result, read on the groups
+  it shows: at least a hundredth of the follow-up shown, and at least a floor of five times the data's own unit
+  (the usual gap between two recorded times), which is never more than a tenth of the follow-up shown and never
+  less than one unit, so that no time given is a participant's while times recorded in whole years keep their
+  points. At least k events lie between two of them and none or at least k after the last (in every imputed
+  dataset, for a pooled curve), and k rows are still followed at the last. The curve and its limits are written
+  to three decimals: with every digit they give the rows at risk at each time, and so the rows whose follow-up
+  ended between two times. The result says until when k rows were followed; the median is rounded up to the
+  step, its lower limit down and its upper limit up, or said to be later than that time. A group of fewer than k
+  rows, events or rows without the event is withheld whole, and with it the smallest groups shown until the
+  groups withheld hold k of each together: the number analysed, less the groups shown, gives their sum. The
+  log-rank test is shown when every group is;
 - beside a pooled result, its complete-case analysis is shown only when the two differ by none, or by at least k,
   of their rows, their rows with the event and their rows without it (group by group for curves): they differ by
-  the rows that lack a value, and by their outcomes.
+  the rows that lack a value, and by their outcomes. The complete cases take the groups the pooled result
+  withholds and may withhold more; nothing they need goes back to the result. A pooled result's rows are the
+  fewest that one of its imputed datasets read, and are compared with its line of the flow as an observed
+  result's are.
 
 Only the numbers a kind's rule names are written: a number added to a record later does not travel until the rule
 says so, and a kind without a rule is withheld. No warning's wording travels: what a reader needs of the cautions
-is written as numbers (a model's parameters and events per parameter, a curve's step and follow-up), and
-:func:`reading_notes` gives the sentences a package says them with.
+is written as numbers (a model's parameters and events per parameter, whether a Poisson model is overdispersed,
+whether a term rests on fewer than 10 of a count, a curve's step and follow-up), and :func:`reading_notes` gives
+the sentences a package says them with.
 
 Before a package is offered, the texts that come from its user and from the data are read for a value held by 1 to
 k - 1 rows (:class:`RareFinder`): a column named after a level, a criterion that names a site, a title. And every
 text that reads as an expression, for a comparison that sets fewer than k rows apart by a value written in it:
-"age == 97" selects one participant and says by what. A test that cannot be run safely is reported as not checked.
-A hit names its place and its column, never the value.
+"age == 97" selects one participant and says by what. A pattern is run by an engine that cannot backtrack, called
+directly; a test that cannot be run safely, and a text too deep to be read, are reported as not checked. A hit
+names its place and its column, never the value.
 
 What the writer of a package must do, which this module cannot:
 
@@ -77,15 +99,23 @@ What the writer of a package must do, which this module cannot:
   shows (the groups of a country, less the sites shown in it);
 - carry only results computed on the package's own population and data, compared by fingerprint and never by a
   count, and pass ``disclose_record`` and ``disclose_spec`` the analysis as the flow shows it;
+- withhold one set of cells per grouping across the results of a package: two results that each withhold another
+  cell to cover a small one give it back together. Each result of a grouping is disclosed with the cells the
+  others withhold (:func:`withheld_labels`, then ``disclose_record``'s ``cover``), again until none withholds
+  more; a cover the person who shares chooses goes the same way;
 - compare the numbers a package shows with those of earlier packages of the same data (two packages exported with
-  different ticks differ by a withheld count): the export log keeps them;
+  different ticks differ by a withheld count), and their populations: one that differs from an exported
+  population by 1 to k - 1 rows gives those rows' influence through any estimate, not only through a count. The
+  export log keeps them;
 - make the policy with ``DisclosurePolicy.for_study`` and the installation's floor, write it as it is recorded,
   and refuse a written policy that lacks what the study asked for and the floor;
+- write :func:`reading_notes` in the package's own text, with its k: no caution of a result travels as wording;
 - give the finder the user's and the data's texts only (its own sentences are made of fixed words and of disclosed
   numbers, never of a box's details, an analysis's note, a stored label or a warning), the format's fixed names
   as ``own``, each criterion stored as numbers through :meth:`RareFinder.bounds`, the identifying columns the
-  person who shares marks, and copies of the datasets; run it in a process with a time limit, and show what it
-  did not finish as not checked;
+  person who shares marks, the columns the package shows as ``shown`` (a value that is the name of a column it
+  does not show is looked for), and copies of the datasets; run it in a process with a time limit and a memory
+  limit, and show what it did not finish, or stopped on, as not checked;
 - check every member against a closed schema: no fingerprint of rows, of cells or of a spec, no intermediate head
   of the trace, no number marked as one participant's;
 - name in the export log what is left out: the results by kind and place, the hits overridden, the texts not
@@ -96,7 +126,6 @@ from __future__ import annotations
 
 import ast
 import bisect
-import copy
 import importlib
 import math
 import re
@@ -111,7 +140,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from biostats.plan import DETERMINISTIC, EXACT, AnalysisSpec, Number, Part, ResultRecord
+from biostats.plan import (
+    DETERMINISTIC,
+    EXACT,
+    ITERATIVE_LOOSE,
+    AnalysisSpec,
+    Number,
+    Part,
+    ResultRecord,
+)
 from core.attrition import DATA, LOADED, SOURCE, AnalysisCount, FlowBox, ParticipantFlow
 from core.expressions.safe_eval import DEFAULT_POLICY, evaluate_tree
 
@@ -410,10 +447,11 @@ OTHER_POPULATION, FEW_LEFT_OUT = "population", "left_out"  # why an analysis is 
 
 
 def _analysed(a: AnalysisCount) -> int:
-    """The rows an analysis used. A pooled analysis uses every row it did not leave out: the imputation fills the
-    missing values."""
-    pooled = a.n_analysed is None or bool(a.imputations)
-    return int(a.n_population) - int(a.n_left_out) if pooled else int(a.n_analysed or 0)
+    """The rows an analysis used: those it counted (for a pooled one, the fewest that one of its imputed datasets
+    read), and never more than the rows it did not leave out. An analysis whose rows were not counted used every
+    row it did not leave out."""
+    rest = int(a.n_population) - int(a.n_left_out)
+    return rest if a.n_analysed is None else min(int(a.n_analysed), rest)
 
 
 def _analysis_withheld(a: AnalysisCount, policy: DisclosurePolicy, population: int) -> str:
@@ -881,6 +919,8 @@ _COUNTED = {
     "count": ("rows", "rows_with_events", "rows_without_events"),
     "survival": ("rows", "events", "censored"),
 }
+# the counts a cell behind a term must hold: those of its kind, kept apart from a model's and a group's
+_CELL_COUNTED = dict(_COUNTED)
 _TOTAL_NAMES = (
     "rows",
     "events",
@@ -913,9 +953,12 @@ def _kept(part: Part, names: Sequence[str], *, totals: bool = False) -> Part:
     return Part(part.id, tuple(n for n in part.numbers if n.name in names), support, part.labels)
 
 
-def _passes(support: Mapping[str, Any], kind: str, policy: DisclosurePolicy) -> bool:
-    """Whether a cell, or a model, holds at least k of each count its kind counts."""
-    held = [_count(support, name) for name in _COUNTED[kind]]
+def _passes(
+    support: Mapping[str, Any], kind: str, policy: DisclosurePolicy, *, cell: bool = False
+) -> bool:
+    """Whether a model or a group (``cell``: a cell behind a term) holds at least k of each count its kind
+    counts."""
+    held = [_count(support, name) for name in (_CELL_COUNTED if cell else _COUNTED)[kind]]
     return all(isinstance(n, int) and n >= policy.k for n in held)
 
 
@@ -963,6 +1006,17 @@ def _withheld_whole(record: ResultRecord, *why: str) -> DisclosedRecord:
 
 # why a term is withheld
 _REFERENCE, _CELL, _COVER = "reference", "cell", "cover"
+# what the cells behind a numeric covariate's term are, as its reference part says (biostats.plan.VALUES, COMMONEST)
+_OF_COMMONEST = "commonest"
+# the sides of a cell whose absence leaves its term without a maximum of the likelihood, whatever the fit reports
+_NO_MAXIMUM = {
+    "logistic": ("events", "non_events"),
+    "cox": ("events",),
+    "count": ("rows_with_events",),
+}
+OVERDISPERSED_ABOVE = (
+    1.5  # a Poisson model's dispersion above which its standard errors are too small
+)
 
 
 def _extreme(part: Part) -> bool:
@@ -970,19 +1024,51 @@ def _extreme(part: Part) -> bool:
     return any(n.name == "extreme" and n.value is True for n in part.numbers)
 
 
+def _label(part: Part) -> str:
+    """A cell's own name: its level, or its group."""
+    return part.labels.get("level", part.labels.get("group", part.id))
+
+
+def _cover_order(part: Part) -> tuple[int, str]:
+    """
+    The order in which the cells shown of one grouping are withheld to cover a small one: the fewest rows first,
+    then the name. One order for the groups of a Kaplan-Meier analysis and for the cells of a model (its reference
+    included), so that the curves and a model of one grouping withhold the same cells: chosen apart, a curve's
+    table and a model's term gave back the cell that both withheld.
+    """
+    rows = _count(part.support, "rows")
+    return (rows if isinstance(rows, int) else 0, _label(part))
+
+
+def _drops_out(support: Mapping[str, Any], kind: str, policy: DisclosurePolicy) -> bool:
+    """
+    Whether the rows of a cell add nothing, or too little, to the other terms of a fit: fewer than k rows (a
+    participant alone in a cell is fitted exactly by the cell's own parameter), or a cell where nobody, or
+    everybody, had the event (its term has no maximum). The terms left are then those of the model fitted without
+    those rows. A cell without its counts reads as one.
+    """
+    rows = _count(support, "rows")
+    sides = [_count(support, name) for name in _NO_MAXIMUM[kind]]
+    if not isinstance(rows, int) or any(not isinstance(n, int) for n in sides):
+        return True
+    return rows < policy.k or any(n == 0 for n in sides)
+
+
 def _withheld_terms(
-    record: ResultRecord, policy: DisclosurePolicy
+    record: ResultRecord,
+    policy: DisclosurePolicy,
+    cover: Mapping[str, Collection[str]] | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """
     The terms of a model that are not written, each with the reason, and the model's variables in its order.
 
-    A term that compares two cells (a factor's level or the upper value of a covariate of two values with the
-    reference; the rows off the commonest value of a numeric covariate with the rows on it) is written only when
-    both cells hold k of each count the kind counts. A term without a maximum is not written. And the cells
-    withheld of a variable must hold k of each count together, or the smallest cell shown goes with them, and the
-    next, until they do or none is left: in a model of categories alone the coefficient of a shown term and its
-    standard error are its two cells' counts in another form, so the model's totals, less the cells shown, give
-    the withheld ones together.
+    A term with cells behind it is written only when they hold k of each count the kind counts: a factor's level
+    or the upper value of a covariate of two values, and the reference; every value of a numeric covariate of a few
+    values; the rows on and off the commonest value of one of many values. A term without a maximum is not written.
+    The cells withheld of a variable must hold k of each count together, or the cell that comes next in the order
+    of :func:`_cover_order` goes with them, until they do or none is left; when that cell is the reference, every
+    term of the variable goes. ``cover`` names cells to withhold first (a variable's levels): those another result
+    of the same package withholds, or those the person who shares chose.
     """
     kind = record.kind
     parts = {p.id: p for p in record.parts}
@@ -993,23 +1079,37 @@ def _withheld_terms(
         own = [p for p in terms if p.labels.get("variable", "") == variable]
         reference = parts.get(f"reference:{variable}")
         if reference is None:
-            # no cell behind it (a numeric covariate that no value dominates); a level without its reference's
-            # counts cannot be judged, and is not shown
+            # no cell behind it (a numeric covariate of many values, none of them dominant); a level without its
+            # reference's counts cannot be judged, and is not shown
             hidden.update({p.id: _CELL for p in own if "level" in p.labels or _extreme(p)})
             continue
-        if not _passes(reference.support, kind, policy):
+        if not _passes(reference.support, kind, policy, cell=True):
             hidden.update({p.id: _REFERENCE for p in own})
             continue
-        hidden.update(
-            {p.id: _CELL for p in own if _extreme(p) or not _passes(p.support, kind, policy)}
-        )
+        asked = set((cover or {}).get(variable, ()))
+        # a term that cannot be shown on its own keeps that reason whatever is asked: the model as a whole is
+        # judged on it (a cell that drops out of the fit)
+        small = {
+            p.id: _CELL
+            for p in own
+            if _extreme(p) or not _passes(p.support, kind, policy, cell=True)
+        }
+        if _label(reference) in asked:
+            hidden.update({p.id: small.get(p.id, _COVER) for p in own})
+            continue
+        hidden.update(small)
+        hidden.update({p.id: _COVER for p in own if p.id not in hidden and _label(p) in asked})
         while True:
             gone = [p for p in own if p.id in hidden]
             left = [p for p in own if p.id not in hidden]
             if not gone or not left or all(n >= policy.k for n in _together(gone, kind).values()):
                 break
-            smallest = min(left, key=lambda p: (_count(p.support, "rows") or 0, p.id))
-            hidden[smallest.id] = _COVER
+            following = min([reference, *left], key=_cover_order)
+            if following is reference:
+                # the reference has no term to withhold: without it, no term of the variable can be read
+                hidden.update({p.id: _COVER for p in left})
+                break
+            hidden[following.id] = _COVER
     return hidden, variables
 
 
@@ -1040,14 +1140,61 @@ def _term_sentences(
     return said
 
 
+def _why_whole(record: ResultRecord, hidden: Mapping[str, str], policy: DisclosurePolicy) -> str:
+    """
+    Why a model with these terms withheld is withheld whole ("" when it is not).
+
+    - One of the withheld terms compares a cell that drops out of the fit (:func:`_drops_out`), or has no
+      maximum: the terms left are those of the model fitted without that cell's rows. Beside another model of
+      the same package that lacks the variable, their difference is those rows' influence: one participant's
+      outcome, arm and age when the cell is one participant.
+    - Every term that would be written compares categories: the model is a table, and its numbers are its
+      cells' counts in another form. A cell that is withheld comes back from the totals as soon as it is alone
+      in its row of the table, whatever the complement of its own variable.
+    """
+    if not hidden:
+        return ""
+    kind = record.kind
+    parts = {p.id: p for p in record.parts}
+    for part in record.parts:
+        if hidden.get(part.id) not in (_CELL, _REFERENCE):
+            continue
+        reference = parts.get(f"reference:{part.labels.get('variable', '')}")
+        # without a maximum, or without its reference's counts, nothing says that the cell stays in the fit
+        if (
+            _extreme(part)
+            or reference is None
+            or any(_drops_out(cell, kind, policy) for cell in (part.support, reference.support))
+        ):
+            return (
+                f"the model is withheld: one of its terms compares a cell of fewer than {policy.k} rows, or one "
+                "where nobody or everybody had the event, or has no maximum: the terms left would be those of the "
+                f"model fitted without those rows ({_ADVICE})"
+            )
+    written = [p for p in record.parts if p.id.startswith("term:") and p.id not in hidden]
+    references = [parts.get(f"reference:{p.labels.get('variable', '')}") for p in written]
+    if all(r is not None and r.labels.get("of") != _OF_COMMONEST for r in references):
+        return (
+            "the model is withheld: its terms all compare categories, so that their numbers are the cells of a "
+            f"table, and one of them cannot be shown ({_ADVICE})"
+        )
+    return ""
+
+
 def _model_facts(model: Part, kind: str, pooled: bool, parameters: int) -> list[Number]:
     """
     What a reader needs beside a model's ratios, as numbers (no warning's wording travels): its parameters apart
-    from the intercept, and for a logistic or a Cox model the events per parameter (the rarer side of a logistic
-    outcome) and whether that is below 10, where the application warns that the ratios may be unstable. From the
-    totals that are written; a pooled model's are the smallest over the imputed datasets, and named so.
+    from the intercept; for a logistic or a Cox model the events per parameter (the rarer outcome of a logistic
+    model) and whether that is below 10, where the application warns that the ratios may be unstable; for a Poisson
+    model whether it is overdispersed (its standard errors are then too small), the dispersion itself being one of
+    the fit's numbers. From the totals that are written; a pooled model's are the smallest over the imputed
+    datasets, and named so.
     """
     facts = [Number("parameters", int(parameters), EXACT)]
+    held = {n.name: n.value for n in model.numbers}
+    dispersion = held.get("dispersion")
+    if held.get("family") == "poisson" and isinstance(dispersion, int | float):
+        facts.append(Number("overdispersed", bool(dispersion > OVERDISPERSED_ABOVE), EXACT))
     events = _count(model.support, "events")
     other = _count(model.support, "non_events") if kind == "logistic" else events
     if (
@@ -1065,8 +1212,25 @@ def _model_facts(model: Part, kind: str, pooled: bool, parameters: int) -> list[
     ]
 
 
+def _term_facts(part: Part, reference: Part | None, kind: str) -> list[Number]:
+    """Beside a term that compares two cells: whether one of them holds fewer than 10 of a count the kind counts
+    (at a k below 10, a ratio can rest on 5 to 9 events beside a model that is not sparse as a whole)."""
+    if reference is None:
+        return []
+    held = [
+        _count(cell, name)
+        for cell in (part.support, reference.support)
+        for name in _CELL_COUNTED[kind]
+    ]
+    few = any(isinstance(n, int) and n < SPARSE_BELOW for n in held)
+    return [Number("sparse", bool(few), EXACT)]
+
+
 def _disclose_model(
-    record: ResultRecord, policy: DisclosurePolicy, spec: AnalysisSpec
+    record: ResultRecord,
+    policy: DisclosurePolicy,
+    spec: AnalysisSpec,
+    cover: Mapping[str, Collection[str]] | None = None,
 ) -> DisclosedRecord:
     """A Cox, logistic or count model, observed or pooled (see the module's description)."""
     kind = record.kind
@@ -1077,7 +1241,7 @@ def _disclose_model(
             record,
             f"the model is withheld: fewer than {policy.k} {_SIDES}, or residual degrees of freedom",
         )
-    hidden, variables = _withheld_terms(record, policy)
+    hidden, variables = _withheld_terms(record, policy, cover)
     written = [
         p.labels.get("variable", "")
         for p in record.parts
@@ -1096,6 +1260,8 @@ def _disclose_model(
             f"the model is withheld: no term of its comparison can be shown, and what is left is its adjustment "
             f"({_ADVICE})",
         )
+    if whole := _why_whole(record, hidden, policy):
+        return _withheld_whole(record, whole)
     # the comparison first: what is withheld of it is what a reader looks for
     ordered = sorted(variables, key=lambda v: v != compare)
     withheld = _term_sentences(record, hidden, ordered, policy)
@@ -1111,6 +1277,7 @@ def _disclose_model(
     shown: list[Part] = []
     for part in record.parts:
         prefix, _, rest = part.id.partition(":")
+        variable = part.labels.get("variable", "")
         if part.id == "model":
             kept = _kept(part, names, totals=True)
             facts = _model_facts(part, kind, record.pooled, len(written) + len(hidden))
@@ -1118,12 +1285,15 @@ def _disclose_model(
         elif part.id == "pooling":
             shown.append(_kept(part, _POOLING_NUMBERS))
         elif prefix == "reference":
-            # a reference with no term left to compare with it says nothing, and its label is a value of the data
-            if part.labels.get("variable", "") in written:
+            # the cell a level is compared with, named by its level: with no term left to compare with it, it
+            # says nothing; and the cells behind a ratio per unit are no reference of it
+            if variable in written and "of" not in part.labels:
                 shown.append(_kept(part, ()))
         elif prefix == "term":
             if part.id not in hidden:
-                shown.append(_kept(part, term_names))
+                kept = _kept(part, term_names)
+                facts = _term_facts(part, parts.get(f"reference:{variable}"), kind)
+                shown.append(Part(kept.id, (*kept.numbers, *facts), kept.support, kept.labels))
         elif prefix == "ph":
             if f"term:{rest}" in parts and f"term:{rest}" not in hidden:
                 shown.append(_kept(part, _PH_NUMBERS))
@@ -1134,7 +1304,7 @@ def _disclose_model(
             shown.append(_kept(part, _TEST_NUMBERS))
     complete = None
     if record.complete_case is not None:
-        inner = _disclose_model(record.complete_case, policy, spec)
+        inner = _disclose_model(record.complete_case, policy, spec, cover)
         observed = next((p for p in record.complete_case.parts if p.id == "model"), None)
         if (
             inner.record is None
@@ -1160,8 +1330,10 @@ def _disclose_model(
 
 STEPS_OF_FOLLOW_UP = 100  # a step is at least this part of the follow-up shown
 UNITS_A_STEP = (
-    5  # and at least this many of the data's own unit (the smallest gap between two recorded times)
+    5  # and at least this many of the data's own unit, as far as a tenth of the follow-up allows
 )
+UNIT_CENTILE = 0.05  # the data's own unit: the gap that this part of the gaps between two recorded times stay below
+SURVIVAL_DECIMALS = 3  # of a curve's value and limits
 
 
 def _clean(value: float) -> float:
@@ -1271,20 +1443,25 @@ def _timeline(part: Part, pooled: bool) -> _Timeline | None:
 
 def time_step(curves: Sequence[_Timeline], k: int) -> float | None:
     """
-    The step every time of a result is a multiple of (its groups, its complete cases): the smallest of 1, 2, 5 x
-    10^n that is at least a hundredth of the follow-up shown (the latest time at which k rows of a group are still
-    followed) and at least five times the data's own unit (the smallest gap between two recorded times). The second
-    is what makes a time given coarser than the record: no time of a curve is a participant's. None when no group
-    has k rows followed at a time above 0.
+    The step every time of a result is a multiple of, read on the groups it shows (its complete cases' too): the
+    smallest of 1, 2, 5 x 10^n that is at least a hundredth of the follow-up shown (the latest time at which k rows
+    of a group are still followed) and at least a floor. The floor is five times the data's own unit, never more
+    than a tenth of the follow-up shown and never less than one unit: it is what makes a time given coarser than
+    the record, so that no time of a curve is a participant's, while times recorded in whole years still get their
+    four points. The unit is the gap that a twentieth of the gaps between two recorded times stay below: read as
+    the smallest gap, one row recorded finer than the others set it. None when no group has k rows followed at a
+    time above 0.
     """
     recorded = sorted({time for curve in curves for time in curve.follow})
-    gaps = [b - a for a, b in zip(recorded, recorded[1:], strict=False)]
+    gaps = sorted(b - a for a, b in zip(recorded, recorded[1:], strict=False))
     horizons = [h for curve in curves if (h := curve.horizon(k)) is not None]
-    least = max(
-        (max(horizons) / STEPS_OF_FOLLOW_UP if horizons else 0.0),
-        (UNITS_A_STEP * min(gaps) if gaps else 0.0),
-    )
-    return step_at_least(least) if horizons and least > 0 else None
+    if not horizons:
+        return None
+    shown = max(horizons)
+    unit = gaps[int(UNIT_CENTILE * (len(gaps) - 1))] if gaps else 0.0
+    floor = max(unit, min(UNITS_A_STEP * unit, shown / 10))
+    least = max(shown / STEPS_OF_FOLLOW_UP, floor)
+    return step_at_least(least) if least > 0 else None
 
 
 def _points(curve: _Timeline, step: float, k: int) -> list[tuple[float, int]]:
@@ -1293,8 +1470,9 @@ def _points(curve: _Timeline, step: float, k: int) -> list[tuple[float, int]]:
     latest event time, rounded up to a multiple of the step, at which k rows are still followed and without the
     event, with at least k events before it and none or at least k after it, in every imputed dataset. Before it, a
     time once k events lie since the one before (rounded up likewise), as long as k events lie between it and the
-    last. So at least k events lie between two times, and none or at least k after the last: no count from 1 to
-    k - 1 can be read between two values of the curve.
+    last. So at least k events lie between two times, and none or at least k after the last: no count of events
+    from 1 to k - 1 can be read between two values of the curve. (The rows whose follow-up ended between two times
+    are another count: the curve's digits would give it, and are not all written.)
     """
     final = None
     for place in range(len(curve.times) - 1, -1, -1):
@@ -1334,6 +1512,13 @@ def _followed_until(curve: _Timeline, step: float, k: int) -> float | None:
     return until if curve.alive(until, step) >= k else None
 
 
+def _decimals(value: Any) -> Any:
+    """A survival probability as a shared curve writes it (a missing one stays missing)."""
+    if isinstance(value, int | float) and math.isfinite(value):
+        return round(float(value), SURVIVAL_DECIMALS)
+    return value
+
+
 def _curve(
     part: Part, timeline: _Timeline | None, policy: DisclosurePolicy, step: float | None
 ) -> Part | None:
@@ -1371,6 +1556,8 @@ def _curve(
         if value is None:
             return None  # not reached
         shown_at = direction(float(value), step)
+        if shown_at <= 0:
+            return None  # a limit below the first step: nothing can be said of it
         if until is None or shown_at > until or timeline.alive(shown_at, step) < k:
             later.append(name)
             return None
@@ -1398,13 +1585,17 @@ def _curve(
         Number("later_than_followed_until", later, EXACT),
         Number("times", [time for time, _ in places], EXACT),
     ]
+    # The curve and its limits to three decimals. With every digit, a value and its limit give the rows at risk at
+    # each time, and so the rows whose follow-up ended between two times, which can be 1 to k - 1 (3 of them, in a
+    # study with a common closing date). A value computed again agrees to one unit of the last decimal.
     numbers += [
-        Number(
-            name, [held[name][j] for _, j in places], by_name[name].cls, scale=by_name[name].scale
-        )
-        for name in ("survival", "lower", "upper", "fmi")
+        Number(name, [_decimals(held[name][j]) for _, j in places], ITERATIVE_LOOSE, scale=1.0)
+        for name in ("survival", "lower", "upper")
         if held.get(name) is not None
     ]
+    if held.get("fmi") is not None:
+        fmi = by_name["fmi"]
+        numbers.append(Number("fmi", [held["fmi"][j] for _, j in places], fmi.cls, scale=fmi.scale))
     counted = {
         name: n
         for name, n in part.support.items()
@@ -1429,25 +1620,30 @@ class _Groups:
     def label(self, part_id: str) -> str:
         return self.curves[part_id].labels.get("group", part_id)
 
+    def alone(self, policy: DisclosurePolicy) -> set[str]:
+        """The groups that can be shown on their own: k rows, k events and k rows without the event, in a record
+        that holds what the rule of a curve's times reads."""
+        return {
+            i
+            for i, part in self.curves.items()
+            if self.timelines[i] is not None and _passes(part.support, "survival", policy)
+        }
+
 
 def _withheld_groups(
-    groups: _Groups,
-    built: Mapping[str, Part | None],
-    policy: DisclosurePolicy,
-    also: Collection[str],
+    groups: _Groups, policy: DisclosurePolicy, also: Collection[str]
 ) -> tuple[list[str], int]:
     """
     The groups of a survival record that are not shown, and how many of them cannot be shown on their own. The
     number the analysis used, and any model on the same rows, give the withheld groups' rows, events and rows
-    without the event together: together they hold at least k of each, or the smallest group shown goes with
-    them, and the next, until they do or none is left. ``also`` names groups that the analysis beside this one (a
-    pooled result's complete cases, or the reverse) withholds: one cover serves both.
+    without the event together: together they hold at least k of each, or the group that comes next in the order
+    of :func:`_cover_order` goes with them, until they do or none is left. ``also`` names groups to withhold first:
+    those the result beside this one withholds (a pooled result's complete cases take its cover), those another
+    result of the package withholds, or those the person who shares chose.
     """
-    small = [i for i in groups.curves if built[i] is None]
-    hidden = [
-        *small,
-        *(i for i in groups.curves if built[i] is not None and groups.label(i) in also),
-    ]
+    alone = groups.alone(policy)
+    small = [i for i in groups.curves if i not in alone]
+    hidden = [*small, *(i for i in groups.curves if i in alone and groups.label(i) in also)]
     shown = [i for i in groups.curves if i not in hidden]
     while (
         hidden
@@ -1456,23 +1652,23 @@ def _withheld_groups(
             n < policy.k for n in _together([groups.curves[i] for i in hidden], "survival").values()
         )
     ):
-        smallest = min(shown, key=lambda i: (_count(groups.curves[i].support, "rows") or 0, i))
-        shown.remove(smallest)
-        hidden.append(smallest)
+        following = min(shown, key=lambda i: _cover_order(groups.curves[i]))
+        shown.remove(following)
+        hidden.append(following)
     return hidden, len(small)
 
 
 def _shown_curves(
     groups: _Groups,
-    built: Mapping[str, Part | None],
     hidden: Sequence[str],
     small: int,
     policy: DisclosurePolicy,
+    step: float | None,
     *,
-    paired: bool = False,
+    beside: bool = False,
 ) -> DisclosedRecord:
-    """A survival record with the groups that are shown, without its complete cases (``paired``: it is a pooled
-    analysis or its complete cases, which withhold the same groups)."""
+    """A survival record with the groups that are shown, at the times of ``step``, without its complete cases
+    (``beside``: it is the complete cases of a pooled result, which take its cover)."""
     record = groups.record
     withheld = []
     if small:
@@ -1486,13 +1682,18 @@ def _shown_curves(
                 "group",
                 f"the number analysed, less the groups shown, would give back fewer than {policy.k} rows, events "
                 "or rows without the event"
-                + (", here or in the analysis beside this one" if paired else ""),
+                + (", or the pooled result withholds them" if beside else ""),
                 more=True,
             )
         )
     if hidden:
         withheld.append(f"to share the other groups together: {_ADVICE}")
-    shown = [part for i in groups.curves if i not in hidden and (part := built[i]) is not None]
+    built = [
+        _curve(part, groups.timelines[i], policy, step)
+        for i, part in groups.curves.items()
+        if i not in hidden
+    ]
+    shown = [part for part in built if part is not None]
     if not shown:
         return DisclosedRecord(record.kind, record.pooled, None, tuple(withheld))
     parts = [_kept(p, _POOLING_NUMBERS) for p in record.parts if p.id == "pooling"]
@@ -1512,58 +1713,53 @@ def _shown_curves(
 
 
 def _disclose_survival(
-    record: ResultRecord, policy: DisclosurePolicy, spec: AnalysisSpec
+    record: ResultRecord,
+    policy: DisclosurePolicy,
+    spec: AnalysisSpec,
+    cover: Mapping[str, Collection[str]] | None = None,
 ) -> DisclosedRecord:
     """Kaplan-Meier curves and the log-rank test, observed or pooled (see the module's description)."""
     main = _Groups.of(record)
-    beside = None if record.complete_case is None else _Groups.of(record.complete_case)
-    both = [main] if beside is None else [main, beside]
-    # one step for every time of the result, and one set of groups withheld
-    step = time_step([t for g in both for t in g.timelines.values() if t is not None], policy.k)
-    built = [
-        {i: _curve(p, g.timelines[i], policy, step) for i, p in g.curves.items()} for g in both
-    ]
-    # one cover for both: the result's own first, which its complete cases then take (two covers chosen apart
-    # could be the two arms of the comparison); what the complete cases need beyond it goes back to the result
-    also: set[str] = set()
-    while True:
-        found = []
-        labels = set(also)
-        for groups, parts in zip(both, built, strict=True):
-            found.append(_withheld_groups(groups, parts, policy, labels))
-            labels |= {groups.label(i) for i in found[-1][0]}
-        if labels <= also:
-            break
-        also = labels
-    disclosed = _shown_curves(main, built[0], *found[0], policy, paired=beside is not None)
-    if beside is None or disclosed.record is None:
+    asked = set((cover or {}).get(spec.variables.get("group") or "", ()))
+    hidden, small = _withheld_groups(main, policy, asked)
+    shown = [i for i in main.curves if i not in hidden]
+    # The complete cases beside a pooled result take its cover, and may withhold more: nothing they need goes back
+    # to the result (it lost groups, and its test, to complete cases that were then not written). Whether they
+    # can be written at all is decided first, on the counts: the rows they left out, and the pair they make with
+    # the result, group by group for the groups both show, and in all.
+    beside: tuple[_Groups, list[str], int] | None = None
+    if record.complete_case is not None and shown:
+        cases = _Groups.of(record.complete_case)
+        theirs, few = _withheld_groups(cases, policy, asked | {main.label(i) for i in hidden})
+        observed = {cases.label(i): part for i, part in cases.curves.items()}
+        both = {cases.label(i) for i in cases.curves if i not in theirs}
+        pairs = [(main.curves[i], observed[main.label(i)]) for i in shown if main.label(i) in both]
+        every = [part for part in main.curves.values() if part.labels.get("group") in observed]
+        if (
+            both
+            and policy.shows(_left_out(record.complete_case))
+            and not any(_differ_by_few(p.support, o.support, "survival", policy) for p, o in pairs)
+            and not _differ_by_few(
+                _together(every, "survival"),
+                _together(list(observed.values()), "survival"),
+                "survival",
+                policy,
+            )
+        ):
+            beside = (cases, theirs, few)
+    # one step for every time of the result, read on the groups that are shown
+    timelines = [main.timelines[i] for i in shown]
+    if beside is not None:
+        timelines += [beside[0].timelines[i] for i in beside[0].curves if i not in beside[1]]
+    step = time_step([t for t in timelines if t is not None], policy.k)
+    disclosed = _shown_curves(main, hidden, small, policy, step)
+    if record.complete_case is None or disclosed.record is None:
         return disclosed
-    inner = _shown_curves(beside, built[1], *found[1], policy, paired=True)
     withheld = list(disclosed.withheld)
-    observed = {p.labels.get("group"): p for p in beside.curves.values()}
-    shown = [] if inner.record is None else [p.labels.get("group") for p in inner.record.parts]
-    pairs = [
-        (main.curves[p.id], observed[p.labels.get("group")])
-        for p in disclosed.record.parts
-        if p.id in main.curves and p.labels.get("group") in shown
-    ]
-    every = [p for p in main.curves.values() if p.labels.get("group") in observed]
-    complete = None
-    if (
-        inner.record is None
-        or not policy.shows(_left_out(beside.record))
-        or any(_differ_by_few(p.support, o.support, "survival", policy) for p, o in pairs)
-        or _differ_by_few(
-            _together(every, "survival"),
-            _together(list(observed.values()), "survival"),
-            "survival",
-            policy,
-        )
-    ):
-        # the two analyses differ, group by group, by the rows that lack a value and by their outcomes
+    inner = None if beside is None else _shown_curves(*beside, policy, step, beside=True)
+    if inner is None or inner.record is None:
         withheld.append("the complete-case analysis is withheld")
     else:
-        complete = inner.record
         withheld += [f"complete-case analysis: {w}" for w in inner.withheld]
     return DisclosedRecord(
         record.kind,
@@ -1573,7 +1769,7 @@ def _disclose_survival(
             record.pooled,
             disclosed.record.parts,
             (),
-            complete,
+            None if inner is None else inner.record,
             record.record_version,
         ),
         tuple(withheld),
@@ -1581,7 +1777,7 @@ def _disclose_survival(
 
 
 # the rule of each kind of result (the kinds' ids are biostats.plan.KINDS'): a kind without one is withheld
-RULES: dict[str, Callable[[ResultRecord, DisclosurePolicy, AnalysisSpec], DisclosedRecord]] = {
+RULES: dict[str, Callable[..., DisclosedRecord]] = {
     "survival": _disclose_survival,
     "cox": _disclose_model,
     "logistic": _disclose_model,
@@ -1600,15 +1796,19 @@ def _left_out(record: ResultRecord) -> int:
 
 
 def _rows_analysed(record: ResultRecord) -> int | None:
-    """The rows an observed result read, as its record counts them (None when it does not say: a pooled result's
-    datasets can hold other rows than the flow counts)."""
-    if record.pooled:
-        return None
+    """The rows a result read, as its record counts them (a pooled result's: the fewest that one of its imputed
+    datasets read); None when the record does not say."""
+    if record.kind == "survival" and record.pooled:
+        data = next((p for p in record.parts if p.id == "data"), None)
+        found = [
+            n.value for n in (data.numbers if data is not None else ()) if n.name == "rows_min"
+        ]
+        return found[0] if found and isinstance(found[0], int) else None
     if record.kind == "survival":
         rows = [p.support.get("rows") for p in record.parts if p.id.startswith("curve#")]
         return sum(rows) if rows and all(isinstance(n, int) for n in rows) else None
     model = next((p for p in record.parts if p.id == "model"), None)
-    rows = None if model is None else model.support.get("rows")
+    rows = None if model is None else _count(model.support, "rows")
     return rows if isinstance(rows, int) else None
 
 
@@ -1618,11 +1818,18 @@ def disclose_record(
     *,
     spec: AnalysisSpec,
     analysis: DisclosedAnalysis | None,
+    cover: Mapping[str, Collection[str]] | None = None,
 ) -> DisclosedRecord:
     """
     What a shared package shows of ``record`` under ``policy``, by the rule of its kind. A kind without a rule is
     withheld whole. No warning's wording is ever copied (a warning can name a level), and no number marked as one
     participant's is written as it is, in the record or in the complete-case record beside it.
+
+    ``cover`` names, for a grouping variable, cells to withhold whatever their size: the groups of a Kaplan-Meier
+    analysis by that variable, the levels of that factor in a model. The writer of a package passes there what
+    another result of the same grouping withholds (:func:`withheld_labels`), or what the person who shares chose,
+    so that one set of cells is withheld per grouping: two results that each withhold another cell to cover a
+    small one give it back together.
 
     ``spec`` is the result's own (ValueError when it is another kind's): a model's comparison is read in it.
     ``analysis`` is the result's analysis as the package's flow shows it (``DisclosedFlow.analyses``), or None when
@@ -1653,7 +1860,7 @@ def disclose_record(
             record,
             "the result is withheld: its rows are not those the participant flow shows for its analysis",
         )
-    disclosed = rule(record, policy, spec)
+    disclosed = rule(record, policy, spec, cover)
     for written in (disclosed.record, getattr(disclosed.record, "complete_case", None)):
         if written is None:
             continue
@@ -1678,8 +1885,7 @@ def disclose_spec(
 
     ``analysis`` is the analysis as the package's flow shows it (``DisclosedFlow.analyses``), or None when the flow
     withholds it or does not list it. The rows of the population and the rows analysed are written only when they
-    are the flow's own for that analysis, and as the flow gives them (a pooled analysis: the population less the
-    rows it left out): any other number beside the flow's would be a subtraction.
+    are the flow's own for that analysis: any other number beside the flow's would be a subtraction.
     """
     if disclosed.record is None:
         return None
@@ -1705,7 +1911,7 @@ def disclose_spec(
     if data is not None:
         own = analysis is not None and (
             data.get("n_population") == analysis.n + analysis.missing + analysis.left_out
-            and (spec.pooled or data.get("n_analysed") == analysis.n)
+            and data.get("n_analysed") in (None, analysis.n)
         )
         if own and analysis is not None:
             data["n_analysed"] = analysis.n
@@ -1724,6 +1930,37 @@ def disclose_spec(
     }
 
 
+def withheld_labels(
+    record: ResultRecord, disclosed: DisclosedRecord, spec: AnalysisSpec
+) -> dict[str, tuple[str, ...]]:
+    """
+    The cells of each grouping that a result's disclosure withholds, by their names: the groups of a Kaplan-Meier
+    analysis under its grouping variable, the levels of each factor of a model (its reference too, when no term of
+    the factor is written). For the writer of a package, which withholds one set of cells per grouping across its
+    results (``disclose_record``'s ``cover``). These names are values of the data: they are never written.
+    """
+    shown = () if disclosed.record is None else disclosed.record.parts
+    if record.kind == "survival":
+        variable = spec.variables.get("group")
+        kept = {p.labels.get("group") for p in shown if p.id.startswith("curve#")}
+        gone = [
+            p.labels.get("group", "")
+            for p in record.parts
+            if p.id.startswith("curve#") and p.labels.get("group") not in kept
+        ]
+        return {str(variable): tuple(gone)} if variable and gone else {}
+    cells = ("reference:", "term:")
+    kept_levels = {
+        (p.labels.get("variable"), p.labels.get("level")) for p in shown if p.id.startswith(cells)
+    }
+    found: dict[str, list[str]] = {}
+    for part in record.parts:
+        named = part.id.startswith(cells) and "level" in part.labels and "of" not in part.labels
+        if named and (part.labels.get("variable"), part.labels["level"]) not in kept_levels:
+            found.setdefault(part.labels.get("variable", ""), []).append(part.labels["level"])
+    return {variable: tuple(levels) for variable, levels in found.items()}
+
+
 def reading_notes(policy: DisclosurePolicy) -> tuple[str, ...]:
     """
     What a reader of a shared package's results must know to read them, in fixed words: the package's own text
@@ -1732,20 +1969,30 @@ def reading_notes(policy: DisclosurePolicy) -> tuple[str, ...]:
     k = policy.k
     return (
         f"A count of participants is given exactly, or as fewer than {k}.",
-        f"A term of a model is written only when both of the cells it compares hold {k} rows, {k} with the event "
-        f"and {k} without. Over studies, the terms written for small levels are selected by their outcome, and the "
+        f"A term of a model is written only when the cells behind it each hold {k} rows, {k} with the event and "
+        f"{k} without. Over studies, the terms written for small levels are selected by their outcome, and the "
         "withheld ones are not missing at random: join small levels on subject-matter grounds before the "
         "analysis.",
         "A term that is written is the full model's, adjusted for every variable and every level, those withheld "
-        "included. When a term is withheld, the numbers of the fit as a whole are withheld with it.",
+        "included. When a term is withheld, the numbers of the fit as a whole are withheld with it; a model "
+        "whose terms all compare categories, or one with a cell of a few participants, is withheld whole.",
+        "A ratio labelled per unit is for one unit more of its variable; a ratio with a level compares that level "
+        "with the reference written beside it.",
+        f"Events per parameter count the rarer outcome of a logistic model and the events of a Cox model; a count "
+        f"model has none. Below {SPARSE_BELOW} (sparse), a model's ratios may be unstable; a term marked sparse "
+        f"rests on fewer than {SPARSE_BELOW} participants with the event, or without it, in one of its cells.",
         f"A survival curve is given at chosen times, multiples of its time step, with at least {k} events between "
-        "two of them: its value and its limits at each are the full curve's. Between two times given, the curve "
-        "lies between the two values. It is given until the time that followed_until names, when it stays flat "
-        "to there.",
+        "two of them. Its value and its limits at a time are the full curve's at the end of the step that ends "
+        f"there, to {SURVIVAL_DECIMALS} decimals. Before the first time the curve lies between 1 and the first "
+        "value; between two times, between their two values.",
+        f"After its last time a curve is not given. When that time is the one followed_until names, {k} "
+        "participants were followed to there. When it is earlier, the curve goes on below its last value: "
+        f"{k} events or more follow. A curve can have no time at all, and still its table and its median.",
         "A median survival time is rounded up to the time step, its lower limit down and its upper limit up. One "
         "that is named in later_than_followed_until is later than that time; one without a value that is not "
-        "named there was not reached.",
-        f"Events per parameter below {SPARSE_BELOW} (sparse) mean that a model's ratios may be unstable.",
+        "named there was not reached, or lies before the first step.",
+        "The counts of a pooled result are the smallest over its imputed datasets (their names end in _min): "
+        "they do not add up, and a pooled curve can stop earlier than the curve of any one dataset.",
     )
 
 
@@ -1787,10 +2034,18 @@ _PATTERN_SIGNS = frozenset(
 # engine try every split of a text: a look-around, a reference to a group
 _BACKTRACKS = re.compile(r"\(\?[=!<]|\\[1-9]|\(\?P=")
 # an ordering sign: a column's name, the sign and a number are a bound, not the name a column per value would have
-_ORDERING = re.compile(r"[<>]=?")
+_ORDERING = re.compile("[<>]=?|[\u2264\u2265\u2a7d\u2a7e\uff1c\uff1e]")  # with the signs of Unicode
+# "8+": 8 or more. A number on its own: in ``score_8 + 1`` the 8 is the end of a column's name
+_AND_MORE = re.compile(r"(?<![\w.,])(\d+(?:[.,]\d+)?)\s*\+(?=\s|$|[),.;:])")
 _BOUND_WORD = (
     "zzboundzz"  # what stands for the sign in the text's normal form: no name and no value holds it
 )
+
+
+def _bounds_marked(text: str) -> str:
+    """The text with a word in place of each ordering sign, before the number it bounds: "score >= 8", "score ≥ 8"
+    and "score 8+" no longer read "score 8"."""
+    return _AND_MORE.sub(rf" {_BOUND_WORD} \1 ", _ORDERING.sub(f" {_BOUND_WORD} ", text))
 
 
 @dataclass(frozen=True)
@@ -1964,14 +2219,15 @@ def one_hot_names(df: pd.DataFrame, policy: DisclosurePolicy) -> dict[str, froze
 
 
 def _parsed(text: str) -> ast.AST | None:
-    """The text as an expression, or None when it is not one."""
+    """The text as an expression, or None when it is not one. RecursionError or MemoryError for a text too deep or
+    too large to be read: the caller says that it was not checked."""
     try:
         with warnings.catch_warnings():
             warnings.simplefilter(
                 "ignore"
             )  # a text that is no expression may hold "\\d": no warning for it
             return ast.parse(text.strip(), mode="eval")
-    except SyntaxError, ValueError, RecursionError, MemoryError:
+    except SyntaxError, ValueError:
         return None
 
 
@@ -2053,8 +2309,7 @@ class _Test:
     - ``among``: for ``isin``, what is tested and its list, so that each value of the list is counted on its own;
     - ``range``: a range of values (``between``, two bounds joined by ``&``): it names a value when the rows it
       takes all hold the same one;
-    - ``pattern``: a text test's pattern as written (None when it is not a text written in the expression), and
-      ``plain`` when the test searches it as it is written (``startswith``, or a pattern without a sign).
+    - ``search``: for a text test (``str.contains``...), how it searches (:class:`_Search`).
     """
 
     tree: ast.AST
@@ -2065,10 +2320,99 @@ class _Test:
     holders: bool = True
     among: tuple[ast.AST, ast.AST] | None = None
     range: bool = False
-    text_test: bool = False
-    pattern: str | None = None
-    plain: bool = False
-    flags: bool = False  # a text test given flags: pandas then runs it with Python's own engine
+    search: _Search | None = None
+
+
+@dataclass(frozen=True)
+class _Search:
+    """
+    How a text test searches: its method, the text it is called on (``receiver``), its pattern as written (None
+    when it is not a text written in the expression), whether it searches the pattern as it is written (``plain``:
+    ``startswith``, ``regex=False``, or a pattern without a sign of a regular expression), without the case of
+    letters, and whether something in the call cannot be read here (``unread``: flags, or a setting that is not
+    written as True or False). The settings are read by name or by position.
+    """
+
+    method: str
+    receiver: ast.AST
+    pattern: str | None
+    plain: bool
+    ignore_case: bool = False
+    unread: bool = False
+
+
+# the settings of a text test after its pattern, in the order pandas takes them
+_SETTINGS = {
+    "contains": ("case", "flags", "na", "regex"),
+    "match": ("case", "flags", "na"),
+    "fullmatch": ("case", "flags", "na"),
+    "startswith": ("na",),
+    "endswith": ("na",),
+}
+
+
+def _search(node: ast.Call) -> _Search | None:
+    """A call read as a text test (``<text>.str.contains(...)``), or None when it is not one."""
+    func = node.func
+    if not (isinstance(func, ast.Attribute) and func.attr in _SETTINGS):
+        return None
+    if not (isinstance(func.value, ast.Attribute) and func.value.attr == "str"):
+        return None
+    method = func.attr
+    given: dict[str, ast.AST] = dict(zip(("pat", *_SETTINGS[method]), node.args, strict=False))
+    given.update({kw.arg: kw.value for kw in node.keywords if kw.arg})
+
+    def written(name: str, default: Any) -> Any:
+        """A setting written as a constant; ``...`` when it is given another way."""
+        found = given.get(name)
+        if found is None:
+            return default
+        return found.value if isinstance(found, ast.Constant) else ...
+
+    pattern, case, flags = written("pat", None), written("case", True), written("flags", 0)
+    regex = written("regex", True) if method == "contains" else True
+    text = pattern if isinstance(pattern, str) else None
+    literal = method in _PLAIN_TESTS or regex is False
+    plain = literal or (text is not None and not (set(text) & _PATTERN_SIGNS))
+    unread = (
+        len(node.args) > 1 + len(_SETTINGS[method])
+        or case not in (True, False)
+        or regex not in (True, False)
+        or (flags != 0 or isinstance(flags, bool))
+    )
+    return _Search(method, func.value.value, text, plain, case is False, unread)
+
+
+def _searches_a_pattern(node: ast.AST) -> bool:
+    """
+    Whether a call inside an expression has pandas search a pattern with Python's own engine, which can try every
+    split of a text (minutes for a value of 30 characters, days for one of 40): a text test that is not searched as
+    written, ``split`` on more than a plain text, ``replace`` with a pattern. pandas decides on the data as well as
+    on the pattern (a letter with an accent in one value, a newline, a column not stored by Arrow), so nothing but
+    the form of the call says it will not.
+    """
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+        return False
+    method = node.func.attr
+    keywords = {kw.arg: kw.value for kw in node.keywords if kw.arg}
+    regex = keywords.get("regex")
+    as_written = isinstance(regex, ast.Constant) and regex.value is False
+    if method in _SETTINGS:
+        search = _search(node)
+        return search is not None and (search.unread or not search.plain)
+    if method in ("split", "rsplit"):
+        first = node.args[0] if node.args else keywords.get("pat")
+        plain = first is None or (
+            isinstance(first, ast.Constant)
+            and (first.value is None or isinstance(first.value, str))
+            and not (set(first.value or "") & _PATTERN_SIGNS)
+        )
+        return not (as_written or (plain and regex is None))
+    if method == "replace":
+        return (regex is not None and not as_written) or bool(
+            {"case", "flags"} & keywords.keys() or len(node.args) > 2
+        )
+    return False
 
 
 def _tests(tree: ast.AST, columns: Collection[str], frame_names: Collection[str]) -> list[_Test]:
@@ -2115,11 +2459,7 @@ def _tests(tree: ast.AST, columns: Collection[str], frame_names: Collection[str]
             column = _column_of(node.func.value)
             on = column if column in columns else None
             first = node.args[0] if node.args else None
-            written = (
-                first.value
-                if isinstance(first, ast.Constant) and isinstance(first.value, str)
-                else None
-            )
+            search = _search(node)
             if method in _EQUALITY:
                 among = (node.func.value, first) if method == "isin" and first is not None else None
                 test = _Test(
@@ -2127,31 +2467,14 @@ def _tests(tree: ast.AST, columns: Collection[str], frame_names: Collection[str]
                     read(node),
                     on=on,
                     equality=True,
-                    empty=written == "",
+                    empty=isinstance(first, ast.Constant) and first.value == "",
                     holders=method != "ne",
                     among=among,
                 )
             elif method == "between":
                 test = _Test(node, read(node), on=on, range=True)
-            elif method in _PATTERN_TESTS or method in _PLAIN_TESTS:
-                as_written = any(
-                    kw.arg == "regex"
-                    and isinstance(kw.value, ast.Constant)
-                    and kw.value.value is False
-                    for kw in node.keywords
-                )
-                plain = method in _PLAIN_TESTS or as_written
-                if written is not None and not plain:
-                    plain = not (set(written) & _PATTERN_SIGNS)
-                test = _Test(
-                    node,
-                    read(node),
-                    on=on,
-                    text_test=True,
-                    pattern=written,
-                    plain=plain,
-                    flags=any(kw.arg == "flags" for kw in node.keywords),
-                )
+            elif search is not None:
+                test = _Test(node, read(node), on=on, search=search)
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitAnd):
             low, high = _bound(node.left), _bound(node.right)
             if low is not None and high is not None and low[0] == high[0] and low[0] in columns:
@@ -2161,22 +2484,38 @@ def _tests(tree: ast.AST, columns: Collection[str], frame_names: Collection[str]
     return out
 
 
-def _linear_time(pattern: str) -> bool:
+def _found_by_arrow(texts: pd.Series, search: _Search) -> pd.Series | None:
     """
-    Whether the engine that cannot backtrack (RE2, behind text stored by Arrow) takes the pattern. pandas runs any
-    other pattern with Python's own engine, which can try every split of a text: minutes for a value of 30
-    characters, days for one of 40. The engine itself is asked; without it, no pattern is run.
+    The rows of ``texts`` that a pattern finds, by the engine that cannot backtrack (RE2, in pyarrow), called
+    directly: its time grows with the length of a text, never with the ways of splitting it. None when the engine
+    is not installed, when it does not take the pattern (a look-around, a reference to a group), or when the values
+    are not texts: the test is then not checked.
     """
-    if _BACKTRACKS.search(pattern):
-        return False
+    if search.pattern is None or _BACKTRACKS.search(search.pattern):
+        return None
+    held = texts.dropna()
+    if not all(isinstance(value, str) for value in held):
+        return None
+    pattern = {
+        "contains": search.pattern,
+        "match": f"^(?:{search.pattern})",
+        "fullmatch": f"^(?:{search.pattern})$",
+    }.get(search.method)
+    if pattern is None:
+        return None
     try:
         arrow = importlib.import_module("pyarrow")
-        importlib.import_module("pyarrow.compute").match_substring_regex(
-            arrow.array([""], type=arrow.string()), pattern
+        compute = importlib.import_module("pyarrow.compute")
+        values = arrow.array(
+            [
+                value if isinstance(value, str) else None for value in texts
+            ],  # a missing value stays one
+            type=arrow.large_string(),
         )
+        found = compute.match_substring_regex(values, pattern, ignore_case=search.ignore_case)
     except Exception:  # not installed, or a pattern it refuses
-        return False
-    return True
+        return None
+    return pd.Series(found.to_pylist(), index=texts.index, dtype="boolean")
 
 
 class RareFinder:
@@ -2200,10 +2539,13 @@ class RareFinder:
     - on an identifying column (``identifying``: the columns the person who shares marks; None: those
       :func:`identifying_columns` finds), an equality with any value but the empty text, and a text searched as
       it is written unless it takes k rows or more: the value may be a participant who is no longer in the data;
-    - a test that cannot be run safely is a hit of its own kind, "not checked", since nothing can be said of it:
-      a pattern that the engine without backtracking does not take or that is not run by it (a look-around, flags,
-      a column not stored by Arrow), which Python's own engine could try for hours, and a form the evaluator
-      refuses.
+    - a test that cannot be run safely is a hit of its own kind, "not checked", since nothing can be said of it.
+      A pattern is run by the engine that cannot backtrack, called directly, and never by pandas, which decides on
+      the data as well as on the pattern whether Python's own engine runs it (hours for one value of 30
+      characters). Not checked: a pattern that engine does not take (a look-around), flags, a pattern inside the
+      text that is tested (``str.replace`` with a pattern, ``str.split``), a form the evaluator refuses, and a
+      text too deep to be read. A pattern is counted as that engine reads it: its ``\\w``, ``\\d`` and ``\\b``
+      know the letters and the digits of ASCII only.
 
     A hit names its place and its column, never the value: the writer of a package stops on a hit, and its message
     is read by the person who shares. Not looked for: one word of a value of several words, a value joined to
@@ -2282,19 +2624,19 @@ class RareFinder:
         if not text:
             return (), (), ()
         if text not in self._cache:
-            tree = _parsed(text)
             found = self._held(self._values, normal(text))
             # the name a column per value would have: not across an ordering sign, which makes a bound of it
-            found |= self._held(self._names, normal(_ORDERING.sub(f" {_BOUND_WORD} ", text)))
+            found |= self._held(self._names, normal(_bounds_marked(text)))
             few: dict[str, None] = {}
             unknown: dict[str, None] = {}
-            if tree is not None:
-                for place, frame in enumerate(self._frames):
-                    columns = frozenset(str(c) for c in frame.columns)
-                    names = DEFAULT_POLICY.frame_names
-                    rewritten = ast.fix_missing_locations(
-                        _Subscripts(columns, names).visit(copy.deepcopy(tree))
-                    )
+            names = DEFAULT_POLICY.frame_names
+            for place, frame in enumerate(self._frames):
+                columns = frozenset(str(c) for c in frame.columns)
+                try:
+                    tree = _parsed(text)  # a tree for each dataset: reading it rewrites it
+                    if tree is None:
+                        break
+                    rewritten = ast.fix_missing_locations(_Subscripts(columns, names).visit(tree))
                     for test in _tests(rewritten, columns, names):
                         answer = self._judge(place, frame, test)
                         if answer is None:
@@ -2305,6 +2647,9 @@ class RareFinder:
                                     (test.on,) if test.on and test.equality else test.columns
                                 )
                             )
+                except RecursionError, MemoryError:
+                    # too deep or too large to be read: nothing can be said of the columns it names
+                    unknown.update(dict.fromkeys(sorted(c for c in columns if c in text)))
             not_run = tuple(column for column in unknown if column not in few)
             self._cache[text] = (tuple(sorted(found)), tuple(few), not_run)
         return self._cache[text]
@@ -2318,12 +2663,10 @@ class RareFinder:
         marked = test.on is not None and test.on in self.identifying
         if test.equality and marked and not test.empty:
             return True
-        if test.text_test and not test.plain:
-            # a pattern: run only by the engine that cannot backtrack, on a text it can take
-            series = frame[test.on] if test.on is not None and test.on in frame.columns else None
-            arrow = series is not None and getattr(series.dtype, "storage", None) == "pyarrow"
-            if test.pattern is None or test.flags or not arrow or not _linear_time(test.pattern):
-                return None
+        search = test.search
+        inside = (n for n in ast.walk(test.tree) if n is not test.tree)
+        if (search is not None and search.unread) or any(_searches_a_pattern(n) for n in inside):
+            return None  # pandas could run it with Python's own engine: not run
         own = frame.copy(
             deep=False
         )  # whatever the test does in place, the caller's dataset stays as it is
@@ -2338,9 +2681,7 @@ class RareFinder:
             }
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                return evaluate_tree(
-                    ast.Expression(body=copy.deepcopy(tree)), own, extra_locals=bare
-                )
+                return evaluate_tree(ast.Expression(body=tree), own, extra_locals=bare)
 
         def answers(given: Any) -> pd.Series | None:
             """True, False and missing for each row, or None when the test gave something else."""
@@ -2354,7 +2695,18 @@ class RareFinder:
             return found
 
         try:
-            given = answers(run(test.tree))
+            if search is not None and not search.plain:
+                # a pattern: the text it is searched in is computed here, and the search is the engine's own
+                texts = run(search.receiver)
+                given = (
+                    _found_by_arrow(texts.reset_index(drop=True), search)
+                    if isinstance(texts, pd.Series) and len(texts) == len(frame)
+                    else None
+                )
+                if given is None:
+                    return None
+            else:
+                given = answers(run(test.tree))
             if given is None:
                 return False  # no test of rows: a value compared with a value
             taken = given == test.holders  # a missing answer is neither
@@ -2367,7 +2719,7 @@ class RareFinder:
                     and column[taken.to_numpy(dtype=bool, na_value=False)].nunique() == 1
                 )
                 return bool(0 < rows < self.policy.k and same)
-            if test.text_test and marked and test.plain:
+            if search is not None and marked and search.plain:
                 return rows < self.policy.k
             if 0 < rows < self.policy.k:
                 return True
@@ -2386,9 +2738,11 @@ class RareFinder:
 
     def _label(self, column: str) -> str:
         """The column as a hit names it: by its name, or by its position when its name is, or holds, a rare value
-        that is looked for (a column the package does not show, named after a level of another)."""
+        that is looked for (a column the package does not show, named after a level of another), or the name a
+        column per value would have (``grade_IV``)."""
         if column not in self._labels:
-            by_position = bool(self._held(self._values, normal(column)))
+            form = normal(column)
+            by_position = bool(self._held(self._values, form) or self._held(self._names, form))
             self._labels[column] = (
                 f"column {self._position.get(column, 0)}" if by_position else column
             )
@@ -2407,9 +2761,21 @@ class RareFinder:
         """
         The hits of a criterion stored as a range of a column (a numeric rule, a bounds rule), which holds its
         values as numbers and not as a text: read as the comparison it stands for, an equality when its two ends
-        are the same value.
+        are the same value. A bound is read as the criterion's mask reads it (whatever ``float`` reads: "97",
+        True); one that cannot be read is not checked.
         """
-        ends = [v for v in (lower, upper) if isinstance(v, int | float) and not isinstance(v, bool)]
+        ends = []
+        for bound in (lower, upper):
+            if bound is None:
+                continue
+            try:
+                number = float(bound)
+            except TypeError, ValueError, OverflowError:
+                number = math.nan
+            if math.isnan(number):
+                return [RareHit(place, self._label(str(column)), UNCHECKED)]
+            if math.isfinite(number):  # an infinite bound is no bound on that side
+                ends.append(number)
         if len(ends) < 2:
             return []  # one bound, or none: a side, not a value
         of = f"df[{str(column)!r}]"
@@ -2462,7 +2828,9 @@ __all__ = [
     "LITERAL",
     "OTHER_POPULATION",
     "POLICY_VERSION",
+    "OVERDISPERSED_ABOVE",
     "SPARSE_BELOW",
+    "SURVIVAL_DECIMALS",
     "UNCHECKED",
     "VALUE",
     "Closure",
@@ -2492,4 +2860,5 @@ __all__ = [
     "shown",
     "step_at_least",
     "time_step",
+    "withheld_labels",
 ]

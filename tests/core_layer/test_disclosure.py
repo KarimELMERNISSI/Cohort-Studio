@@ -505,6 +505,21 @@ def test_a_pooled_analysis_counts_the_rows_it_left_out() -> None:
         15,
         5,
     )
+    # the rows its datasets read, when they were counted: 20 lack the event, which no imputation fills
+    read = AnalysisCount(
+        "Kaplan-Meier, pooled",
+        960,
+        925,
+        imputations=5,
+        n_left_out=15,
+        left_out="in a group too small to draw",
+    )
+    (shown_as,) = disclose_flow(flow, K10, [read]).analyses
+    assert (shown_as.n, shown_as.missing, shown_as.left_out) == (925, 20, 15)
+    # never more than the rows it did not leave out: no missing value is counted below zero
+    over = AnalysisCount("Cox model, pooled", 960, 960, imputations=5, n_left_out=15, left_out="x")
+    (shown_as,) = disclose_flow(flow, K10, [over]).analyses
+    assert (shown_as.n, shown_as.missing, shown_as.left_out) == (945, 0, 15)
 
 
 def test_exits_listed_for_as_many_rows_are_not_listed() -> None:
@@ -663,6 +678,15 @@ NO_COMPARISON = (
     "the model is withheld: no term of its comparison can be shown, and what is left is its adjustment "
     f"({ADVICE})"
 )
+DROPS_OUT = (
+    "the model is withheld: one of its terms compares a cell of fewer than 10 rows, or one where nobody or "
+    "everybody had the event, or has no maximum: the terms left would be those of the model fitted without those "
+    f"rows ({ADVICE})"
+)
+A_TABLE = (
+    "the model is withheld: its terms all compare categories, so that their numbers are the cells of a table, and "
+    f"one of them cannot be shown ({ADVICE})"
+)
 GROUP_WITHHELD = "1 group withheld: fewer than 10 rows, events or rows without the event"
 COVER_WITHHELD = (
     "1 more group withheld: the number analysed, less the groups shown, would give back fewer than 10 rows, "
@@ -753,7 +777,12 @@ def _in_the_flow(record):
         for n in p.numbers
         if n.name in ("rows_skipped", "rows_left_out")
     )
-    if record.kind == "survival":
+    read = [
+        n.value for p in record.parts if p.id == "data" for n in p.numbers if n.name == "rows_min"
+    ]
+    if record.kind == "survival" and record.pooled and read:
+        rows = read[0]  # the fewest rows that one of its imputed datasets read
+    elif record.kind == "survival":
         rows = sum(
             p.support.get("rows", p.support.get("rows_min", 0))
             for p in record.parts
@@ -777,33 +806,63 @@ def _ids(disclosed) -> list[str]:
     return [part.id for part in disclosed.record.parts]
 
 
-def test_a_term_of_one_participant_coded_1_is_withheld() -> None:
+def test_a_term_of_one_participant_coded_1_withholds_the_model() -> None:
     """One participant is coded 1 and died: the coefficient (+22.9 in the review's probe) gives their outcome, and
-    the term carried the whole model's counts."""
+    the term carried the whole model's counts. With that term alone withheld, the terms written were those of the
+    model fitted without the participant: beside the same model without the covariate, their difference gave the
+    participant's outcome, arm and age."""
     from biostats import plan
     from biostats.regression import logistic_regression
 
     df = _cohort()
     df["transplanted"] = 0
     df.loc[df.index[7], ["transplanted", "died"]] = [1, 1]
+    fitted = logistic_regression(df, "died", ["transplanted", "arm", "age"])
+    record = plan.record("logistic", fitted)
+    assert record is not None and record.part("term:transplanted").support["rows"] == 1
+    # what the rule rests on: a participant alone in a cell is fitted by the cell's own parameter
+    with_them = fitted.table.set_index("term")["coef"]
+    without = logistic_regression(df.drop(index=df.index[7]), "died", ["arm", "age"])
+    others = without.table.set_index("term")["coef"]
+    assert with_them[others.index].to_numpy() == pytest.approx(others.to_numpy(), abs=1e-6)
+    disclosed = _disclose(record, compare="arm")
+    assert disclosed.record is None and disclosed.withheld == (DROPS_OUT,)
+    # at k = 5 too: one row is below any k
+    assert _disclose(record, DisclosurePolicy(5), compare="arm").record is None
+    # as the comparison of the model: what is left is the adjustment, whose coefficients are no effects
+    compared = _disclose(record, compare="transplanted")
+    assert compared.record is None and compared.withheld == (NO_COMPARISON,)
+
+
+def test_a_term_of_a_cell_with_a_few_events_is_withheld_alone() -> None:
+    """Twelve participants coded 1, three of whom died: the cell holds k rows and both outcomes, so its rows stay in
+    the fit, and its term alone is withheld, with the numbers of the fit as a whole."""
+    from biostats import plan
+    from biostats.regression import logistic_regression
+
+    df = _cohort()
+    df["transplanted"] = 0
+    df.loc[df.index[:12], "transplanted"] = 1
+    df.loc[df.index[:12], "died"] = [1, 1, 1] + [0] * 9
     record = plan.record(
         "logistic", logistic_regression(df, "died", ["transplanted", "arm", "age"])
     )
-    assert record is not None and record.part("term:transplanted").support["rows"] == 1
+    assert record is not None
+    assert record.part("term:transplanted").support == {"rows": 12, "events": 3, "non_events": 9}
     disclosed = _disclose(record, compare="arm")
     assert disclosed.record is not None
     ids = _ids(disclosed)
     assert "term:transplanted" not in ids and "reference:transplanted" not in ids
     assert {"model", "reference:arm", "term:arm#1", "term:age"} <= set(ids)
     assert disclosed.withheld == (f"1 term of transplanted withheld: {CELL}", FIT)
-    # at k = 5 too: one row is below any k
+    # at k = 5 the cell still lacks its events
     assert "term:transplanted" not in _ids(_disclose(record, DisclosurePolicy(5), compare="arm"))
     # as the comparison of the model: what is left is the adjustment, whose coefficients are no effects
-    alone = _disclose(record, compare="transplanted")
-    assert alone.record is None and alone.withheld == (NO_COMPARISON,)
+    compared = _disclose(record, compare="transplanted")
+    assert compared.record is None and compared.withheld == (NO_COMPARISON,)
 
 
-def test_a_rare_reference_level_withholds_every_term_of_its_factor() -> None:
+def test_a_rare_reference_level_withholds_the_model() -> None:
     """The first level in sorted order is the reference: held by 2 rows who both died, it made every other level's
     coefficient (-22.8, -23.0) give their outcome, while those terms passed on their own counts."""
     from biostats import plan
@@ -813,6 +872,25 @@ def test_a_rare_reference_level_withholds_every_term_of_its_factor() -> None:
     df.loc[df.index[:2], ["site", "died"]] = ["Aaa-CANARY", 1]
     record = plan.record("logistic", logistic_regression(df, "died", ["site", "age"]))
     assert record is not None and record.part("reference:site").support["rows"] == 2
+    disclosed = _disclose(record)
+    # the two rows drop out of the fit: the age term left would be that of the model fitted without them
+    assert disclosed.record is None and disclosed.withheld == (DROPS_OUT,)
+    assert "CANARY" not in " ".join(disclosed.withheld)
+    assert _disclose(record, compare="site").withheld == (NO_COMPARISON,)
+
+
+def test_a_reference_level_with_a_few_events_withholds_every_term_of_its_factor() -> None:
+    """A reference of 12 rows, two of whom died, stays in the fit: no term of its factor can be read without it,
+    and the other terms of the model are written."""
+    from biostats import plan
+    from biostats.regression import logistic_regression
+
+    df = _cohort()
+    df.loc[df.index[:12], "site"] = "Aaa-CANARY"
+    df.loc[df.index[:12], "died"] = [1, 1] + [0] * 10
+    record = plan.record("logistic", logistic_regression(df, "died", ["site", "age"]))
+    assert record is not None
+    assert record.part("reference:site").support == {"rows": 12, "events": 2, "non_events": 10}
     disclosed = _disclose(record)
     assert [i for i in _ids(disclosed) if "site" in i] == [] and "term:age" in _ids(disclosed)
     # said for what it is: the exporter can join the level, or name the levels so that a larger one comes first
@@ -874,13 +952,15 @@ def test_a_model_shows_only_the_numbers_its_rule_names() -> None:
 
 
 def test_a_withheld_level_does_not_come_back_from_the_counts_shown() -> None:
-    """A site of 3 participants who all died: its term was withheld, and the model's rows, events and rows without
-    the event, less the reference's and the shown term's, gave 3, 3 and 0: the outcome of each of the three."""
+    """A site of 15 participants, 3 of whom died: its term was withheld, and the model's rows, events and rows
+    without the event, less the reference's and the shown term's, gave 15, 3 and 12. With a site of 3 participants
+    who all died, the same subtraction gave the outcome of each of the three."""
     from biostats import plan
     from biostats.regression import logistic_regression
     from biostats.survival import cox_regression
 
-    df = _three_sites()
+    df = _three_sites(delta=15)
+    df.loc[df["site"] == "Delta", "died"] = [1, 1, 1] + [0] * 12
     for kind, result, without in (
         ("logistic", logistic_regression(df, "died", ["site", "age"]), "non_events"),
         ("cox", cox_regression(df, "days", "died", ["site", "age"]), "censored"),
@@ -894,10 +974,10 @@ def test_a_withheld_level_does_not_come_back_from_the_counts_shown() -> None:
             - record.part("term:site#1").support[name]
             for name in ("rows", "events", without)
         }
-        assert left == {"rows": 3, "events": 3, without: 0}
+        assert left == {"rows": 15, "events": 3, without: 12}
         disclosed = _disclose(record)  # the site is an adjustment here
         # no count travels beside a term, and the other level is withheld with the small one: nothing says what
-        # the 3 rows hold
+        # the 15 rows hold
         assert disclosed.withheld == (
             f"1 term of site withheld: {CELL}",
             f"1 more term of site withheld: {COVER}",
@@ -911,12 +991,23 @@ def test_a_withheld_level_does_not_come_back_from_the_counts_shown() -> None:
         assert not FIT_NAMES & {n.name for n in shown.part("model").numbers}
         assert "Delta" not in _written(disclosed) and "Beta" not in _written(disclosed)
         assert _disclose(record, compare="site").withheld == (NO_COMPARISON,)
+    # three participants who all died drop out of the fit: the age term left would be that of the model fitted
+    # without them, and the model is withheld whole
+    three = _three_sites()
+    for kind, result in (
+        ("logistic", logistic_regression(three, "died", ["site", "age"])),
+        ("cox", cox_regression(three, "days", "died", ["site", "age"])),
+    ):
+        gone = _disclose(plan.record(kind, result))
+        assert gone.record is None and gone.withheld == (DROPS_OUT,), kind
+        assert _disclose(plan.record(kind, result), compare="site").withheld == (NO_COMPARISON,)
 
 
 def test_a_model_of_categories_alone_gives_no_cell_back() -> None:
     """In a model of one factor, the coefficient of a level is the log odds ratio of its cell and the reference's,
     and the square of its standard error the sum of their four reciprocals: with one term shown, a single set of
-    whole numbers gave both cells, and the model's totals then left the 3 participants of Delta, who all died."""
+    whole numbers gave both cells, and the model's totals then left the 3 participants of Delta, who all died. In a
+    model of two factors a cell withheld of one came back the same way through the terms of the other."""
     import math
 
     from biostats import plan
@@ -935,26 +1026,57 @@ def test_a_model_of_categories_alone_gives_no_cell_back() -> None:
     # Beta is withheld with Delta, and a model none of whose terms is written holds nothing a reader can use
     disclosed = _disclose(crude, compare="site")
     assert disclosed.record is None and disclosed.withheld == (NO_TERM,)
-    # with a fourth site, the smaller of the two others covers Delta: Beta's term is written, and what the totals
-    # leave is Gamma and Delta together, at least k of each count
+    # with a fourth site, the smaller of the two others covers Delta and Beta's term could be written: but the
+    # three rows of Delta drop out of the fit, in each kind of model
     four = _four_sites()
-    for key, result, counted in (
-        ("logistic", logistic_regression(four, "died", ["site"]), ("rows", "events", "non_events")),
-        ("cox", cox_regression(four, "days", "died", ["site"]), ("rows", "events", "censored")),
-        (
-            "count",
-            count_regression(four, "visits", ["site"]),
-            ("rows", "rows_with_events", "rows_without_events"),
-        ),
+    for key, result in (
+        ("logistic", logistic_regression(four, "died", ["site"])),
+        ("cox", cox_regression(four, "days", "died", ["site"])),
+        ("count", count_regression(four, "visits", ["site"])),
     ):
         record = plan.record(key, result)
         assert record is not None
         disclosed = _disclose(record, compare="site")
-        assert [i for i in _ids(disclosed) if i.startswith(("reference:", "term:"))] == [
+        assert disclosed.record is None and disclosed.withheld == (DROPS_OUT,), key
+    # a fourth site of 15 rows, 3 of whom died, stays in the fit. Gamma covers it, and what the totals would leave
+    # beside Beta's term is Gamma and Delta together: but every term written would compare categories, so the model
+    # is a table, and is withheld whole
+    df = _sites_of({"Alpha": 450, "Beta": 385, "Gamma": 150, "Delta": 15})
+    df.loc[df["site"] == "Delta", "died"] = [1, 1, 1] + [0] * 12
+    table = _disclose(
+        plan.record("logistic", logistic_regression(df, "died", ["site"])), compare="site"
+    )
+    assert table.record is None and table.withheld == (A_TABLE,)
+    # two variables of categories, the comparison being the other one: the same
+    df["sex"] = np.where(np.arange(len(df)) % 2 == 0, "F", "M")
+    two = plan.record("logistic", logistic_regression(df, "died", ["site", "sex"]))
+    assert _disclose(two, compare="sex").withheld == (A_TABLE,)
+    # and a numeric covariate of a few values is one of them
+    df["score"] = np.arange(len(df)) % 3
+    scored = plan.record("logistic", logistic_regression(df, "died", ["site", "score"]))
+    assert _disclose(scored, compare="score").withheld == (A_TABLE,)
+    # beside a covariate of many values, the terms are no cells of a table: Beta's is written
+    for key, result, counted in (
+        (
+            "logistic",
+            logistic_regression(df, "died", ["site", "age"]),
+            ("rows", "events", "non_events"),
+        ),
+        (
+            "cox",
+            cox_regression(df, "days", "died", ["site", "age"], diagnostics=False),
+            ("rows", "events", "censored"),
+        ),
+    ):
+        record = plan.record(key, result)
+        assert record is not None
+        shown = _disclose(record, compare="site")
+        assert [i for i in _ids(shown) if i.startswith(("reference:", "term:"))] == [
             "reference:site",
+            "term:age",
             "term:site#1",
         ], key
-        assert disclosed.withheld == (
+        assert shown.withheld == (
             f"1 term of site withheld: {CELL}",
             f"1 more term of site withheld: {COVER}",
             FIT,
@@ -965,9 +1087,9 @@ def test_a_model_of_categories_alone_gives_no_cell_back() -> None:
             - record.part("term:site#1").support[name]
             for name in counted
         }
-        assert left["rows"] == 153 and min(left.values()) >= 10, key
-        assert not FIT_NAMES & {n.name for n in disclosed.record.part("model").numbers}, key
-        assert "Delta" not in _written(disclosed) and "Gamma" not in _written(disclosed)
+        assert left["rows"] == 165 and min(left.values()) >= 10, key
+        assert not FIT_NAMES & {n.name for n in shown.record.part("model").numbers}, key
+        assert "Delta" not in _written(shown) and "Gamma" not in _written(shown)
 
 
 def test_the_numbers_of_a_fit_travel_only_when_no_term_is_withheld() -> None:
@@ -986,7 +1108,15 @@ def test_the_numbers_of_a_fit_travel_only_when_no_term_is_withheld() -> None:
     events, without = model.support["events"], model.support["non_events"]
     assert (model.number("auc").value - 0.5) * 2 * events * without == pytest.approx(without)
     assert _disclose(alone).record is None and _disclose(alone).withheld == (NO_TERM,)
-    # adjusted for age, the model is written with its totals and its age term, and none of the fit's numbers
+    # adjusted for age, nothing of it is written either: the age term would be that of the other 399 rows
+    one = plan.record("logistic", logistic_regression(df, "died", ["transplanted", "age"]))
+    assert _disclose(one).withheld == (DROPS_OUT,)
+    # twelve participants coded 1, three of whom died: the model is written with its totals and its age term, and
+    # none of the fit's numbers
+    df = _cohort()
+    df["transplanted"] = 0
+    df.loc[df.index[:12], "transplanted"] = 1
+    df.loc[df.index[:12], "died"] = [1, 1, 1] + [0] * 9
     adjusted = plan.record("logistic", logistic_regression(df, "died", ["transplanted", "age"]))
     shown = _disclose(adjusted).record.part("model")
     assert [n.name for n in shown.numbers] == [
@@ -1000,9 +1130,11 @@ def test_the_numbers_of_a_fit_travel_only_when_no_term_is_withheld() -> None:
     }
 
 
-def test_a_numeric_covariate_that_a_few_rows_carry_is_read_as_a_cell() -> None:
+def test_a_numeric_covariate_that_a_few_rows_carry_is_read_as_cells() -> None:
     """A dose that is 0 for 398 rows, 1 and 3 for two participants who both died: its term carried the model's
-    counts and was written, +22.8: everybody with a dose died."""
+    counts and was written, +22.8: everybody with a dose died. A score of 0, 1 or 2 that two participants hold at 2
+    was written the same way, and the slope, its standard error and the likelihood of the crude model left one
+    table: those two, and their outcome."""
     from biostats import plan
     from biostats.regression import count_regression, logistic_regression
     from biostats.survival import cox_regression
@@ -1014,19 +1146,13 @@ def test_a_numeric_covariate_that_a_few_rows_carry_is_read_as_a_cell() -> None:
     record = plan.record("logistic", logistic_regression(df, "died", ["dose", "age"]))
     assert record is not None
     dose = record.part("term:dose")
-    assert dose.labels == {"variable": "dose"}  # a slope, not a level
-    assert dose.support == {
-        "rows": 2,
-        "events": 2,
-        "non_events": 0,
-    }  # the rows off its commonest value
+    assert dose.labels == {"variable": "dose", "per": "unit"}  # a slope, not a level
+    # each of its values is a cell: the smallest of each count over the values above the first
+    assert dose.support == {"rows": 1, "events": 1, "non_events": 0}
     reference = record.part("reference:dose")
-    assert (
-        reference.labels == {"variable": "dose", "level": "0"} and reference.support["rows"] == 398
-    )
-    disclosed = _disclose(record)
-    assert _ids(disclosed) == ["model", "term:age"]
-    assert disclosed.withheld == (f"1 term of dose withheld: {CELL}", FIT)
+    assert reference.labels == {"variable": "dose", "level": "0", "of": "values"}
+    assert reference.support["rows"] == 398
+    assert _disclose(record).withheld == (DROPS_OUT,)
     # six participants with an earlier event, five of whom died: the same in the three kinds of model
     df = _cohort()
     df["prior"] = 0
@@ -1039,29 +1165,71 @@ def test_a_numeric_covariate_that_a_few_rows_carry_is_read_as_a_cell() -> None:
         ("count", count_regression(df, "visits", ["prior", "age"])),
     ):
         record = plan.record(key, result)
-        assert record is not None and record.part("term:prior").support["rows"] == 6, key
-        assert _ids(_disclose(record)) == ["model", "term:age"], key
-    # a covariate that half of the rows hold at 0 while the others spread over seven values: its term is written
-    df["packs"] = np.where(np.arange(len(df)) % 2 == 0, 0, 1 + np.arange(len(df)) % 7)
+        assert record is not None and record.part("term:prior").support["rows"] == 1, key
+        assert _disclose(record).withheld == (DROPS_OUT,), key
+    # a score of 0, 1 or 2 that two participants hold at 2: crude, and adjusted
+    scored = _cohort()
+    scored["score"] = np.arange(len(scored)) % 2
+    scored.loc[scored.index[:2], "score"] = 2
+    crude = plan.record("logistic", logistic_regression(scored, "died", ["score"]))
+    assert crude is not None and crude.part("term:score").support["rows"] == 2
+    assert _disclose(crude).withheld == (NO_TERM,)
+    adjusted = plan.record("logistic", logistic_regression(scored, "died", ["score", "age"]))
+    assert _disclose(adjusted).withheld == (DROPS_OUT,)
+    # a score whose every value many rows hold: its slope is written, per unit, and no cell is called its reference
+    scored["score"] = np.arange(len(scored)) % 4
+    wide = _disclose(plan.record("logistic", logistic_regression(scored, "died", ["score", "age"])))
+    assert wide.withheld == () and _ids(wide) == ["model", "term:score", "term:age"]
+    assert wide.record.part("term:score").labels == {"variable": "score", "per": "unit"}
+    # a covariate of many values that half of the rows hold at 0: its cells are the rows on that value and off it
+    df["packs"] = np.where(np.arange(len(df)) % 2 == 0, 0.0, 1.0 + np.arange(len(df)))
     spread = plan.record("logistic", logistic_regression(df, "died", ["packs", "age"]))
     assert spread is not None and spread.part("term:packs").support["rows"] == 200
-    assert "term:packs" in _ids(_disclose(spread))
+    assert spread.part("reference:packs").labels == {
+        "variable": "packs",
+        "level": "0",
+        "of": "commonest",
+    }
+    assert _ids(_disclose(spread)) == ["model", "term:packs", "term:age"]
     # and age, which no value holds for half of the rows, has the model's counts behind it
     whole = {k: n for k, n in spread.part("model").support.items() if k != "df_resid"}
     assert spread.part("term:age").support == whole
     assert "reference:age" not in [p.id for p in spread.parts]
 
 
-def test_a_term_without_a_maximum_is_not_written() -> None:
-    """The application itself says that such a ratio cannot be read; and beside a withheld term, "not converged"
-    made a reader doubt the sound terms and told them that a withheld level had no maximum."""
+def test_a_dose_of_two_values_is_written_per_unit_without_a_reference() -> None:
+    """A dose coded 0 or 50 was written as the level "50" against a reference "0", beside an odds ratio for one unit
+    of dose."""
+    from biostats import plan
+    from biostats.regression import logistic_regression
+
+    df = _cohort()
+    df["dose"] = np.where(np.arange(len(df)) % 4 == 0, 50, 0)
+    df["exposed"] = (df["dose"] > 0).astype(int)
+    by_dose = _disclose(plan.record("logistic", logistic_regression(df, "died", ["dose", "age"])))
+    assert by_dose.withheld == () and _ids(by_dose) == ["model", "term:dose", "term:age"]
+    assert by_dose.record.part("term:dose").labels == {"variable": "dose", "per": "unit"}
+    assert "50" not in json.dumps([p.labels for p in by_dose.record.parts])
+    # a covariate coded 0 or 1 is the higher value against the lower, and says so
+    by_flag = _disclose(
+        plan.record("logistic", logistic_regression(df, "died", ["exposed", "age"]))
+    )
+    assert _ids(by_flag) == ["model", "reference:exposed", "term:exposed", "term:age"]
+    assert by_flag.record.part("reference:exposed").labels == {"variable": "exposed", "level": "0"}
+    assert by_flag.record.part("term:exposed").labels == {"variable": "exposed", "level": "1"}
+
+
+def test_a_term_without_a_maximum_withholds_the_model() -> None:
+    """The application itself says that such a ratio cannot be read, and the terms left are those of the model
+    fitted without the rows that carry it. Beside a term withheld for its counts, "not converged" made a reader
+    doubt the sound terms and told them that a withheld level had no maximum."""
     from biostats.plan import EXACT, ITERATIVE, Number, Part, ResultRecord
 
     counts = {"rows": 400, "events": 160, "non_events": 240}
 
-    def term(name: str, extreme: bool) -> Part:
+    def term(name: str, extreme: bool, cell: dict | None = None, **labels: str) -> Part:
         numbers = (Number("coef", 0.2, ITERATIVE), Number("extreme", extreme, EXACT))
-        return Part(f"term:{name}", numbers, counts, {"variable": name})
+        return Part(f"term:{name}", numbers, cell or counts, {"variable": name, **labels})
 
     model = Part(
         "model",
@@ -1074,6 +1242,18 @@ def test_a_term_without_a_maximum_is_not_written() -> None:
     )
     record = ResultRecord("logistic", parts=(model, term("age", False), term("marker", True)))
     disclosed = _disclose(record)
+    assert disclosed.record is None and disclosed.withheld == (DROPS_OUT,)
+    # a term withheld for its counts (12 rows, 3 of them with the event): the model is written, without what its
+    # fit says of all its rows together, "not converged" included
+    reference = Part(
+        "reference:marker",
+        (),
+        {"rows": 388, "events": 157, "non_events": 231},
+        {"variable": "marker", "level": "0"},
+    )
+    few = term("marker", False, {"rows": 12, "events": 3, "non_events": 9}, level="1")
+    counted = ResultRecord("logistic", parts=(model, reference, term("age", False), few))
+    disclosed = _disclose(counted)
     assert _ids(disclosed) == ["model", "term:age"]
     assert disclosed.withheld == (f"1 term of marker withheld: {CELL}", FIT)
     assert [n.name for n in disclosed.record.part("model").numbers] == [
@@ -1165,19 +1345,14 @@ def test_a_part_without_its_counts_is_not_shown() -> None:
         ),
     )
     disclosed = _disclose(record)
-    # the two terms without their counts, and Beta with them: nothing says what they hold together
-    assert _ids(disclosed) == ["model", "term:age"]
-    assert disclosed.withheld == (
-        f"2 terms of site withheld: {CELL}",
-        f"1 more term of site withheld: {COVER}",
-        FIT,
-    )
+    # two terms without their counts: nothing says that their rows stay in the fit, and nothing is written
+    assert disclosed.record is None and disclosed.withheld == (DROPS_OUT,)
     # with both cells counted, Beta's term is written
     counted = ResultRecord("logistic", parts=record.parts[:4])
     assert _ids(_disclose(counted)) == ["model", "reference:site", "term:age", "term:site#1"]
     # a level without its reference's counts cannot be judged
     orphan = ResultRecord("logistic", parts=(model, age, record.parts[3]))
-    assert _ids(_disclose(orphan)) == ["model", "term:age"]
+    assert _disclose(orphan).withheld == (DROPS_OUT,)
     # a curve without its rows without the event; a model without its residual degrees of freedom
     curve = Part(
         "curve#0", (Number("rows", 100, EXACT),), {"rows": 100, "events": 40}, {"group": "all"}
@@ -1204,7 +1379,9 @@ def test_no_number_of_one_participant_passes_inside_the_complete_case_record(
         "survival", parts=(Part("curve#0", (Number("median", 412.0, EXACT, fine=True),)),)
     )
     careless = DisclosedRecord("survival", True, ResultRecord("survival", True, (), (), inner))
-    monkeypatch.setitem(disclosure.RULES, "survival", lambda record, policy, spec: careless)
+    monkeypatch.setitem(
+        disclosure.RULES, "survival", lambda record, policy, spec, cover=None: careless
+    )
     with pytest.raises(ValueError, match="would share 1 number"):
         _disclose(ResultRecord("survival", True))
 
@@ -1286,9 +1463,9 @@ def test_a_curve_is_given_at_multiples_of_one_step_every_k_events() -> None:
         assert len(survival) == len(times) == len(part.number("lower").value)
         steps, events = original.number("times").value, original.number("events_at").value
         full = dict(zip(steps, original.number("survival").value, strict=True))
-        # the value at a time given is the full curve's at that time
+        # the value at a time given is the full curve's at that time, to three decimals
         for t, value in zip(times, survival, strict=True):
-            assert value == full[max(s for s in steps if s <= t)]
+            assert value == round(full[max(s for s in steps if s <= t)], 3)
         # at least k events between two times given, and none or at least k after the last
         until = part.number("followed_until").value
         flat = times[-1] == until and survival[-1] == survival[-2]
@@ -1629,6 +1806,345 @@ def test_a_pooled_result_and_its_complete_cases_withhold_the_same_groups() -> No
     assert groups(disclosed.record.complete_case) == ["a_treat"]
 
 
+def test_a_pooled_result_keeps_the_groups_its_complete_cases_cannot_show() -> None:
+    """Groups of 300, 200 and 40 rows in the pooled result; the third one's value is recorded for 6 rows. The
+    complete cases covered their 6 rows with the second group, and what they withheld went back to the pooled
+    result, which showed one group and no test: for complete cases that, with 4 rows lacking in the first group,
+    were not even written."""
+    from biostats import plan
+    from biostats.mi import MIData
+    from biostats.plan import specify
+    from core.disclosure import disclose_record
+
+    rng = np.random.default_rng(12)
+    truth = pd.DataFrame({"group": ["a"] * 300 + ["b"] * 200 + ["c"] * 40})
+    truth["died"] = (rng.random(540) < 0.4).astype(int)
+    truth["days"] = rng.exponential(400, 540).round() + 1
+
+    def disclosed_with(lacking_in_a: int):
+        base = truth.copy()
+        base["group"] = base["group"].astype(object)
+        base.loc[[*range(lacking_in_a), *range(300, 330), *range(500, 534)], "group"] = np.nan
+        mi = MIData.from_completed(
+            base, [truth.copy() for _ in range(5)], methods={"group": "polyreg"}
+        )
+        done = plan.run(
+            specify("survival", pooled=True, time="days", event="died", group="group"), mi=mi
+        )
+        record = plan.record("survival_mi", done.result)
+        assert record is not None and record.complete_case is not None
+        return disclose_record(record, K10, spec=done.spec, analysis=_in_the_flow(record))
+
+    def groups(of) -> list[str]:
+        return [p.labels["group"] for p in of.parts if p.id.startswith("curve#")]
+
+    # complete cases of 270, 170 and 6 rows: they take the result's cover (none) and their own; the result keeps
+    # its three groups and its test
+    shown = disclosed_with(30)
+    assert groups(shown.record) == ["a", "b", "c"]
+    assert "test:log_rank" in [p.id for p in shown.record.parts]
+    assert groups(shown.record.complete_case) == ["a"]
+    assert all(said.startswith("complete-case analysis: ") for said in shown.withheld)
+    assert len(shown.withheld) == 4 and "or the pooled result withholds them" in shown.withheld[1]
+    # 4 rows lack the value in the first group: the pair would give them, and the complete cases are not written
+    alone = disclosed_with(4)
+    assert groups(alone.record) == ["a", "b", "c"] and alone.record.complete_case is None
+    assert "test:log_rank" in [p.id for p in alone.record.parts]
+    assert alone.withheld == ("the complete-case analysis is withheld",)
+
+
+def _sites_with_a_few_events(sizes: dict[str, int]) -> pd.DataFrame:
+    """Sites of these sizes; 3 of the 15 participants of Delta died: a cell that stays in a fit."""
+    df = _sites_of(sizes)
+    df.loc[df["site"] == "Delta", "died"] = [1, 1, 1] + [0] * 12
+    return df
+
+
+def test_the_curves_and_a_model_of_one_grouping_withhold_the_same_cells() -> None:
+    """Sites Alpha (the reference: first in sorted order), Beta, Gamma and a small Delta. The curves withheld the
+    smallest site shown with Delta, whichever it was; a model withheld the smallest term, never its reference.
+    With Alpha the smallest, the curves showed Beta and Gamma and the model wrote Gamma's term: its coefficient
+    and standard error gave Alpha's cell, and the totals, less Alpha, Beta and Gamma, gave Delta."""
+    from biostats import plan
+    from biostats.plan import specify
+    from core.disclosure import disclose_record, withheld_labels
+
+    def both(df: pd.DataFrame, **more):
+        curves = plan.run(specify("survival", time="days", event="died", group="site"), df)
+        model = plan.run(specify("logistic", outcome="died", adjust=["site", "age"]), df)
+        found = []
+        for done in (curves, model):
+            record = plan.record(done.spec.kind, done.result)
+            disclosed = disclose_record(
+                record, K10, spec=done.spec, analysis=_in_the_flow(record), **more
+            )
+            found.append((disclosed, withheld_labels(record, disclosed, done.spec)))
+        return found
+
+    # the reference is the smallest site shown: the curves withhold it with Delta, and the model every term of
+    # the factor (a level cannot be read without its reference)
+    smallest = _sites_with_a_few_events({"Alpha": 150, "Beta": 397, "Gamma": 438, "Delta": 15})
+    (curves, of_curves), (model, of_model) = both(smallest)
+    assert of_curves == {"site": ("Alpha", "Delta")}
+    assert [p.labels["group"] for p in curves.record.parts if p.id.startswith("curve#")] == [
+        "Beta",
+        "Gamma",
+    ]
+    assert of_model == {"site": ("Alpha", "Beta", "Delta", "Gamma")}
+    assert _ids(model) == ["model", "term:age"]
+    assert model.withheld == (
+        f"1 term of site withheld: {CELL}",
+        f"2 more terms of site withheld: {COVER}",
+        FIT,
+    )
+    # the reference is the largest: both withhold Gamma with Delta
+    largest = _sites_with_a_few_events({"Alpha": 450, "Beta": 385, "Gamma": 150, "Delta": 15})
+    (curves, of_curves), (model, of_model) = both(largest)
+    assert of_curves == of_model == {"site": ("Delta", "Gamma")}
+    assert _ids(model) == ["model", "reference:site", "term:age", "term:site#1"]
+    # a cover chosen elsewhere (another result of the package, or the person who shares) is withheld first, in
+    # both: Beta with Delta, which need no other
+    (curves, of_curves), (model, of_model) = both(largest, cover={"site": ["Beta"]})
+    assert of_curves == of_model == {"site": ("Beta", "Delta")}
+    assert model.withheld == (
+        f"1 term of site withheld: {CELL}",
+        f"1 more term of site withheld: {COVER}",
+        FIT,
+    )
+    assert "Beta" not in _written(model) and "Beta" not in _written(curves)
+    # the reference asked for: no term of the factor is written
+    (_, _), (model, of_model) = both(largest, cover={"site": ["Alpha"]})
+    assert of_model == {"site": ("Alpha", "Beta", "Delta", "Gamma")}
+    # a grouping that the result does not hold changes nothing
+    (curves, of_curves), (model, of_model) = both(largest, cover={"arm": ["drug"]})
+    assert of_curves == of_model == {"site": ("Delta", "Gamma")}
+    # a result that is withheld whole withholds every cell of its groupings
+    three = _three_sites()
+    done = plan.run(specify("logistic", outcome="died", adjust=["site", "age"]), three)
+    record = plan.record("logistic", done.result)
+    gone = disclose_record(record, K10, spec=done.spec, analysis=_in_the_flow(record))
+    assert gone.record is None
+    assert withheld_labels(record, gone, done.spec) == {"site": ("Alpha", "Beta", "Delta")}
+
+
+def test_the_time_step_is_read_on_the_usual_gap_between_two_recorded_times() -> None:
+    """The data's unit was the smallest gap between two recorded times, and a step five of them at least: a
+    follow-up in whole years (1 to 4) got a step of 5 and no time at all, and one row recorded at 45.1 days in a
+    study recorded in days brought the step down to 1, where the times given are event days again."""
+    rng = np.random.default_rng(3)
+    years = pd.DataFrame(
+        {"days": rng.integers(1, 5, 400).astype(float), "died": (rng.random(400) < 0.5).astype(int)}
+    )
+    (curve,) = _curve_shown(years)
+    assert curve.number("time_step").value == 1
+    assert curve.number("times").value == [1, 2, 3, 4]  # four times can hold a point
+    assert curve.number("followed_until").value == 4
+    rng = np.random.default_rng(5)
+    ninety = pd.DataFrame(
+        {
+            "days": rng.integers(1, 91, 928).astype(float),
+            "died": (rng.random(928) < 0.5).astype(int),
+        }
+    )
+    (curve,) = _curve_shown(ninety)
+    times = curve.number("times").value
+    assert curve.number("time_step").value == 5 and times == [float(t) for t in range(5, 90, 5)]
+    for odd in (45.25, 45.1):
+        finer = ninety.copy()
+        finer.loc[0, "days"] = odd
+        (curve,) = _curve_shown(finer)
+        assert curve.number("time_step").value == 5 and curve.number("times").value == times, odd
+    # whole months over four years, and one time written 12.1
+    months = pd.DataFrame(
+        {
+            "days": rng.integers(1, 49, 600).astype(float),
+            "died": (rng.random(600) < 0.5).astype(int),
+        }
+    )
+    months.loc[0, "days"] = 12.1
+    (curve,) = _curve_shown(months)
+    assert curve.number("time_step").value == 5
+    assert curve.number("times").value == [float(t) for t in range(5, 50, 5)]
+
+
+def test_a_limit_of_the_median_below_the_first_step_is_not_written() -> None:
+    """A lower limit of 3 days under a step of 5 was rounded down and written as 0: a median survival of at least
+    no time at all."""
+    from biostats.plan import DETERMINISTIC, EXACT, Number, Part, ResultRecord
+
+    days = [float(d) for d in range(1, 201)]
+    curve = Part(
+        "curve#0",
+        (
+            Number("rows", 200, EXACT),
+            Number("events", 100, EXACT),
+            Number("median", 150.0, EXACT, fine=True),
+            Number("median_lower", 3.0, EXACT, fine=True),
+            Number("median_upper", 172.0, EXACT, fine=True),
+            Number("times", days[::2], EXACT, fine=True),
+            Number("survival", [1 - (j + 1) / 200 for j in range(100)], DETERMINISTIC, scale=1.0),
+            Number("events_at", [1] * 100, EXACT, fine=True),
+            Number("follow_times", days, EXACT, fine=True),
+            Number("followed", [200 - j for j in range(200)], EXACT, fine=True),
+        ),
+        {"rows": 200, "events": 100, "censored": 100},
+        {"group": "all"},
+    )
+    shown = _disclose(ResultRecord("survival", parts=(curve,))).record.part("curve#0")
+    assert shown.number("time_step").value == 5
+    assert shown.number("median").value == 150 and shown.number("median_upper").value == 175
+    assert shown.number("median_lower").value is None  # and not named as later than the follow-up
+    assert shown.number("later_than_followed_until").value == []
+
+
+def test_the_time_step_is_read_on_the_groups_that_are_shown() -> None:
+    """A group followed 300 days, beside a small group and its cover, which is followed 3,000 days and not shown:
+    the step was read over every group, and the curve shown had 6 times at a step of 50 where its own follow-up
+    gives it a step of 5."""
+    rng = np.random.default_rng(7)
+
+    def followed(name: str, rows: int, days: int) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "group": name,
+                "days": rng.integers(1, days + 1, rows).astype(float),
+                "died": (rng.random(rows) < 0.5).astype(int),
+            }
+        )
+
+    small = followed("small", 5, 300)
+    df = pd.concat(
+        [followed("main", 300, 300), followed("long", 100, 3000), small], ignore_index=True
+    )
+    (main,) = _curve_shown(df, "group")
+    assert main.labels == {"group": "main"} and main.number("time_step").value == 5
+    assert len(main.number("times").value) >= 10
+    # shown together, the two large groups share the step of the longer follow-up
+    both = _curve_shown(df[df["group"] != "small"], "group")
+    assert [p.number("time_step").value for p in both] == [50, 50]
+
+
+def test_a_curve_s_values_are_written_to_three_decimals() -> None:
+    """With every digit, a value and its lower limit give the rows at risk at each time, and so the rows whose
+    follow-up ended between two times: 3 of them, in a study with a common closing date."""
+    from biostats import plan
+    from biostats.plan import ITERATIVE_LOOSE
+    from biostats.survival import compare_survival
+    from core.disclosure import SURVIVAL_DECIMALS
+
+    record = plan.record("survival", compare_survival(_cohort(), "days", "died", "arm"))
+    disclosed = _disclose(record)
+    assert SURVIVAL_DECIMALS == 3
+    for part in disclosed.record.parts[:2]:
+        for name in ("survival", "lower", "upper"):
+            number = part.number(name)
+            assert number.value and all(v == round(v, 3) for v in number.value), name
+            # a value computed again agrees to one unit of the last decimal, and is compared so
+            assert number.cls == ITERATIVE_LOOSE and number.scale == 1.0, name
+        full = record.part(part.id).number("survival").value
+        assert not all(v == round(v, 3) for v in full)  # the record itself holds every digit
+
+
+def test_a_pooled_result_is_compared_with_the_rows_its_datasets_read() -> None:
+    """400 rows; the event is missing for 20 of them and no imputation fills it. Every dataset's curves and models
+    read 380 rows, and the flow said 400 analysed and none missing: a pooled result's rows were not compared with
+    its line of the flow."""
+    from biostats import plan
+    from biostats.mi import MIData
+    from biostats.plan import specify
+    from core.disclosure import DisclosedAnalysis, disclose_record
+
+    rng = np.random.default_rng(2)
+    truth = _cohort()
+    base = truth.copy()
+    gap = rng.random(len(base)) < 0.15
+    base.loc[gap, "age"] = np.nan
+    base["died"] = base["died"].astype(float)
+    base.loc[base.index[:20], "died"] = np.nan
+    completed = []
+    for _ in range(5):
+        one = base.copy()
+        one.loc[gap, "age"] = truth.loc[gap, "age"] + rng.normal(0, 5, gap.sum())
+        completed.append(one)
+    mi = MIData.from_completed(base, completed, methods={"age": "pmm"})
+    for kind, roles in (
+        ("survival", {"time": "days", "event": "died", "group": "arm"}),
+        ("cox", {"time": "days", "event": "died", "compare": "arm", "adjust": ["age"]}),
+        ("logistic", {"outcome": "died", "compare": "arm", "adjust": ["age"]}),
+    ):
+        done = plan.run(specify(kind, pooled=True, **roles), mi=mi)
+        record = plan.record(f"{kind}_mi", done.result)
+        assert record is not None
+        assert _in_the_flow(record).n == 380, kind
+        read = DisclosedAnalysis("analysis", 380, missing=20, imputations=5)
+        assert disclose_record(record, K10, spec=done.spec, analysis=read).record is not None, kind
+        every = DisclosedAnalysis("analysis", 400, imputations=5)
+        said = disclose_record(record, K10, spec=done.spec, analysis=every)
+        assert said.record is None and said.withheld == (NOT_ITS_ROWS,), kind
+
+
+def test_two_cautions_travel_as_facts() -> None:
+    """With a term withheld, a Poisson model lost its dispersion (2.28 on the tutorial: its standard errors are 1.5
+    times too small); and at k = 5 a ratio can rest on 5 to 9 events beside a model that is not sparse as a
+    whole."""
+    from biostats import plan
+    from biostats.regression import count_regression
+    from biostats.survival import cox_regression
+
+    df = _cohort()
+    rng = np.random.default_rng(1)
+    df["visits"] = rng.poisson(2 * rng.gamma(0.5, 2.0, len(df)))
+    poisson = _disclose(
+        plan.record("count", count_regression(df, "visits", ["arm", "age"], family="poisson")),
+        compare="arm",
+    ).record.part("model")
+    assert (
+        poisson.number("dispersion").value > 1.5 and poisson.number("overdispersed").value is True
+    )
+    # with a term withheld (12 rows, 3 of them with a visit), the dispersion goes with the fit's numbers, and the
+    # fact stays
+    rare = df.assign(rare=0)
+    rare.loc[rare.index[:12], "rare"] = 1
+    rare.loc[rare.index[:12], "visits"] = [4, 2, 1] + [0] * 9
+    partly = _disclose(
+        plan.record(
+            "count", count_regression(rare, "visits", ["rare", "arm", "age"], family="poisson")
+        ),
+        compare="arm",
+    )
+    model = partly.record.part("model")
+    assert "term:rare" not in _ids(partly) and "term:arm#1" in _ids(partly)
+    assert "dispersion" not in [n.name for n in model.numbers]
+    assert model.number("overdispersed").value is True
+    even = df.assign(visits=np.random.default_rng(2).poisson(2, len(df)))
+    steady = _disclose(
+        plan.record("count", count_regression(even, "visits", ["arm", "age"], family="poisson")),
+        compare="arm",
+    ).record.part("model")
+    assert steady.number("overdispersed").value is False
+    # a negative binomial model's dispersion is a parameter of its fit: no such fact
+    fitted = _disclose(
+        plan.record(
+            "count", count_regression(df, "visits", ["arm", "age"], family="negative_binomial")
+        ),
+        compare="arm",
+    ).record.part("model")
+    assert "overdispersed" not in [n.name for n in fitted.numbers]
+    # a site of 20 rows, 7 of whom died: written at k = 5, and marked as resting on fewer than 10
+    df = _cohort()
+    df["site"] = "Beta"
+    df.loc[df.index[:20], "site"] = "Gamma"
+    df.loc[df.index[:20], "died"] = [1] * 7 + [0] * 13
+    record = plan.record(
+        "cox", cox_regression(df, "days", "died", ["site", "age"], diagnostics=False)
+    )
+    at_five = _disclose(record, DisclosurePolicy(5)).record
+    assert at_five.part("model").number("sparse").value is False
+    assert at_five.part("term:site#1").number("sparse").value is True
+    assert "sparse" not in [n.name for n in at_five.part("term:age").numbers]  # no cell behind it
+    assert "term:site#1" not in _ids(_disclose(record))  # at k = 10 it is withheld
+
+
 def test_a_shared_spec_names_no_row_and_no_withheld_level() -> None:
     import hashlib
 
@@ -1637,8 +2153,11 @@ def test_a_shared_spec_names_no_row_and_no_withheld_level() -> None:
     from core.disclosure import DisclosedAnalysis, DisclosedRecord, disclose_record, disclose_spec
 
     df = _cohort()
-    df["site"] = np.where(np.arange(len(df)) % 3 == 0, "Alpha", df["site"])
-    df.loc[df.index[:3], "site"] = "CANARY-SITE"
+    df["site"] = np.where(
+        np.arange(len(df)) % 2 == 0, "Alpha", df["site"]
+    )  # the reference: the largest
+    df.loc[df.index[:12], "site"] = "CANARY-SITE"
+    df.loc[df.index[:12], "died"] = [1, 1] + [0] * 10
     done = plan.run(specify("logistic", outcome="died", compare="arm", adjust=["site", "age"]), df)
     spec = done.spec.on(
         ComputedOn(
@@ -1667,7 +2186,7 @@ def test_a_shared_spec_names_no_row_and_no_withheld_level() -> None:
     assert hashlib.sha256(canonical(asked).encode("utf-8")).hexdigest() == shared["request_id"]
     # the level that was the event was decided on the data: beside the request, with a model that is shown
     assert shared["decided"]["event_level"] == "1"
-    # the site of 3 rows is withheld, and the smaller of the two others with it
+    # the site of 12 rows, two of whom died, is withheld, and the smaller of the two others with it
     sizes = df["site"].value_counts()
     larger = "Beta" if sizes["Gamma"] < sizes["Beta"] else "Gamma"
     assert shared["decided"]["levels"] == {
@@ -1710,9 +2229,24 @@ def test_the_notes_a_package_reads_its_results_with_are_fixed_words() -> None:
     from core.disclosure import reading_notes
 
     notes = reading_notes(DisclosurePolicy(12))
-    assert len(notes) == 6 and all(isinstance(note, str) and note.endswith(".") for note in notes)
+    assert len(notes) == 9 and all(isinstance(note, str) and note.endswith(".") for note in notes)
     assert "fewer than 12" in notes[0] and "selected by their outcome" in notes[1]
-    assert "followed_until" in notes[3] and "below 10" in notes[5]
+    # what a model with a withheld term is, and when nothing of a model is written
+    assert (
+        "adjusted for every variable and every level" in notes[2] and "withheld whole" in notes[2]
+    )
+    assert "per unit" in notes[3] and "the reference written beside it" in notes[3]
+    assert "the rarer outcome of a logistic model" in notes[4] and "Below 10 (sparse)" in notes[4]
+    # what a time of a curve stands for, and what follows its last time
+    assert "at the end of the step that ends there, to 3 decimals" in notes[5]
+    assert "between 1 and the first value" in notes[5]
+    assert "followed_until" in notes[6] and "12 events or more follow" in notes[6]
+    assert "stays flat" not in " ".join(
+        notes
+    )  # it does not, when 12 events or more follow the last time
+    assert "later_than_followed_until" in notes[7] and "before the first step" in notes[7]
+    assert "_min" in notes[8] and "do not add up" in notes[8]
+    assert reading_notes(DisclosurePolicy(12)) == notes and reading_notes(K10) != notes
 
 
 # ----------------------------------------------------------------------------- rare values in a package's texts
@@ -1923,8 +2457,8 @@ def test_a_value_is_rare_when_the_source_or_the_analysis_base_holds_it_in_a_few_
 
 
 def test_what_a_result_shows_holds_no_rare_value() -> None:
-    """A site of 3 participants: the record as computed names it (a term's label, the levels the run recorded);
-    what the package shows of the record and of its request does not."""
+    """A site of 3 participants: the record as computed names it (a curve's label, a term's, the levels and the
+    groups the run recorded); what the package shows of the record and of its request does not."""
     from biostats import plan
     from biostats.plan import specify
     from core.disclosure import RareFinder, disclose_record, disclose_spec
@@ -1932,25 +2466,30 @@ def test_what_a_result_shows_holds_no_rare_value() -> None:
     df = _cohort()
     df["site"] = np.where(np.arange(len(df)) % 3 == 0, "Alpha", df["site"])
     df.loc[df.index[:3], "site"] = "CANARY-SITE"
-    done = plan.run(specify("logistic", outcome="died", compare="arm", adjust=["site", "age"]), df)
-    record = plan.record("logistic", done.result)
     finder = RareFinder([df], K10)
-    as_computed = finder.document(
-        "results.json", {"record": record.to_dict(), "spec": done.spec.to_dict()}
-    )
-    assert as_computed and {hit.column for hit in as_computed} == {"site"}
-    assert "canary" not in repr(as_computed).lower()
-    line = _in_the_flow(record)
-    disclosed = disclose_record(record, K10, spec=done.spec, analysis=line)
-    shown_of_it = {
-        "record": disclosed.record.to_dict(),
-        "spec": disclose_spec(done.spec, disclosed, analysis=line),
-        "withheld": list(disclosed.withheld),
-    }
-    assert any(
-        i.startswith("term:site#") for i in _ids(disclosed)
-    )  # a level of the site is shown, and named
-    assert finder.document("results.json", shown_of_it) == []
+    curves = plan.run(specify("survival", time="days", event="died", group="site"), df)
+    model = plan.run(specify("logistic", outcome="died", compare="arm", adjust=["site", "age"]), df)
+    shown_groups = 0
+    for done in (curves, model):
+        record = plan.record(done.spec.kind, done.result)
+        as_computed = finder.document(
+            "results.json", {"record": record.to_dict(), "spec": done.spec.to_dict()}
+        )
+        assert as_computed and {hit.column for hit in as_computed} == {"site"}
+        assert "canary" not in repr(as_computed).lower()
+        line = _in_the_flow(record)
+        disclosed = disclose_record(record, K10, spec=done.spec, analysis=line)
+        shown_of_it = {
+            "record": None if disclosed.record is None else disclosed.record.to_dict(),
+            "spec": disclose_spec(done.spec, disclosed, analysis=line),
+            "withheld": list(disclosed.withheld),
+        }
+        assert finder.document("results.json", shown_of_it) == []
+        if disclosed.record is not None:
+            shown_groups += len([i for i in _ids(disclosed) if i.startswith("curve#")])
+    # two sites are shown by the curves, and named; the model, which a site of 3 rows drops out of, is not written
+    assert shown_groups == 2
+    assert disclosed.record is None and shown_of_it["spec"] is None
 
 
 def test_the_scan_of_a_large_file_stays_fast() -> None:
@@ -2006,9 +2545,10 @@ def test_the_scan_never_changes_the_datasets_it_is_given() -> None:
 
 
 def test_a_pattern_is_run_only_by_the_engine_that_cannot_backtrack() -> None:
-    """``(.|.)*(?=#)`` takes Python's own engine minutes on a value of 30 characters and days on one of 40: a
-    pattern is run by the engine behind text stored by Arrow, when that engine takes it, and is not checked
-    otherwise."""
+    """``(.|.)*(?=#)`` takes Python's own engine minutes on a value of 30 characters and days on one of 40. pandas
+    chooses its engine on the data as well as on the pattern (a letter with an accent in one value, a newline, a
+    column kept as Python objects): a pattern is run by the engine that cannot backtrack, called directly, when
+    that engine takes it, and is not checked otherwise."""
     import time
 
     from core.disclosure import UNCHECKED, RareFinder, RareHit
@@ -2022,11 +2562,33 @@ def test_a_pattern_is_run_only_by_the_engine_that_cannot_backtrack() -> None:
     slow = "df['diagnosis'].str.contains('(.|.)*(?=#)')"
     assert finder.compared(slow) == () and finder.unchecked(slow) == ("diagnosis",)
     assert finder.text("criterion", slow) == [RareHit("criterion", "diagnosis", UNCHECKED)]
-    # flags send pandas to Python's own engine, and a column kept as Python objects is searched by it
+    # flags are not read, given by name or by position
     assert finder.unchecked("df['diagnosis'].str.contains('sarc.id', flags=2)") == ("diagnosis",)
+    assert finder.unchecked("df['diagnosis'].str.contains('sarc.id', True, 2)") == ("diagnosis",)
+    # a column kept as Python objects is searched by the same engine, whatever pandas would do with it
     objects = RareFinder([_sites().astype({"diagnosis": object})], K10)
-    assert objects.unchecked("df['diagnosis'].str.contains('sarc.id')") == ("diagnosis",)
-    assert objects.unchecked("df['diagnosis'].str.match('(a|a)*b')") == ("diagnosis",)
+    assert objects.compared("df['diagnosis'].str.contains('sarc.id')") == ("diagnosis",)
+    assert objects.unchecked("df['diagnosis'].str.contains('sarc.id')") == ()
+    assert objects.compared("df['diagnosis'].str.match('(a|a)*b')") == ()
+    assert objects.unchecked("df['diagnosis'].str.match('(a|a)*b')") == ()
+    # from the start of a value, the whole of it, without the case of letters, after another method
+    assert objects.compared("df['diagnosis'].str.match('sarc')") == ("diagnosis",)
+    assert objects.compared("df['diagnosis'].str.match('oidosis')") == ()
+    assert objects.compared("df['diagnosis'].str.fullmatch('sarc.*')") == ("diagnosis",)
+    assert objects.compared("df['diagnosis'].str.fullmatch('sarc')") == ()
+    assert objects.compared("df['diagnosis'].str.contains('SARC.ID', case=False)") == ("diagnosis",)
+    assert objects.compared("df['diagnosis'].str.contains('SARC.ID')") == ()
+    assert objects.compared("df['diagnosis'].str.upper().str.contains('SARC.ID')") == ("diagnosis",)
+    # values that are not all texts, and a pattern that is not written in the text: nothing can be said
+    mixed = _sites().astype({"diagnosis": object})
+    mixed.loc[0, "diagnosis"] = 7
+    of_mixed = RareFinder([mixed], K10)
+    assert of_mixed.unchecked("df['diagnosis'].str.contains('sarc.id')") == ("diagnosis",)
+    computed = "df['diagnosis'].str.contains(df['site'][0])"
+    assert objects.compared(computed) == () and set(objects.unchecked(computed)) == {
+        "diagnosis",
+        "site",
+    }
     # a text searched as it is written is run whatever the column: there is no pattern to try
     assert objects.compared("df['diagnosis'].str.contains('sarcoid')") == ("diagnosis",)
     assert objects.compared("df['diagnosis'].str.contains('sarc.id', regex=False)") == ()
@@ -2034,13 +2596,103 @@ def test_a_pattern_is_run_only_by_the_engine_that_cannot_backtrack() -> None:
     assert time.perf_counter() - started < 5
 
 
+@pytest.mark.parametrize("stored", ["str", "object", "string[pyarrow]"])
+def test_no_text_of_a_package_reaches_the_engine_that_backtracks(stored: str) -> None:
+    """pandas sent each of these to Python's own engine: a class of letters beside a value with an accent, a column
+    kept as objects, flags given by position, an end of text beside a value with a newline, and a pattern inside
+    the text that is tested (``split``, ``replace``). Each took about four times longer for every two characters
+    of a value: 20 seconds at 22 characters, hours at 30."""
+    import time
+
+    from core.disclosure import RareFinder
+
+    pytest.importorskip("pyarrow")
+    values = ["a" * 22] * 9 + ["é" + "a" * 21, "a" * 20 + "\nb", "b" * 22]
+    frame = pd.DataFrame({"site": pd.Series(values, dtype=stored), "age": np.arange(12.0)})
+    finder = RareFinder([frame], K10, identifying=[])
+    run, not_checked = ((), ()), ((), ("site",))
+    cases = {
+        r"df['site'].str.contains('(\\w|\\w)*#')": run,
+        "df['site'].astype('object').str.contains('(.|.)*#')": run,
+        "df['site'].str.contains('(.|.)*#$')": run,
+        "df['site'].str.contains('(.|.)*#', True, 2)": not_checked,
+        "df['site'].str.split('(.|.)*#').str.len() == 1": not_checked,
+        "df['site'].str.replace('(.|.)*#', 'x', regex=True, case=False) == 'x'": not_checked,
+        "df['site'].replace('(.|.)*#', 'x', regex=True) == 'x'": not_checked,
+        # and what is run still counts its rows: the one value made of b
+        "df['site'].str.fullmatch('b{22}')": (("site",), ()),
+        "df['site'].str.lower().str.contains('^b+$')": (("site",), ()),
+        "df['site'].str.replace('b', 'c') == 'c' * 22": (("site",), ()),
+        "df['site'].str.split('-').str.len() == 2": run,
+    }
+    started = time.perf_counter()
+    for text, expected in cases.items():
+        assert (finder.compared(text), finder.unchecked(text)) == expected, text
+    assert time.perf_counter() - started < 5
+
+
+def test_a_text_too_deep_to_be_read_is_not_checked() -> None:
+    """250 comparisons joined by ``&`` raised RecursionError out of the scan, where it promises "not checked" for
+    what it cannot read."""
+    from core.disclosure import UNCHECKED, VALUE, RareFinder, RareHit
+
+    finder = RareFinder([_sites()], K10)
+
+    def joined(comparisons: int) -> str:
+        return " & ".join(f"(df['age'] > {i})" for i in range(comparisons))
+
+    assert finder.text("criterion", joined(250)) == []  # read: bounds, which name no value
+    assert finder.text("criterion", joined(3000)) == [RareHit("criterion", "age", UNCHECKED)]
+    # what such a text names is still found as a text, and every column it reads is said not to be checked
+    named = finder.text("criterion", joined(3000) + " & (df['site'] == 'Wiltz-CANARY')")
+    assert {(hit.column, hit.kind) for hit in named} == {
+        ("site", VALUE),
+        ("age", UNCHECKED),
+        ("site", UNCHECKED),
+    }
+    # brackets as deep as Python reads them
+    nested = "(" * 150 + "df['age'] == 97" + ")" * 150
+    assert finder.compared(nested) == ("age",)
+
+
+def test_a_column_named_after_a_level_is_named_by_its_position() -> None:
+    """A column ``grade_IV`` of 0 and 1: a hit on it was labelled by its name, which holds the level that 3
+    participants have (two characters: not a value that is looked for on its own)."""
+    from core.disclosure import LITERAL, VALUE, RareFinder
+
+    df = _sites().assign(grade_IV=lambda d: (d["grade"] == "IV").astype(int))
+    assert list(df.columns).index("grade_IV") == 10
+    hits = RareFinder([df], K10).text("criterion", "df['grade_IV'] == 1")
+    assert {(hit.column, hit.kind) for hit in hits} == {
+        ("grade", VALUE),
+        ("column 11", VALUE),
+        ("column 11", LITERAL),
+    }
+    assert "grade_IV" not in repr(hits)
+
+
 def test_a_criterion_stored_as_numbers_is_read_as_the_comparison_it_stands_for() -> None:
     """A criterion that excludes ``record_no`` 100234 to 100234, or ``age`` 97 to 97, holds its values as numbers:
     the finder reads texts, and gave no hit."""
-    from core.disclosure import LITERAL, RareFinder, RareHit
+    from core.disclosure import LITERAL, UNCHECKED, RareFinder, RareHit
 
     finder = RareFinder([_sites()], K10)
     assert finder.bounds("criterion 3", "age", 97, 97) == [RareHit("criterion 3", "age", LITERAL)]
+    # a bound is read as the criterion's own mask reads it: a number written as a text, a number of numpy
+    one = [RareHit("c", "age", LITERAL)]
+    assert finder.bounds("c", "age", "97", "97") == one
+    assert finder.bounds("c", "age", "96.5", "97.5") == one
+    assert finder.bounds("c", "age", np.float64(97), np.float64(97)) == one
+    assert finder.bounds("c", "record_no", "100234", "100234") == [
+        RareHit("c", "record_no", LITERAL)
+    ]
+    assert (
+        finder.bounds("c", "age", "18", "110") == [] and finder.bounds("c", "age", None, "97") == []
+    )
+    # one that cannot be read is said not to be checked; an infinite one is no bound on its side
+    for unread in ("abc", [1], float("nan")):
+        assert finder.bounds("c", "age", unread, 97) == [RareHit("c", "age", UNCHECKED)], unread
+    assert finder.bounds("c", "age", float("-inf"), 97) == []
     assert finder.bounds("criterion 3", "record_no", 100234, 100234) == [
         RareHit("criterion 3", "record_no", LITERAL)
     ]
@@ -2065,10 +2717,25 @@ def test_a_bound_at_a_rare_level_is_not_the_name_of_a_level() -> None:
         "score >= 8",
         "8 <= df['score']",
         "a score >= 8 at admission",
+        # as a text writes them: the signs of Unicode, and "8+" for 8 or more
+        "score \u2265 8",
+        "GCS \u2264 8 or score \u2265 8",
+        "score \u2a7e 8",
+        "score \uff1e 7",
+        "score 8+",
+        "a score of 8+ at admission",
+        "(score 8+)",
     ):
         assert finder.text("criterion", bound) == [], bound
     # the level itself, after its column's name, is one
-    for level in ("score_8", "df['score_8'] == 1", "score 8", "score = 8", "score-8"):
+    for level in (
+        "score_8",
+        "df['score_8'] == 1",
+        "score 8",
+        "score = 8",
+        "score-8",
+        "score_8 + 1",  # the 8 ends a column's name: no "8 or more"
+    ):
         assert [hit.kind for hit in finder.text("title", level)] == ["value"], level
     # and an equality with it is found by the rows it takes
     assert {hit.kind for hit in finder.text("criterion", "df['score'] == 8")} == {

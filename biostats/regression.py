@@ -12,7 +12,13 @@ import pandas as pd
 import statsmodels.api as sm
 from scipy import stats
 
-from biostats.design import design_matrix, dominant_counts, indicator_counts, level_counts
+from biostats.design import (
+    design_matrix,
+    dominant_counts,
+    indicator_counts,
+    level_counts,
+    value_counts,
+)
 from biostats.references import REFERENCES
 
 logger = logging.getLogger(__name__)
@@ -61,8 +67,10 @@ class RegressionResult:
     level_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     # the same for a numeric or True/False covariate that holds two values (biostats.design.indicator_counts)
     indicator_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
-    # on and off the commonest value of a numeric covariate of more than two values, when at least half of the rows
-    # hold it (biostats.design.dominant_counts)
+    # at each value of a numeric covariate of three to twenty values (biostats.design.value_counts)
+    value_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    # on and off the commonest value of a numeric covariate of more values, when at least half of the rows hold it
+    # (biostats.design.dominant_counts)
     dominant_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     # a logistic model's two outcome levels as read, sorted: the event is one of them
     outcome_levels: tuple[str, ...] = ()
@@ -217,6 +225,7 @@ def logistic_regression(
         df_resid=float(len(y) - x.shape[1]),
         level_counts=level_counts(frame, covariates, y, levels=levels),
         indicator_counts=indicator_counts(frame, covariates, y, levels=levels),
+        value_counts=value_counts(frame, covariates, y, levels=levels),
         dominant_counts=dominant_counts(frame, covariates, y, levels=levels),
         outcome_levels=tuple(outcome_levels),
         converged=converged,
@@ -345,6 +354,7 @@ def count_regression(
         df_resid=float(len(y) - x.shape[1]),
         level_counts=level_counts(frame, covariates, y, levels=levels),
         indicator_counts=indicator_counts(frame, covariates, y, levels=levels),
+        value_counts=value_counts(frame, covariates, y, levels=levels),
         dominant_counts=dominant_counts(frame, covariates, y, levels=levels),
         converged=converged,
         dispersion_se=dispersion_se,

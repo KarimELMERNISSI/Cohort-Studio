@@ -756,24 +756,41 @@ def _recorded_cells(
     rows: pd.DataFrame, covariates: Sequence[str], events: Any, levels: Mapping[str, Any]
 ) -> dict[str, Any]:
     """
-    The cells of a pooled model's numeric covariates, counted on recorded values. ``rows`` are the observed rows that
-    record the outcome and ``events`` each one's events; a covariate is counted on the rows that record it: each
-    value of a covariate recorded with two values, and the rows on and off the commonest value of one that holds
-    more (biostats.design). An imputed value is not a recorded one. The small-cell rule of a shared result reads
-    these cells where the imputed datasets do not keep a covariate's two values (a normal draw gives it others: one
-    participant coded 1 would carry the term under the model's counts), and for a commonest value always.
+    The cells of a pooled model's numeric covariates, counted on recorded values. ``rows`` are the observed rows the
+    analysis reads and ``events`` each one's events, missing where the outcome is not recorded. A covariate is
+    counted on the rows that record it, whatever their outcome: each value of a covariate recorded with two values
+    or with a few, and the rows on and off the commonest value of one that holds more (biostats.design). A cell is
+    its rows, its recorded events, its rows with a recorded event and its rows recorded without one.
+
+    An imputed value is not a recorded one. The small-cell rule of a shared result reads these cells where the
+    imputed datasets do not keep a covariate's two values (a normal draw gives it others: one participant coded 1
+    would carry the term under the model's counts), and for a covariate of more values always. A participant coded 1
+    whose outcome is missing is a row of the cell all the same: counted where the outcome is recorded only, the
+    cell did not exist and the term was written.
     """
-    from biostats.design import dominant_counts, indicator_counts
+    from biostats.design import dominant_counts, indicator_counts, value_counts
 
     happened = np.asarray(events, dtype=float)
-    cells: dict[str, Any] = {"indicator": {}, "dominant": {}}
+    known = ~np.isnan(happened)
+    had = np.where(known, happened, 0.0)
+    had_none = (known & (happened == 0)).astype(float)
+    cells: dict[str, Any] = {"indicator": {}, "values": {}, "dominant": {}}
     for name in covariates:
         if name in levels:
             continue
         held = rows[name].notna().to_numpy(dtype=bool)
         part = rows.loc[held, [name]]
-        cells["indicator"].update(indicator_counts(part, [name], happened[held]))
-        cells["dominant"].update(dominant_counts(part, [name], happened[held]))
+        for key, count in (
+            ("indicator", indicator_counts),
+            ("values", value_counts),
+            ("dominant", dominant_counts),
+        ):
+            with_events = count(part, [name], had[held])
+            without = count(part, [name], had_none[held])
+            for covariate, found in with_events.items():
+                cells[key][covariate] = {
+                    value: (*cell, without[covariate][value][1]) for value, cell in found.items()
+                }
     return cells
 
 
@@ -845,7 +862,7 @@ def _run_cox(spec: AnalysisSpec, frame: pd.DataFrame) -> tuple[Any, dict[str, An
 
 def _pool_cox(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     from biostats.mi import analyze_mi
-    from biostats.survival import cox_regression, event_coding, event_indicator, rows_read
+    from biostats.survival import cox_regression, event_coding, event_indicator
 
     v, o = spec.variables, spec.options
     covariates = spec.covariates()
@@ -867,7 +884,8 @@ def _pool_cox(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], dict[st
         columns=[v["time"], v["event"], *covariates],
         alpha=o["alpha"],
     )
-    read = mi.base.loc[rows_read(mi.base, v["time"], v["event"]).index]
+    # every row but those a dataset's model leaves out for a follow-up time below zero
+    read = mi.base[~(pd.to_numeric(mi.base[v["time"]], errors="coerce") < 0)]
     result.extra["recorded_cells"] = _recorded_cells(
         read, covariates, event_indicator(read[v["event"]]), levels
     )
@@ -938,10 +956,9 @@ def _pool_logistic(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], di
         if o["event_level"] is not None
         else outcome_levels[-1],
     }
-    read = mi.base[mi.base[v["outcome"]].notna()]
-    result.extra["recorded_cells"] = _recorded_cells(
-        read, covariates, read[v["outcome"]].astype(str) == derived["event_level"], levels
-    )
+    outcome = mi.base[v["outcome"]]
+    happened = (outcome.astype(str) == derived["event_level"]).astype(float).where(outcome.notna())
+    result.extra["recorded_cells"] = _recorded_cells(mi.base, covariates, happened, levels)
     return result, *_decisions({"levels": levels}, derived)
 
 
@@ -992,8 +1009,8 @@ def _pool_count(spec: AnalysisSpec, mi: Any) -> tuple[Any, dict[str, Any], dict[
         columns=[v["count"], *covariates, *([exposure] if exposure else [])],
         alpha=o["alpha"],
     )
-    read = mi.base.loc[mi.base[[v["count"], *([exposure] if exposure else [])]].dropna().index]
-    result.extra["recorded_cells"] = _recorded_cells(read, covariates, read[v["count"]], levels)
+    counted = pd.to_numeric(mi.base[v["count"]], errors="coerce")
+    result.extra["recorded_cells"] = _recorded_cells(mi.base, covariates, counted, levels)
     return result, *_decisions({"levels": levels}, {"levels": own})
 
 
@@ -1048,16 +1065,55 @@ def _cell_support(cell: Sequence[int], kind: str) -> dict[str, int]:
     return found
 
 
+# what the cells of a numeric covariate's term are (the label ``of`` of its reference part): stored ids
+VALUES = "values"  # each value of the covariate is a cell: a covariate of a few values
+COMMONEST = (
+    "commonest"  # the rows on and off its commonest value: a covariate of many values, half at one
+)
+
+
 @dataclass(frozen=True)
 class _Term:
     """What a term of a design stands for: its part's id (without the prefix), its labels, and its cell's counts:
-    a level's, the higher value's of a covariate of two values, the rows off the commonest value of a covariate
-    that at least half of the rows hold at one value (None for any other numeric covariate: the model's counts are
-    behind it)."""
+    a level's; the higher value's of a covariate of two values; the smallest of each count over the values of a
+    covariate of a few values; the rows off the commonest value of a covariate that at least half of the rows hold
+    at one value (None for any other numeric covariate: the model's counts are behind it)."""
 
     id: str
     labels: dict[str, str]
     cell: Sequence[int] | None
+
+
+def _least(cells: Sequence[Sequence[int]]) -> tuple[int, int, int, int]:
+    """The smallest of each count over several cells (rows, events, rows with an event, rows without one): each of
+    the cells holds at least these. They are not one cell's counts, and do not add up."""
+    whole = [
+        (int(c[0]), int(c[1]), int(c[2]), int(c[3]) if len(c) > 3 else int(c[0]) - int(c[2]))
+        for c in cells
+    ]
+    return (
+        min(c[0] for c in whole),
+        min(c[1] for c in whole),
+        min(c[2] for c in whole),
+        min(c[3] for c in whole),
+    )
+
+
+def _one_unit_apart(values: Sequence[str]) -> bool:
+    """Whether a covariate's two values, as the counts name them, are one unit apart (0 and 1, False and True): its
+    ratio per unit is then the ratio of the higher value against the lower."""
+    words = {"False": 0.0, "True": 1.0}
+    numbers = []
+    for value in values:
+        text = str(value)
+        try:
+            numbers.append(words[text] if text in words else float(text))
+        except ValueError:
+            return False
+    return len(numbers) == 2 and abs(abs(numbers[1] - numbers[0]) - 1.0) < 1e-12
+
+
+PER_UNIT = {"per": "unit"}  # the label of a numeric covariate's term: a ratio for one unit more
 
 
 def _terms_of(
@@ -1065,13 +1121,18 @@ def _terms_of(
     levels: Mapping[str, Mapping[str, Sequence[int]]],
     indicators: Mapping[str, Mapping[str, Sequence[int]]],
     dominant: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
+    values: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
 ) -> list[_Term]:
     """
     What each term of a design stands for, by its place: the design holds the numeric covariates first, then each
     factor's levels after its reference, so the last terms are the factors' and the others are numeric, whatever
-    their names (two factors can give one name to a term: the place tells them apart). ``dominant`` holds, for a
-    numeric covariate of more than two values, its commonest value's cell and then the cell of its other rows
-    (biostats.design.dominant_counts).
+    their names (two factors can give one name to a term: the place tells them apart). ``values`` holds the cell of
+    each value of a numeric covariate of a few values (biostats.design.value_counts); ``dominant``, for one of more
+    values, its commonest value's cell and then the cell of its other rows (biostats.design.dominant_counts).
+
+    The term of a numeric covariate is a ratio per unit, and is labelled so. Only where its two values are one unit
+    apart (0 and 1) is it also the higher value against the lower, and labelled as that contrast: a dose coded 0 or
+    50 read "50 against 0" beside a ratio for one unit of dose.
     """
     of_factors = [
         _Term(f"{factor}#{place}", {"variable": factor, "level": str(level)}, cells[level])
@@ -1082,17 +1143,25 @@ def _terms_of(
     numeric = []
     for name in list(names)[: len(names) - len(of_factors)]:
         cells = indicators.get(str(name))
+        few = (values or {}).get(str(name))
         apart = (dominant or {}).get(str(name))
-        if (
-            cells
-        ):  # two values: the term compares the higher with the lower, as a level with its reference
+        slope = {"variable": str(name), **PER_UNIT}
+        if cells:
+            # two values: the term is carried by the cell of the higher one; one unit apart, it compares the
+            # higher with the lower, as a level with its reference
             high = list(cells)[1]
-            numeric.append(_Term(str(name), {"variable": str(name), "level": high}, cells[high]))
+            contrast = {"variable": str(name), "level": high}
+            numeric.append(
+                _Term(str(name), contrast if _one_unit_apart(list(cells)) else slope, cells[high])
+            )
+        elif few:
+            # a few values: each is a cell, and the term is shown when the smallest of them can be
+            numeric.append(_Term(str(name), slope, _least(list(few.values())[1:])))
         elif apart:
             # one value for at least half of the rows: the term is carried by the rows off it
-            numeric.append(_Term(str(name), {"variable": str(name)}, apart[list(apart)[1]]))
+            numeric.append(_Term(str(name), slope, apart[list(apart)[1]]))
         else:
-            numeric.append(_Term(str(name), {"variable": str(name)}, None))
+            numeric.append(_Term(str(name), slope, None))
     return numeric + of_factors
 
 
@@ -1101,20 +1170,37 @@ def _reference_parts(
     indicators: Mapping[str, Mapping[str, Sequence[int]]],
     kind: str,
     dominant: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
+    values: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
 ) -> list[Part]:
-    """A part per factor, per covariate of two values and per covariate with a commonest value, for the cell its
-    terms are compared with: the first level, the lower value, the commonest value. It has no number of its own;
-    its counts are behind every term of its variable."""
+    """
+    A part per variable whose terms have cells behind them, for the other cell: the first level of a factor, the
+    lower value of a covariate of two values or of a few, the commonest value of a covariate that half of the rows
+    hold at one value. It has no number of its own; its counts are behind every term of its variable.
+
+    A factor's part, and that of a covariate whose two values are one unit apart, is the reference its terms are
+    compared with. The others say what they are (``of``: "values", every value of the covariate is a cell;
+    "commonest", the rows on and off one value): their term is a ratio per unit, not a contrast with this cell.
+    """
+    kinds = [
+        *((variable, cells, "") for variable, cells in levels.items()),
+        *(
+            (variable, cells, "" if _one_unit_apart(list(cells)) else VALUES)
+            for variable, cells in indicators.items()
+        ),
+        *((variable, cells, VALUES) for variable, cells in (values or {}).items()),
+        *((variable, cells, COMMONEST) for variable, cells in (dominant or {}).items()),
+    ]
     parts = []
-    for variable, cells in (*levels.items(), *indicators.items(), *(dominant or {}).items()):
+    for variable, cells, of in kinds:
         names = list(cells)
         if not names:
             continue
+        labels = {"variable": str(variable), "level": str(names[0])}
         parts.append(
             Part(
                 id=f"reference:{variable}",
                 support=_cell_support(cells[names[0]], kind),
-                labels={"variable": str(variable), "level": str(names[0])},
+                labels={**labels, "of": of} if of else labels,
             )
         )
     return parts
@@ -1246,7 +1332,8 @@ def _record_cox(result: Any) -> tuple[list[Part], None]:
     levels = getattr(result, "level_counts", {}) or {}
     indicators = getattr(result, "indicator_counts", {}) or {}
     dominant = getattr(result, "dominant_counts", {}) or {}
-    terms = _terms_of(list(result.table["term"]), levels, indicators, dominant)
+    values = getattr(result, "value_counts", {}) or {}
+    terms = _terms_of(list(result.table["term"]), levels, indicators, dominant, values)
     parts = [
         Part(
             id="model",
@@ -1262,7 +1349,7 @@ def _record_cox(result: Any) -> tuple[list[Part], None]:
                 Number("concordance", result.concordance, ITERATIVE_LOOSE, scale=1.0),
             ),
         ),
-        *_reference_parts(levels, indicators, "cox", dominant),
+        *_reference_parts(levels, indicators, "cox", dominant, values),
         *_model_terms(
             result.table,
             terms,
@@ -1338,10 +1425,11 @@ def _record_regression(kind: str) -> Callable[[Any], tuple[list[Part], None]]:
         levels = getattr(result, "level_counts", {}) or {}
         indicators = getattr(result, "indicator_counts", {}) or {}
         dominant = getattr(result, "dominant_counts", {}) or {}
-        terms = _terms_of(list(result.table["term"]), levels, indicators, dominant)
+        values = getattr(result, "value_counts", {}) or {}
+        terms = _terms_of(list(result.table["term"]), levels, indicators, dominant, values)
         return [
             Part(id="model", support={**whole, **_df(result.df_resid)}, numbers=tuple(model)),
-            *_reference_parts(levels, indicators, kind, dominant),
+            *_reference_parts(levels, indicators, kind, dominant, values),
             *_model_terms(
                 result.table,
                 terms,
@@ -1497,12 +1585,17 @@ def _pooled_model(kind: str) -> Callable[[Any], tuple[list[Part], ResultRecord |
             }.items()
             if name in names
         }
+        values = {
+            name: cells
+            for name, cells in (recorded.get("values") or {}).items()
+            if name in names and name not in indicators
+        }
         dominant = {
             name: cells
             for name, cells in (recorded.get("dominant") or {}).items()
-            if name in names and name not in indicators
+            if name in names and name not in indicators and name not in values
         }
-        terms = _terms_of(names, levels, indicators, dominant)
+        terms = _terms_of(names, levels, indicators, dominant, values)
         of_factor: dict[str, list[str]] = {}
         for term in terms:
             if "#" in term.id:
@@ -1521,7 +1614,7 @@ def _pooled_model(kind: str) -> Callable[[Any], tuple[list[Part], ResultRecord |
                     Number("converged_in", extra.get("converged_in", result.m), EXACT),
                 ),
             ),
-            *_reference_parts(levels, indicators, kind, dominant),
+            *_reference_parts(levels, indicators, kind, dominant, values),
             *(_pooled_terms(result.table, terms, whole, kind) if result.table is not None else []),
             *_pooled_tests(result.tests, ITERATIVE, whole, of_factor),
         ], (
@@ -1612,6 +1705,8 @@ def _pooled_survival(result: Any) -> tuple[list[Part], ResultRecord | None]:
                 # datasets: counts of participants, like a level's
                 Number("rows_skipped", extra.get("rows_skipped", 0), EXACT, fine=True),
                 Number("rows_left_out", extra.get("rows_left_out", 0), EXACT, fine=True),
+                # the rows of the groups drawn, the fewest over the datasets: what the analysis read
+                Number("rows_min", (extra.get("total") or {}).get("rows"), EXACT),
             ),
         )
     )

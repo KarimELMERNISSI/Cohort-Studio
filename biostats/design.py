@@ -169,7 +169,48 @@ def indicator_counts(
     return out
 
 
+FEW_VALUES = 20  # a numeric covariate of at most this many values is counted value by value, as a factor's levels
 OTHER_VALUES = "other values"  # the cell of the rows off a covariate's commonest value
+
+
+def value_counts(
+    df: pd.DataFrame,
+    covariates: Sequence[str],
+    events: Sequence[float],
+    *,
+    levels: Mapping[str, Sequence[str]] | None = None,
+) -> dict[str, dict[str, tuple[int, int, int]]]:
+    """
+    The rows, the events and the rows with an event (as :func:`level_counts`) at each value of each numeric
+    covariate that holds from three to ``FEW_VALUES`` values among the rows a model read, the values in increasing
+    order.
+
+    A score from 0 to 8 that two participants hold at 8 is read by the design as a number, and its slope reads as
+    one estimate of the whole model. But a model of such covariates is a table: its written numbers (the slope, its
+    standard error, the likelihood) give back the cell of each value, and the two participants' outcome with it.
+    Each value's cell is counted, so that a shared result withholds the term when one of them is small.
+    """
+    used = levels if levels is not None else factor_levels(df, covariates)
+    happened = np.asarray(list(events), dtype=float)
+    out: dict[str, dict[str, tuple[int, int, int]]] = {}
+    for col in covariates:
+        if col in used:
+            continue
+        series = df[col]
+        present = series.notna().to_numpy(dtype=bool)
+        distinct = pd.unique(series[present])
+        if not 3 <= len(distinct) <= FEW_VALUES:
+            continue
+        try:
+            values = sorted(distinct, key=float)
+            names = [_value_text(value) for value in values]
+        except TypeError, ValueError:
+            continue
+        out[col] = {
+            name: _cell(present & (series == value).fillna(False).to_numpy(dtype=bool), happened)
+            for name, value in zip(names, values, strict=True)
+        }
+    return out
 
 
 def dominant_counts(
@@ -181,13 +222,15 @@ def dominant_counts(
 ) -> dict[str, dict[str, tuple[int, int, int]]]:
     """
     The rows, the events and the rows with an event (as :func:`level_counts`) on and off the commonest value of each
-    numeric covariate that holds more than two values, when that value is held by at least half of the rows a model
-    read: ``{covariate: {<the commonest value>: cell, OTHER_VALUES: cell}}``.
+    numeric covariate that holds more than ``FEW_VALUES`` values, when that value is held by at least half of the
+    rows a model read: ``{covariate: {<the commonest value>: cell, OTHER_VALUES: cell}}``. A covariate of fewer
+    values is counted value by value (:func:`value_counts`, :func:`indicator_counts`).
 
-    A dose that is 0 for all but two participants, a number of earlier events that is 0 for all but six: the
-    coefficient of such a covariate is carried by the few rows off its commonest value, as an indicator's is by the
-    rows coded 1, while the term would carry the whole model's counts. The two cells are counted, so that a shared
-    result withholds the term when the rows off the commonest value are few.
+    A dose that is 0 for all but a few participants: the coefficient of such a covariate is carried by the rows off
+    its commonest value, as an indicator's is by the rows coded 1, while the term would carry the whole model's
+    counts. The two cells are counted, so that a shared result withholds the term when the rows off the commonest
+    value are few. What no count of cells sees: a few extreme values of a covariate that no value dominates (one
+    creatinine of 15 among values of 1) can carry its coefficient as well.
     """
     used = levels if levels is not None else factor_levels(df, covariates)
     happened = np.asarray(list(events), dtype=float)
@@ -198,7 +241,7 @@ def dominant_counts(
         series = df[col]
         present = series.notna().to_numpy(dtype=bool)
         counts = series[present].value_counts()
-        if len(counts) <= 2 or int(counts.iloc[0]) * 2 < int(present.sum()):
+        if len(counts) <= FEW_VALUES or int(counts.iloc[0]) * 2 < int(present.sum()):
             continue
         commonest = counts.index[0]
         try:
@@ -211,10 +254,12 @@ def dominant_counts(
 
 
 __all__ = [
+    "FEW_VALUES",
     "OTHER_VALUES",
     "design_matrix",
     "dominant_counts",
     "factor_levels",
     "indicator_counts",
     "level_counts",
+    "value_counts",
 ]

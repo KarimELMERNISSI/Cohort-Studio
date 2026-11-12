@@ -233,11 +233,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   factor's term is named by its factor and its level's place, the level's own name being a label that a shared
   package can drop. The Cox, logistic and count models count the rows and events at each level of each factor, and
   at each value of a covariate coded with two values (0 and 1, True and False): such a covariate is read as a
-  number, so one participant coded 1 carried the whole model's counts. The same for a covariate of more values
-  that at least half of the rows hold at one value (a dose that is 0 for all but two participants): the rows on and
-  off that value are counted. A count model also counts the rows with an event, since its events are not people.
+  number, so one participant coded 1 carried the whole model's counts. A numeric covariate of three to twenty
+  values is counted value by value (a score from 0 to 8, a dose that is 0 for all but two participants), and one
+  of more values that at least half of the rows hold at one value, on and off that value. The term of a numeric
+  covariate is labelled as a ratio per unit; it is labelled as the higher value against the lower only where its
+  two values are one unit apart (a dose coded 0 or 50 read "50 against 0" beside an odds ratio for one unit of
+  dose). A count model also counts the rows with an event, since its events are not people.
   Pooled, the counts are the smallest over the imputed datasets, and are named so (`rows_min`); where an imputation
-  gives a covariate of two values other values (a normal draw), its cells are those of its recorded values. A
+  gives a covariate of two values other values (a normal draw), its cells are those of its recorded values, counted
+  wherever the covariate is recorded, whatever the outcome (a participant coded 1 whose outcome is missing is a row
+  of the cell). A pooled Kaplan-Meier record holds the fewest rows its datasets read. A
   record holds no residual and no point of a figure; the steps of a Kaplan-Meier curve, the times its follow-ups
   end, its median and the last follow-up time, which are one participant's, are marked so that a shared package
   coarsens or leaves them out. Whether a fit converged, whether a term's estimate is extreme, how many groups were
@@ -250,29 +255,46 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   than 10" (the larger of what the study asks for and of the installation's number). The participant flow is shown
   so that no withheld count comes back by subtraction, and a result is shown with the analysis the flow shows for
   it, or withheld with it.
-  - **A model's term** is shown only when both cells it compares hold k rows, k with the event and k without (a
-    factor's level or a covariate coded with two values against the reference; the rows off the commonest value of
-    a covariate that half of the rows hold at one value), and not when its estimate has no maximum. No count
-    travels beside a term. In a model of categories alone a coefficient and its standard error are its cells'
-    counts in another form, so the cells withheld of a variable hold k of each count together, the smallest cell
-    shown being withheld with them otherwise. The numbers of the fit as a whole (likelihood, AIC, pseudo-R2, AUC,
-    concordance, whether it converged) are written only when no term is withheld: with its only term withheld, a
-    model's AUC gave the cell back. A model none of whose terms can be shown, or no term of whose comparison can,
-    is withheld whole.
+  - **Every kind counts both outcomes.** A model as a whole, each cell behind a term and each group of curves must
+    hold k rows, k with the event and k without (a count model: k rows with an event and k without one): a cell
+    where nobody, or everybody, had the event says so of each of its participants.
+  - **A model's term** is shown only when the cells behind it each hold those counts (a factor's level or a
+    covariate coded with two values, and the reference; every value of a numeric covariate of three to twenty
+    values; the rows on and off the commonest value of one of more values that half of the rows hold at one
+    value), and not when its estimate has no maximum. No count travels beside a term. In a model of categories
+    alone a coefficient and its standard error are its cells' counts in another form, so the cells withheld of a
+    variable hold k of each count together, the cell shown that holds the fewest rows being withheld with them
+    otherwise; when that cell is the reference, every term of the variable is withheld. The numbers of the fit
+    as a whole (likelihood, AIC, pseudo-R2, AUC, concordance, whether it converged) are written only when no term
+    is withheld: with its only term withheld, a model's AUC gave the cell back.
+  - **A model is withheld whole** when none of its terms can be shown, or no term of its comparison; when a term is
+    withheld for a cell of fewer than k rows, for one where nobody or everybody had the event, or for an estimate
+    without a maximum (the terms left would be those of the model fitted without those rows: beside the same
+    model without the variable, they gave the outcome, the arm and the age of a participant alone in a cell); and
+    when a term is withheld while every term written would compare categories (such a model is a table). A cell
+    of k rows with few events withholds its term only. The message says what to do: join a small level to
+    another, or take its rows out of the analysis population by a criterion, and run the analysis again.
   - **A Kaplan-Meier curve** is given at multiples of one time step for the whole result (a hundredth of the
-    follow-up, and five times the data's own unit), with at least k events between two times and none or at least
-    k after the last, to the time until which k rows were followed. Its median is rounded up to the step, its lower
-    limit down and its upper limit up, or said to be later than the follow-up. A group is withheld with others
-    until those withheld hold k rows, k events and k rows without the event together, the same groups in a pooled
-    result and in its complete cases.
-  - **No warning's wording travels**: a model's parameters and events per parameter, a curve's step and its
-    follow-up are written as numbers, with fixed sentences to read them by.
+    follow-up shown, and five times the usual gap between two recorded times, as far as a tenth of the follow-up
+    allows: a follow-up in whole years keeps its four points, and one row recorded finer than the others changes
+    nothing), with at least k events between two times and none or at least k after the last, to the time until
+    which k rows were followed. Its values are written to three decimals. Its median is rounded up to the step,
+    its lower limit down and its upper limit up, or said to be later than the follow-up. A group is withheld with
+    others until those withheld hold k rows, k events and k rows without the event together; the curves and a
+    model of one grouping withhold the same cells, and a result can be given the cells another one withholds. The
+    complete cases beside a pooled result take the groups it withholds, and may withhold more.
+  - **No warning's wording travels**: a model's parameters and events per parameter, whether a Poisson model is
+    overdispersed, whether a term rests on fewer than 10 participants with the event or without it, a curve's
+    step and its follow-up are written as numbers, with fixed sentences to read them by.
   - The study definition travels without the rows a rule lists and without notes.
   - **Before a package is offered**, the texts that come from its user and from the data are read for a value that
     fewer than k rows hold (a criterion that names a site, a column named after a level, a code, a date,
-    "age == 97", a range that takes one value, a criterion stored as numbers): a hit names its place and its
-    column, never the value. A test that cannot be run safely (a pattern that could take hours) is reported as not
-    checked, and the datasets given to the scan are never changed.
+    "age == 97", a range that takes one value, a criterion stored as numbers or as numbers written as text): a
+    hit names its place and its column, never the value, and a column named after a level by its position. A
+    threshold is no level, written `>= 8`, `≥ 8` or `8+`. A pattern is run by an engine that cannot backtrack,
+    whatever the data hold; a test that cannot be run safely (a look-around, flags, a pattern inside the text that
+    is tested) and a text too deep to be read are reported as not checked, and the datasets given to the scan are
+    never changed.
 
 ### Documentation: the architecture scheme
 

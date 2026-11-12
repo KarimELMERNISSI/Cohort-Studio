@@ -19,7 +19,13 @@ from statsmodels.duration.hazard_regression import PHReg
 from statsmodels.duration.survfunc import SurvfuncRight
 
 from biostats._types import CI
-from biostats.design import design_matrix, dominant_counts, indicator_counts, level_counts
+from biostats.design import (
+    design_matrix,
+    dominant_counts,
+    indicator_counts,
+    level_counts,
+    value_counts,
+)
 from biostats.references import REFERENCES
 from biostats.regression import extreme_estimates
 
@@ -390,8 +396,10 @@ class CoxResult:
     level_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     # the same for a numeric or True/False covariate that holds two values (biostats.design.indicator_counts)
     indicator_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
-    # on and off the commonest value of a numeric covariate of more than two values, when at least half of the rows
-    # hold it (biostats.design.dominant_counts)
+    # at each value of a numeric covariate of three to twenty values (biostats.design.value_counts)
+    value_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
+    # on and off the commonest value of a numeric covariate of more values, when at least half of the rows hold it
+    # (biostats.design.dominant_counts)
     dominant_counts: dict[str, dict[str, tuple[int, int, int]]] = field(default_factory=dict)
     converged: bool = (
         True  # False: the estimates may not be the maximum of the likelihood (a warning says so)
@@ -535,6 +543,7 @@ def cox_regression(
         reference_levels=refs,
         level_counts=level_counts(frame, covariates, e, levels=levels),
         indicator_counts=indicator_counts(frame, covariates, e, levels=levels),
+        value_counts=value_counts(frame, covariates, e, levels=levels),
         dominant_counts=dominant_counts(frame, covariates, e, levels=levels),
         converged=converged,
         rows_left_out=_negative_times(df[[time_col, event_col, *covariates]].dropna(), time_col),
