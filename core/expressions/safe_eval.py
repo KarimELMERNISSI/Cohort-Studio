@@ -19,12 +19,15 @@ evaluation itself runs with empty builtins and facade modules as defence in dept
 The sizes an expression can ask for are bounded too, since a formula written by a language model is tried on the data
 before anyone reads it: a power of constants, an exponent, a constant, the size of an array built by ``np.full``,
 ``np.ones`` or ``np.zeros``, a padding width and a repeated text (``9 ** 9 ** 8`` would keep the server busy for
-minutes).
+minutes). A size is read where it is written as a number, through ``int``, ``float``, ``abs``, ``round``, ``max`` and
+``min`` too (``str.pad(int(1e8))``); a column of texts times a number is known only when it is computed, and is
+bounded then (``df['site'] * 100000000``). An expression nested too deep to be walked is refused as too complex.
 """
 
 from __future__ import annotations
 
 import ast
+import copy
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -47,6 +50,7 @@ MAX_WIDTH = 10_000  # a padding width, or a text repeated a constant number of t
 _SIZED_ARRAYS = frozenset({"full", "ones", "zeros"})
 _WIDTHS = frozenset({"pad", "zfill", "center", "ljust", "rjust"})
 _SIZE_KEYWORDS = frozenset({"shape", "width"})  # a size given by its name is a size too
+_TOO_DEEP = "Expression too complex (nested too deep to be read)."
 
 
 def _constant(node: ast.AST) -> float | None:
@@ -88,11 +92,37 @@ def _constant(node: ast.AST) -> float | None:
             raise UnsafeExpressionError(
                 "A number this large is not allowed in a formula."
             ) from None
+    elif (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _FOLDED
+        and node.args
+        and not node.keywords
+    ):
+        # a number passed through int, round, abs, max or min is a number still: int(1e8) is a width of 100 million
+        given = [_constant(arg) for arg in node.args]
+        if any(one is None for one in given):
+            return None
+        try:
+            value = float(_FOLDED[node.func.id]([one for one in given if one is not None]))
+        except OverflowError, ValueError, TypeError, IndexError:
+            return None
     else:
         return None
     if math.isinf(value) or abs(value) > MAX_CONSTANT:
         raise UnsafeExpressionError("A number this large is not allowed in a formula.")
     return value
+
+
+# what the functions of numbers that an expression may call make of constants (the first for one argument)
+_FOLDED: dict[str, Any] = {
+    "int": lambda given: math.trunc(given[0]),
+    "float": lambda given: given[0],
+    "abs": lambda given: abs(given[0]),
+    "round": lambda given: round(given[0], int(given[1])) if len(given) > 1 else round(given[0]),
+    "max": max,
+    "min": min,
+}
 
 
 _NP_FUNCTIONS = frozenset(
@@ -545,7 +575,12 @@ def validate_tree(
     """Check an already parsed expression tree; returns it unchanged or raises :class:`UnsafeExpressionError`."""
     if not isinstance(tree, ast.Expression):
         raise UnsafeExpressionError("Only single expressions are allowed.")
-    _Validator(policy, frozenset(extra_names or ())).visit(tree)
+    try:
+        _Validator(policy, frozenset(extra_names or ())).visit(tree)
+    except RecursionError:
+        # a few hundred comparisons joined one after the other are a tree too deep to walk: refused as too complex,
+        # like an expression of too many nodes, and not as a failure of the application
+        raise UnsafeExpressionError(_TOO_DEEP) from None
     return tree
 
 
@@ -564,7 +599,86 @@ def validate(
         tree = ast.parse(expression.strip(), mode="eval")
     except SyntaxError as exc:
         raise UnsafeExpressionError(f"Syntax error: {exc.msg} (position {exc.offset}).") from exc
+    except RecursionError, MemoryError:
+        raise UnsafeExpressionError(_TOO_DEEP) from None
     return validate_tree(tree, policy=policy, extra_names=extra_names)
+
+
+_TIMES = "__times__"  # the name a product is computed under when one of its sides is not a number written in it
+
+
+def _holds_text(value: Any) -> bool:
+    """Whether a value is a text, or a column or an array of texts."""
+    if isinstance(value, str):
+        return True
+    kind = getattr(value, "dtype", None)
+    if kind is None or not isinstance(value, pd.Series | pd.Index | np.ndarray):
+        return False
+    return bool(pd.api.types.is_string_dtype(kind) or pd.api.types.is_object_dtype(kind))
+
+
+def _largest(value: Any) -> float:
+    """The largest whole number a value holds, as a count of repetitions (0 for anything else)."""
+    if isinstance(value, bool | np.bool_):
+        return 0.0
+    if isinstance(value, int | np.integer):
+        return float(abs(int(value)))
+    kind = getattr(value, "dtype", None)
+    counted = kind is not None and isinstance(value, pd.Series | pd.Index | np.ndarray)
+    if counted and len(value) and pd.api.types.is_integer_dtype(kind):
+        return float(np.nanmax(np.abs(np.asarray(value, dtype="float64"))))
+    return 0.0
+
+
+def _times(left: Any, right: Any) -> Any:
+    """
+    ``left * right``, unless it repeats a text more than ``MAX_WIDTH`` times. A text written in the expression is
+    counted when the expression is read; a column of texts is known only when it is computed:
+    ``df['site'] * 100000000`` builds a hundred million copies of each site's name.
+    """
+    for text, count in ((left, right), (right, left)):
+        if _holds_text(text) and _largest(count) > MAX_WIDTH:
+            raise UnsafeExpressionError(
+                f"A text repeated more than {MAX_WIDTH:,} times is not allowed."
+            )
+    return left * right
+
+
+class _Products(ast.NodeTransformer):
+    """Each product with a side that is not a number written in the expression, computed by :func:`_times`."""
+
+    def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
+        self.generic_visit(node)
+        if isinstance(node.op, ast.Mult) and not _both_numbers(node):
+            call = ast.Call(
+                func=ast.Name(id=_TIMES, ctx=ast.Load()), args=[node.left, node.right], keywords=[]
+            )
+            return ast.copy_location(call, node)
+        return node
+
+
+def _both_numbers(node: ast.BinOp) -> bool:
+    return all(
+        isinstance(side, ast.Constant)
+        and isinstance(side.value, int | float)
+        and not isinstance(side.value, bool)
+        for side in (node.left, node.right)
+    )
+
+
+def _guarded(tree: ast.Expression) -> ast.Expression:
+    """The tree as it is evaluated: a copy with its products guarded, or the tree itself when it has none to guard
+    (the caller's tree is never changed: it may be evaluated again, and would then not pass the validation)."""
+    products = (
+        isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult) and not _both_numbers(node)
+        for node in ast.walk(tree)
+    )
+    if not any(products):
+        return tree
+    try:
+        return ast.fix_missing_locations(_Products().visit(copy.deepcopy(tree)))
+    except RecursionError:
+        raise UnsafeExpressionError(_TOO_DEEP) from None
 
 
 def evaluate_tree(
@@ -577,12 +691,16 @@ def evaluate_tree(
     """Validate and evaluate a tree with empty builtins and restricted ``np`` / ``pd`` facades."""
     extra_locals = dict(extra_locals or {})
     validate_tree(tree, policy=policy, extra_names=frozenset(extra_locals))
-    ast.fix_missing_locations(tree)
-    code = compile(tree, filename="<expression>", mode="eval")
+    try:
+        ast.fix_missing_locations(tree)
+        code = compile(_guarded(tree), filename="<expression>", mode="eval")
+    except RecursionError:
+        raise UnsafeExpressionError(_TOO_DEEP) from None
     namespace: dict[str, Any] = {
         "__builtins__": dict(policy.builtins),
         "np": _np_facade(policy),
         "pd": _pd_facade(policy),
+        _TIMES: _times,
     }
     namespace.update(extra_locals)
     # the expression gets a table of its own, which shares the caller's values until one is written (copy-on-write):

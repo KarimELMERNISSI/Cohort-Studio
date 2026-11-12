@@ -126,7 +126,11 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   were already computed on such a copy. The sizes the evaluator limits are read when they are given by name or as
   a shape of several dimensions too (`np.ones(shape=10**9)`, `np.zeros((10**4, 10**4))` and
   `str.pad(width=100000000)` were accepted), and a text repeated in several steps is counted in all
-  (`('x' * 10000) * 10000`).
+  (`('x' * 10000) * 10000`). A size passed through `int`, `float`, `abs`, `round`, `max` or `min` is read as the
+  number it is (`str.pad(int(1e8))` and `np.ones(int(1e12))` were accepted). A column of texts repeated more than
+  10,000 times is refused when it is computed (`df['site'] * 100000000`): only a text written in the expression was
+  counted. An expression nested too deep to be read (240 methods called one after the other) is refused as too
+  complex, where the application stopped on it.
 
 ### Privacy: what today's documents leave out (M8, first steps)
 

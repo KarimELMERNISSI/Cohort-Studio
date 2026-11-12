@@ -256,3 +256,105 @@ def test_an_expression_gets_a_table_of_its_own(df: pd.DataFrame) -> None:
     # inplace=False changes nothing, and stored criteria are written with it: read as before
     assert evaluate("df['age'].fillna(0, inplace=False)", df).tolist() == [10.0, 25.0, 70.0, 0.0]
     assert df.equals(before)
+
+
+# --- a size that is not written as a plain number, and a size known only when the expression is computed ---
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        ("df['sex'].str.pad(int(1e8))", "A width larger than 10,000 characters"),
+        ("df['sex'].str.pad(width=abs(-100000000))", "A width larger than 10,000 characters"),
+        ("df['sex'].str.zfill(max(100000000, 1))", "A width larger than 10,000 characters"),
+        ("np.ones(int(1e12))", "An array of more than 10,000,000 values"),
+        ("np.zeros((int(1e6), int(1e6)))", "An array of more than 10,000,000 values"),
+        ("np.full(shape=round(1e12), fill_value=1)", "An array of more than 10,000,000 values"),
+        ("np.ones(min(10 ** 9, 10 ** 10))", "An array of more than 10,000,000 values"),
+        ("'x' * int(5e9)", "A text repeated more than 10,000 times"),
+        ("'x' * float(20000)", "A text repeated more than 10,000 times"),
+    ],
+)
+def test_a_size_passed_through_a_function_is_a_size(expression: str, message: str) -> None:
+    """``int(1e8)`` is a call, not a number written in the expression: a width of a hundred million characters was
+    accepted, and ``str.pad(int(2e5))`` built 12 million characters on 60 rows."""
+    with pytest.raises(UnsafeExpressionError, match=message):
+        validate(expression)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "df['sex'].str.pad(int(12.0))",
+        "df['sex'].str.zfill(max(4, 8))",
+        "np.ones(int(4))",
+        "np.full(shape=round(3.7), fill_value=1)",
+        "df['age'].round(int(2))",
+        "'-' * int(20)",
+        "np.where(df['age'] > max(18, 21), 1, 0)",
+    ],
+)
+def test_a_size_of_ordinary_use_passes_through_a_function(
+    df: pd.DataFrame, expression: str
+) -> None:
+    evaluate(expression, df)
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "df['sex'] * int(1e8)",
+        "df['sex'] * 100000",
+        "100000 * df['sex']",
+        "df['sex'] * (df['systolic'] * 1000)",
+        "df['sex'].str.upper() * 20000",
+    ],
+)
+def test_a_column_of_texts_is_not_repeated_without_bound(df: pd.DataFrame, expression: str) -> None:
+    """``df['site'] * 100000000`` builds a hundred million copies of each site's name. A text written in the
+    expression is counted when the expression is read; a column of texts is known only when it is computed."""
+    with pytest.raises(UnsafeExpressionError, match="A text repeated more than 10,000 times"):
+        evaluate(expression, df)
+
+
+def test_a_product_computes_as_it_did(df: pd.DataFrame) -> None:
+    assert evaluate("df['systolic'] * 2", df).tolist() == [240, 300, 270, 180]
+    assert evaluate("2 * df['Weight'] * 3", df).tolist() == [300.0, 480.0, 540.0, 360.0]
+    assert evaluate("df['Weight'] * df['Height']", df).tolist() == [
+        8000.0,
+        14400.0,
+        15300.0,
+        9000.0,
+    ]
+    # numbers, however large; and a text repeated a few times
+    assert evaluate("df['systolic'] * 100000", df).tolist() == [
+        12000000,
+        15000000,
+        13500000,
+        9000000,
+    ]
+    assert evaluate("(df['Weight'] * 1000000).round()", df).tolist() == [5e7, 8e7, 9e7, 6e7]
+    assert evaluate("df['sex'] * 2", df).tolist() == [
+        "malemale",
+        "femalefemale",
+        "malemale",
+        "femalefemale",
+    ]
+    assert evaluate("3 * 4", df) == 12 and evaluate("'ab' * 3", df) == "ababab"
+    # the caller's tree is evaluated as it is: it is not changed, and can be evaluated again
+    tree = ast.parse("df['Weight'] * df['systolic']", mode="eval")
+    as_given = ast.dump(tree)
+    first, second = evaluate_tree(tree, df), evaluate_tree(tree, df)
+    assert first.tolist() == second.tolist() == [6000.0, 12000.0, 12150.0, 5400.0]
+    assert ast.dump(tree) == as_given
+
+
+def test_an_expression_nested_too_deep_is_refused(df: pd.DataFrame) -> None:
+    """240 methods called one after the other are fewer nodes than the policy allows and a tree too deep to walk:
+    RecursionError came out of the evaluator, a failure of the application where a refusal was due."""
+    chained = "df['age']" + ".abs()" * 240
+    with pytest.raises(UnsafeExpressionError, match="too complex"):
+        validate(chained)
+    with pytest.raises(UnsafeExpressionError, match="too complex"):
+        evaluate(chained, df)
+    assert evaluate("df['age']" + ".abs()" * 20, df).tolist()[:3] == [10.0, 25.0, 70.0]
