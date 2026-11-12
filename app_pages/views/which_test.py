@@ -4,6 +4,7 @@ import streamlit as st
 
 from ui.components import glossary_popover, page_header, page_link, section, status_chip
 from ui.guidance import DESIGNS, DISTRIBUTIONS, GROUPS, OUTCOMES, recommend
+from ui.guidance.test_chooser import OTHER_QUESTIONS
 
 page_header("Which test?", "Answer four questions to get the recommended analysis, the effect size to report and where to run it.",
             chapter="05_Epidemiology")
@@ -17,7 +18,7 @@ with left:
     groups = st.selectbox("How many groups?", GROUPS, key="chooser_groups",
                           help="Groups are the levels of the factor you compare (e.g. treatment arms).")
     design = st.selectbox("How were the groups formed?", DESIGNS, key="chooser_design",
-                          help="Paired: the same subjects measured twice (before/after, two methods on the same sample).")
+                          help="Paired: the same participants measured twice (before/after, two methods on the same sample).")
     distribution = st.selectbox("What does the outcome look like?", DISTRIBUTIONS, key="chooser_distribution",
                                 help="Skewed outcomes, outliers or very small groups favour rank-based tests. "
                                      "Welch procedures already tolerate unequal variances.")
@@ -39,5 +40,10 @@ with right:
         if rec.alternatives:
             st.caption("Alternatives: " + "; ".join(rec.alternatives))
         if rec.available:
-            page_link(rec.page, "Open the analysis page", icon=":material/science:")
+            page_link(rec.page, "Open this analysis", icon=":material/science:", tab=rec.tab)
     st.caption("Assumption checks are shown as diagnostics next to every result; they never replace the choice above.")
+    # the four questions compare groups: the analyses they cannot reach are one click away
+    section("Another kind of question?")
+    with st.container(border=True):
+        for question, tab in OTHER_QUESTIONS:
+            page_link("analyze", question, icon=":material/arrow_forward:", tab=tab)

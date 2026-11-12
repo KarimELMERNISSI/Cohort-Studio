@@ -293,6 +293,43 @@ def mcnemar_test(
     )
 
 
+def paired_table(
+    before: pd.Series, after: pd.Series, *, counted: object | None = None
+) -> pd.DataFrame:
+    """
+    The 2x2 table of a yes/no characteristic measured twice on the same participants: rows the first measurement,
+    columns the second, over the rows where both are recorded.
+
+    Both columns must hold the same two values (ValueError otherwise): two columns of different values, "Negative /
+    Positive" and "Detected / Not detected", were paired by the alphabetical order of their labels, and a test came
+    out of the wrong pairs. ``counted`` is the value whose share is compared: it comes second, so that the
+    difference :func:`mcnemar_test` gives is the change in the share with that value. Without it, the second value in
+    sorted order.
+    """
+    from biostats.reliability import category, category_order
+
+    both = before.notna().to_numpy() & after.notna().to_numpy()
+    first = [category(v) for v in before[both]]
+    second = [category(v) for v in after[both]]
+    if set(first) != set(second) or len(set(first)) != 2:
+        raise ValueError(
+            "both columns must hold the same two values in the rows where both are recorded"
+        )
+    levels = category_order(list(set(first)))
+    if counted is not None:
+        wanted = category(counted)
+        if wanted not in levels:
+            raise ValueError("the value counted is not one of the two values")
+        levels = [name for name in levels if name != wanted] + [wanted]
+    table = pd.crosstab(
+        pd.Categorical(first, categories=levels),
+        pd.Categorical(second, categories=levels),
+        dropna=False,
+    )
+    table.index.name, table.columns.name = str(before.name), str(after.name)
+    return table
+
+
 def one_sample_proportion(
     successes: int, n: int, reference_proportion: float, *, alpha: float = 0.05
 ) -> TestResult:
@@ -326,5 +363,6 @@ __all__ = [
     "one_sample_t",
     "one_sample_wilcoxon",
     "paired_t",
+    "paired_table",
     "wilcoxon_signed_rank",
 ]

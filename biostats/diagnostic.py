@@ -114,8 +114,21 @@ def diagnostic_accuracy(
 
     ppv_prev = npv_prev = None
     if prevalence is not None and n_pos and n_neg:
-        ppv_prev = sens * prevalence / (sens * prevalence + (1 - spec) * (1 - prevalence))
-        npv_prev = spec * (1 - prevalence) / (spec * (1 - prevalence) + (1 - sens) * prevalence)
+        # the shares called positive and negative at that prevalence: none of either when the cut-off calls no one,
+        # or everyone, positive (a marker that points the other way, a cut-off outside the scores), and the
+        # predictive value of a result nobody has is no number (it was a division by zero)
+        positive = sens * prevalence + (1 - spec) * (1 - prevalence)
+        negative = spec * (1 - prevalence) + (1 - sens) * prevalence
+        ppv_prev = sens * prevalence / positive if positive > 0 else None
+        npv_prev = spec * (1 - prevalence) / negative if negative > 0 else None
+    if n and not (tp + fp):
+        warnings.append(
+            "no one is called positive at this cut-off: the positive predictive value has no value"
+        )
+    if n and not (tn + fn):
+        warnings.append(
+            "everyone is called positive at this cut-off: the negative predictive value has no value"
+        )
 
     return DiagnosticAccuracy(
         tp=tp,
@@ -299,8 +312,9 @@ def youden_cutoff(
         "resamples": drawn,
         "caution": caution,
         "pos_label": pos_label,
-        "note": "Chosen on the same data it is evaluated on: sensitivity and specificity at this cut-off are optimistic; "
-        "confirm on independent data. Its range is the middle of the cut-offs found in bootstrap resamples: not a "
+        "note": "Chosen on the same data it is evaluated on: sensitivity and specificity at this cut-off are optimistic, "
+        "and their intervals do not know that the cut-off was chosen; check them on independent data. Its range is "
+        "the middle of the cut-offs found in bootstrap resamples: not a "
         "confidence interval (its level is not known), and rough when the ROC curve is flat near its top, where the "
         "best cut-off jumps between distant scores from one resample to the next.",
         "references": cite("youden1950"),

@@ -7,9 +7,9 @@ The **Epidemiology & Hypothesis** page provides a complete statistical analysis 
 The **Guidance** switch at the top of the page (on by default) adds help where decisions are made; turn it off once
 you know the page.
 
-- **Which tab do I need?** — maps your question to the right tab (compare groups, diagnostic accuracy and
-  agreement, paired data, rates and stratified analyses, power and sample size, reference z-scores) and links to
-  the *Which test?* chooser.
+- **Which tab do I need?** — a map from your question to the analysis that answers it. Each button opens its tab,
+  and on *Diagnostic accuracy & agreement* and *Paired, rates & stratified* the analysis it names. It also links
+  to the *Which test?* chooser, whose recommendation opens its analysis the same way.
 - **Every parameter is explained** — hover the help icon of any input: what it means, typical values and what
   changes when you change it.
 - **Before you run: the plan** — once the groups and variables are chosen, the page shows, for each variable,
@@ -254,17 +254,66 @@ Dead/Alive and Event/Censored. Any other code is refused with a message rather t
 censored and 2 = event (as in R's survival package) must be recoded first, and a competing event needs its own
 analysis.
 
-## Paired, rates & stratified (Analyze > Hypothesis tests & epidemiology)
+## Diagnostic accuracy & agreement, and Paired, rates & stratified (Analyze > Hypothesis tests & epidemiology)
 
-| Method | What it gives |
-| --- | --- |
-| Paired t-test / Wilcoxon signed-rank | mean or pseudo-median within-pair difference with 95% CI (for the pseudo-median, from the ordered averages of every pair of differences, as R's `wilcox.test`), Cohen's d_z, matched-pairs rank-biserial r |
-| One-sample t / Wilcoxon / exact binomial | difference from a reference value, Wilson interval for a proportion |
-| McNemar (exact) | paired binary outcomes from the discordant pairs |
-| Incidence rates | exact Poisson intervals; rate ratio with the exact conditional interval and test (Clopper-Pearson, as R's `poisson.test`), which agree: the interval excludes 1 exactly when p < 0.05 |
-| Mantel-Haenszel | pooled OR (Robins-Breslow-Greenland interval) and RR (Greenland-Robins), Breslow-Day homogeneity, crude vs adjusted comparison |
-| Standardised ratio (SMR/SIR) | observed / expected with the exact Poisson interval |
-| Cohen's kappa, ICC(2,1), ICC(3,1) | agreement and reliability with intervals and the usual interpretation scales (on the *Diagnostic accuracy & agreement* tab) |
+Both tabs follow the pattern of Survival & regression. **Question**, at the top of the tab, opens one analysis at a
+time; each keeps its choices and its result while another is open.
+
+- **Nothing is chosen for you.** Every column starts empty, and the list of a second column puts first the columns
+  whose name resembles the first (`sbp_baseline`, then `sbp_6m`). A value typed for one column (a cut-off, a
+  reference value) is cleared when the column changes.
+- **Before you run: the plan** (Guidance on) says what Run will do and on how many rows, then what to check first:
+  rows left out for a missing value, a direction the data contradict, two columns that do not hold the same values, a
+  reference equal to the data's own mean. It advises; **Run analysis** is disabled only while nothing can be computed.
+- **The result** reads the estimate with its 95% interval first, then the test (p written `< 0.001`, never
+  `1.5e-43`), then the counts, and one sentence saying what was compared and in which direction. The statistic, the
+  effect sizes, the assumption checks and the method are folded under **Details**.
+- **A result stays** while its choices are unchanged, with the line saying what it was computed on, and can be added
+  to the study dossier. After a change, the page says which choices the last result belongs to.
+- **With imputed data selected**, each analysis says what it reads: pooled over the imputed datasets, or which
+  observed rows.
+
+### Diagnostic accuracy & agreement
+
+| Question | You choose | What it gives |
+| --- | --- | --- |
+| **Accuracy of a test (ROC)** | the reference standard and the value that means the condition is present; the test or score; whether the condition is more likely when the test is **higher** or **lower**; the cut-off | the ROC curve and its AUC with the DeLong interval; with a cut-off, the 2x2 table, sensitivity and specificity (Wilson intervals), predictive values, likelihood ratios and the diagnostic odds ratio |
+| **Agreement of two measurements** | two or more numeric columns measuring the same quantity; which analyses; what counts as agreement for the ICC | Bland-Altman mean difference and limits of agreement with their intervals (two columns), and the intraclass correlation, ICC(2,1) absolute agreement or ICC(3,1) consistency, with the Shrout-Fleiss interval; one Run gives both |
+| **Agreement of two raters (kappa)** | the two raters' columns; whether the categories are names or ordered grades, and for grades their order and how a near miss counts | the share put in the same category, Cohen's kappa (weighted, linear or quadratic, for ordered grades) with its interval, and the cross-table |
+
+- **The cut-off** has three settings. *None* (the default) gives the curve and its AUC only. *A value fixed
+  beforehand* is the one to report. *Found on these data* (Youden's J) is exploratory: sensitivity and specificity
+  read at a cut-off chosen on the same data are optimistic, and the page says so with the result.
+- **The direction is asked, not assumed.** For a marker that falls with the condition (a low ejection fraction),
+  choose **lower**: the test is then positive *at most* the cut-off. The plan shows the median of the test with and
+  without the condition, and warns when the direction chosen contradicts them.
+- **Predictive values** are given at the share with the condition in the data. That share is the prevalence only when
+  participants were taken as they came; under **More options**, type the prevalence where the test will be used to
+  read them there as well.
+- **Kappa** is computed on the participants rated by both, with the same categories on both sides of the table, so
+  that the diagonal is agreement even when one rater never uses a category. Its benchmark (Landis & Koch) is read on
+  the interval and given for the unweighted kappa only; the ICC's (Koo & Li) is read on its interval too.
+
+### Paired, rates & stratified
+
+| Question | You choose | What it gives |
+| --- | --- | --- |
+| **Paired measurements**, a number | the first and the second measurement; the summary of the change | the mean change (paired t-test) or the typical change (Wilcoxon signed-rank, pseudo-median from the ordered averages of every pair of differences, as R's `wilcox.test`) with its 95% interval, Cohen's d_z or the matched-pairs rank-biserial r |
+| **Paired measurements**, yes or no | two columns holding the same two values; the value whose share is counted | the change in that share, in points, with its interval; who changed, and which way; McNemar's exact test on the pairs that changed |
+| **One group against a reference**, a mean | the measurement; a reference value fixed beforehand; the summary | the mean (or typical value) with its interval, and its difference from the reference: one-sample t-test or Wilcoxon signed-rank |
+| **One group against a reference**, a share | a yes/no variable and the value counted, read from the dataset, or two numbers you type; the reference share | the share with its Wilson interval and the exact binomial test |
+| **Stratified (Mantel-Haenszel)** | a yes/no outcome and its event; what is compared and its **reference group**; one variable of 2 to 8 groups to adjust for | odds ratio (Robins-Breslow-Greenland interval) and risk ratio (Greenland-Robins) adjusted for that variable, beside the unadjusted ones; each stratum's table and ratios; whether the strata differ (Breslow-Day) |
+| **Rates (from counts)** | one rate, two rates, or observed against expected events; the numbers | events per person-time with exact Poisson intervals; the rate ratio with the exact conditional interval and test (Clopper-Pearson, as R's `poisson.test`), which agree: the interval excludes 1 exactly when p < 0.05; the standardised ratio (SMR or SIR) with its exact Poisson interval |
+
+- **Rates is a calculator.** It reads the numbers you type, not the dataset: its fields start empty, it has no Run
+  button, and its result follows the numbers and says where they came from. The analysis population and the
+  imputation do not apply to it. The typed share of *One group against a reference* works the same way.
+- **The strata.** One combined ratio sums the strata up only when their ratios are alike. The result says so in three
+  ways: no evidence that they differ (which is no proof that they are alike: the test has little power in small
+  strata), they differ (report the ratio of each stratum), or not tested (a stratum holds one group or one outcome
+  only). To adjust for several variables at once, use a logistic model (Survival & regression, Binary).
+- **A change within one group** is not the effect of a treatment: time, regression to the mean and who stayed also
+  move it. To compare groups, adjust for the first measurement (Analysis tab, Multivariate).
 
 ## Analyses with multiply imputed data
 
@@ -313,9 +362,9 @@ How to read a pooled table:
 
 Not pooled: rank tests (Mann-Whitney, Kruskal-Wallis, Wilcoxon), Fisher's exact test, Hodges-Lehmann shifts
 and bootstrap intervals give no estimate with a variance to combine; the ICC and Bland-Altman limits have no
-validated pooling rule; z-scores and min-max scaling depend on each imputed dataset. The page gives the reason
-and the alternative. McNemar, Mantel-Haenszel, diagnostic accuracy and kappa analyse the observed data in this
-version.
+established pooling rule; z-scores and min-max scaling depend on each imputed dataset. The page gives the reason
+and the alternative. McNemar, Mantel-Haenszel, the share read from the dataset, diagnostic accuracy and kappa analyse
+the observed data in this version, and each says so beside its Run.
 
 **Zero cells in a 2x2 table.** A zero cell gets the +0.5 (Haldane-Anscombe) correction in its own imputed
 dataset only. When that happens in some imputed datasets but not all, their odds and risk ratios measure

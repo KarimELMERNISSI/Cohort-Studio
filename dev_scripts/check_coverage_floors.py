@@ -43,8 +43,10 @@ from pathlib import Path
 # app_pages to 66 at 68.1 with the tests of the kept and named addresses and of the dossier's survival blocks
 # (2026-11-09).
 # utils to 66 at 68.3 with the tests of the environment's commit, code fingerprint and lock checksum (2026-11-10).
+# app_pages to 68 at 70.9 with the tests that drive the tabs Diagnostic accuracy & agreement and Paired, rates &
+# stratified through the page (2026-11-12).
 FLOORS: dict[str, float] = {
-    "app_pages": 66.0,
+    "app_pages": 68.0,
     "biostats": 93.0,
     "core": 94.0,
     "enrich": 87.0,

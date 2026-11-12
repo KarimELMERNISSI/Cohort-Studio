@@ -26,7 +26,7 @@ def test_a_small_stratum_is_counted_never_named() -> None:
         ]
     result = mantel_haenszel(pd.DataFrame(rows), "exposed", "event", "site")
     said = " ".join(result.warnings)
-    assert "1 of 3 strata has fewer than 5 subjects in a group" in said
+    assert "1 of 3 strata has fewer than 5 participants in a group" in said
     assert CANARY not in said
 
 

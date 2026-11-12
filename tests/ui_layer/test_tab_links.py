@@ -27,6 +27,15 @@ def _opened(at: AppTest) -> dict[tuple[str, ...], str]:
     return found
 
 
+def _chosen(at: AppTest) -> dict[tuple[str, ...], str]:
+    """Each selector on the page (its labels) and the choice it holds: a label after the tabs of a path names one."""
+    return {
+        tuple(control.options): control.formatted_values[0]
+        for control in at.segmented_control
+        if control.formatted_values
+    }
+
+
 DECLARED = [(p.key, tab, labels) for p in nav.PAGES for tab, labels in p.tabs]
 
 
@@ -54,12 +63,14 @@ def test_a_declared_tab_opens_its_page_on_it(
     at.switch_page(nav.page_path(key)).run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     rows = {row: row[0] for row in _opened(at)}
-    for label in labels:  # without the link, each row opens on its first tab
-        assert any(label in row for row in rows), (key, tab, label, list(rows))
-    assert _opened(at) == rows
+    assert any(labels[0] in row for row in rows), (key, tab, labels[0], list(rows))
+    assert _opened(at) == rows  # without the link, each row opens on its first tab
     at.query_params[nav.TAB_PARAM] = tab
     at.run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
-    opened = _opened(at)
-    for label in labels:  # with it, each row of its path opens on the tab it names
+    # with it, each label of its path is what its row opens on: a row of tabs, or the selector a tab opens on (drawn
+    # once its tab is open: only the open tab of such a page runs)
+    opened = {**_chosen(at), **_opened(at)}
+    for label in labels:
+        assert label in {name for row in opened for name in row}, (key, tab, label, list(opened))
         assert next(o for row, o in opened.items() if label in row) == label, (key, tab, label)

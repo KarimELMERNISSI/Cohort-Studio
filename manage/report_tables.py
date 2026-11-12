@@ -433,6 +433,7 @@ def result_blocks(value: Any) -> ResultBlocks:
     from biostats.linear import AncovaResult, LinearModelResult
     from biostats.rates import StratifiedResult
     from biostats.regression import APPARENT_AUC, APPARENT_AUC_NOTE, RegressionResult
+    from biostats.reliability import ICCResult, KappaResult
     from biostats.survival import CoxResult, SurvivalComparison
 
     if hasattr(value, "m_total") and hasattr(value, "tests"):
@@ -542,29 +543,70 @@ def result_blocks(value: Any) -> ResultBlocks:
         )
         blocks.warnings.extend(value.warnings)
         return blocks
+    if isinstance(value, ICCResult):
+        return ResultBlocks(
+            lines=[
+                f"ICC = {_num(value.icc)} (95% CI {_ci(value.ci)}); {value.model}; "
+                f"{value.n_subjects:,} participants, {value.n_raters} columns",
+                f"F = {_num(value.f_statistic)}, df = {value.df1:.0f}, {value.df2:.0f}, {_peq(value.p_value)}",
+            ],
+            references=list(value.references),
+        )
     if isinstance(value, dict):
+        if isinstance(value.get("kappa"), KappaResult) and "table" in value:
+            # the order of the grades is part of a weighted kappa: written with it
+            kappa, order = value["kappa"], [str(name) for name in value.get("order") or ()]
+            weights = value.get("weights")
+            name = f"Weighted kappa ({weights} weights)" if weights else "Cohen's kappa"
+            lines = [
+                f"{name} = {_num(kappa.kappa)} (95% CI {_ci(kappa.ci)}); {kappa.n:,} participants rated by both",
+                f"Same category for {_num(100 * kappa.observed_agreement)}% of them "
+                f"({_num(100 * kappa.expected_agreement)}% expected by chance)",
+            ]
+            if weights and order:
+                lines.append("Order of the grades, lowest first: " + ", ".join(order))
+            return ResultBlocks(
+                lines=lines,
+                tables=[("Ratings (rows: first rater; columns: second rater)", value["table"].reset_index())],
+                references=list(kappa.references),
+            )
         if "acc" in value and "auc" in value:
             acc, auc = value["acc"], value["auc"]
-            table = pd.DataFrame(
-                [
-                    ("AUC (DeLong)", _num(auc.get("auc")), _ci(auc.get("ci"))),
+            lower = value.get("direction") == "lower"
+            rows = [("AUC (DeLong)", _num(auc.get("auc")), _ci(auc.get("ci")))]
+            if acc is not None:
+                share = f"{_num(100 * acc.prevalence_observed)}%"
+                rows += [
                     ("Sensitivity", _num(acc.sensitivity), _ci(acc.sensitivity_ci)),
                     ("Specificity", _num(acc.specificity), _ci(acc.specificity_ci)),
-                    ("PPV", _num(acc.ppv), _ci(acc.ppv_ci)),
-                    ("NPV", _num(acc.npv), _ci(acc.npv_ci)),
+                    (f"PPV, at the share in these data ({share})", _num(acc.ppv), _ci(acc.ppv_ci)),
+                    (f"NPV, at the share in these data ({share})", _num(acc.npv), _ci(acc.npv_ci)),
+                ]
+                if value.get("prevalence") is not None:
+                    typed = f"{_num(100 * float(value['prevalence']))}%"
+                    rows += [
+                        (f"PPV, at a prevalence of {typed}", _num(acc.ppv_at_prevalence), ""),
+                        (f"NPV, at a prevalence of {typed}", _num(acc.npv_at_prevalence), ""),
+                    ]
+                rows += [
                     ("LR+", _num(acc.lr_positive), _ci(acc.lr_positive_ci)),
                     ("LR-", _num(acc.lr_negative), _ci(acc.lr_negative_ci)),
-                ],
-                columns=["Measure", "Estimate", "95% CI"],
-            )
+                ]
+            table = pd.DataFrame(rows, columns=["Measure", "Estimate", "95% CI"])
+            # what the numbers are of: the value that means the condition, the way the test points, the cut-off
+            title = f"{value.get('score')} for {value.get('outcome')}"
+            if value.get("pos_label") is not None:
+                title += f" = {value.get('pos_label')}"
+            if lower:
+                title += ", lower values pointing to the condition"
+            if acc is None:
+                title += " (no cut-off)"
+            else:
+                title += f" (positive at {'most' if lower else 'least'} {_num(value.get('cutoff'))})"
             blocks = ResultBlocks(
-                tables=[
-                    (
-                        f"{value.get('score')} for {value.get('outcome')} (cut-off {_num(value.get('cutoff'))})",
-                        table,
-                    )
-                ],
-                references=list(acc.references) + list(auc.get("references") or []),
+                tables=[(title, table)],
+                references=([] if acc is None else list(acc.references))
+                + list(auc.get("references") or []),
             )
             youden = value.get("youden") or {}
             if str(value.get("mode") or "").startswith("Youden"):
@@ -580,7 +622,8 @@ def result_blocks(value: Any) -> ResultBlocks:
                     blocks.lines.append(str(youden["note"]))
                 if youden.get("caution"):
                     blocks.warnings.append(str(youden["caution"]))
-            blocks.warnings.extend(acc.warnings)
+            if acc is not None:
+                blocks.warnings.extend(acc.warnings)
             return blocks
         if "res" in value and "table" in value:
             blocks = _test_blocks(value["res"])

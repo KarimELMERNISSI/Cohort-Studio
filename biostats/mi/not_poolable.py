@@ -70,7 +70,7 @@ NOT_POOLABLE: dict[str, NotPoolable] = {
         ),
         NotPoolable(
             analysis="icc",
-            reason="The intraclass correlation is bounded and skewed, and no pooling rule has been validated for it.",
+            reason="The intraclass correlation is bounded and skewed, and no pooling rule is established for it.",
             alternative="Report the ICC on the complete cases and its range across the imputed datasets.",
         ),
         NotPoolable(

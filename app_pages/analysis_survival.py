@@ -259,11 +259,12 @@ def run_survival(df: pd.DataFrame, analyzer, *, mi=None) -> None:
     if guided:
         with st.container(horizontal=True, gap="medium"):
             page_link("which_test", "Not sure which analysis fits?", icon=":material/help_center:")
-            if kind.simpler:
+            for gives, tab in kind.simpler:
                 page_link(
                     "analyze",
-                    f"{kind.simpler}: Hypothesis tests & epidemiology",
+                    f"{gives}: Hypothesis tests & epidemiology",
                     icon=":material/science:",
+                    tab=tab,
                 )
     panel = {TIME_TO_EVENT: _time_to_event, BINARY: _binary, COUNT: _count}[outcome]
     panel(df, numeric, binary, groups, mi=mi, token=token, guided=guided)

@@ -183,7 +183,15 @@ KEYS: tuple[Key, ...] = (
         "epi_tab",
         "app_pages.epidemiology",
         "page",
-        note="the open tab of Hypothesis tests & epidemiology: only that tab runs",
+        note="the open tab of Hypothesis tests & epidemiology: only that tab runs; a button of the page opens a tab "
+        "by setting it (the orientation, the 2x2 panel's way to the stratified analysis)",
+    ),
+    Key(
+        "agree_cols",
+        "app_pages.analysis_diagnostic",
+        "page",
+        note="Agreement of two measurements: the columns chosen, in the order the differences are taken; Swap turns "
+        "the order round, and a column the data no longer hold leaves it",
     ),
     Key(
         "anomaly_check_done",

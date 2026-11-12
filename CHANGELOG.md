@@ -6,6 +6,75 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Hypothesis tests & epidemiology: two tabs, one analysis at a time
+
+*Diagnostic accuracy & agreement* and *Paired, rates & stratified* stacked eleven analyses on two long tabs, each
+with its own form and button, the first columns of the file already chosen. They now follow Survival & regression.
+
+- **One analysis is open at a time**, chosen by **Question** at the top of the tab. Diagnostic accuracy & agreement:
+  *Accuracy of a test (ROC)*, *Agreement of two measurements* (Bland-Altman and the ICC, one Run), *Agreement of two
+  raters (kappa)*. Paired, rates & stratified: *Paired measurements* (a number, or yes or no), *One group against a
+  reference* (a mean, or a share), *Stratified (Mantel-Haenszel)*, *Rates (from counts)*. Each keeps its choices and
+  its result while another is open.
+- **Nothing is preselected.** The first columns of the file gave a treatment arm as reference standard and age
+  against height. A second column's list puts first the columns named like the first.
+- **Before you run: the plan** (Guidance on) says what Run will do, on how many rows, and what to check: rows left
+  out for a missing value, a direction the data contradict, two columns that do not hold the same values, a
+  reference equal to the data's own mean, strata too small. Run is disabled only while nothing can be computed.
+- **A result reads the estimate first**, with its 95% interval, then the test, then the counts, and one sentence
+  saying what was compared and which way. The statistic, the effect sizes, the assumption checks and the method are
+  folded under Details. p-values are written "< 0.001", no longer "1.5e-43" or "0".
+- **Every analysis of the dataset keeps its result** with what it was computed on, and can go to the study dossier.
+  Kappa, the ICC and the share against a reference vanished at the next click, and the stratified analysis had no
+  such line. After a change of the choices, the page says which choices the last result belongs to.
+- **The calculators** (rates, the ratio of two rates, observed against expected events, a share from typed counts)
+  start empty, have no button, and say under their result that it comes from the numbers typed, not from the dataset.
+  Rates are shown per the person-time unit you name.
+- **Accuracy of a test** asks which way the test points (the condition more likely when it is higher, or lower) and
+  shows the median with and without the condition. The cut-off is none by default (the curve and its AUC), a value
+  fixed beforehand, or the one found on the data, said to be exploratory. Predictive values are given at the share
+  with the condition in the data, and at a prevalence only when you type one.
+- **Agreement of two raters** asks whether the categories are names or ordered grades, and for grades shows the
+  order the weights read, which you can correct.
+- **Stratified** asks for the outcome and its event, what is compared and its **reference group** (as the 2x2 panel
+  of the Analysis tab does), then the variable to adjust for. The strata table is headed in words.
+- **With imputed data selected**, each analysis says what it reads, in place of one note for the whole tab.
+- **Analysis type** and **Transform numeric variables** moved into the Analysis tab, the only tab that reads them.
+- **Links open the analysis they name.** "Which tab do I need?" is a map whose buttons open a tab and its analysis;
+  "Which test?" opens the analysis it recommends and lists the questions its four cannot reach (accuracy,
+  agreement, strata, rates); Survival & regression links to the 2x2 panel, to the stratified analysis and to the
+  rates; the 2x2 panel links to the stratified analysis.
+
+**Results corrected with it:**
+
+- **A marker that falls with the condition** (a low ejection fraction) was read as rising with it: the cut-off found
+  called everyone positive and the AUC fell below 0.5. Choose *lower*: the test is positive at most the cut-off.
+- **A cut-off that calls everyone, or no one, positive** stopped the analysis on a division by zero. The predictive
+  value that has no value is left empty, with the reason.
+- **Predictive values "at prevalence 0.502"**: the prevalence field kept the share of the first column's first value
+  when the reference standard changed, and the result reported it. The one-sample test kept a reference value the
+  same way (the mean of the first numeric column). Both fields start empty and are cleared with their column.
+- **A weighted kappa took the alphabetical order of the labels as the order of the grades** ("mild", "moderate",
+  "severe" by luck; "high", "low", "medium" not). The order is shown and can be corrected, and is kept with the
+  result.
+- **Kappa was 0 when one rater's codes were whole numbers and the other's decimals** (2 against 2.0): the categories
+  are now compared by value. The cross-table holds the same categories on both sides, so that its diagonal is
+  agreement when one rater never uses a category.
+- **McNemar's test paired two columns of different values by alphabetical order** ("Yes"/"No" against "1"/"0"). It
+  now asks for two columns holding the same two values, and which value is counted.
+- **A stratified analysis whose homogeneity test could not be computed read "heterogeneous across strata".** It reads
+  "not tested", with the reason.
+- **A result's own warnings were not shown** on these tabs: the pairs a signed-rank test leaves out, fewer than 10
+  pairs that changed, a difference that changes with the size of the measurement.
+- **A pooled paired or one-sample t-test stamped every row of the population as analysed**; it gives the rows its
+  imputed datasets read.
+- **"0 events" in the reference group gave an infinite rate ratio**, because 0 also meant "one rate only". One rate
+  and two rates are now two settings; with no event in the reference group the ratio reads "no upper bound", with its
+  lower bound.
+- The dot on the ROC curve is the 2x2 table's own point (it was the nearest threshold of the curve, another point for
+  a typed cut-off). A benchmark (Landis & Koch, Koo & Li) is read on the interval, in Details, and not given for a
+  weighted kappa. "Subjects" became "participants".
+
 ### Security: the Ollama and Qdrant addresses are chosen from the server's lists, never typed
 
 - Settings > AI engine offers the Ollama addresses the server allows, in a list that cannot be typed in, instead of a
@@ -141,7 +210,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - The dossier's Kaplan-Meier figure draws only the groups whose medians it shows (10 participants or more), and says
   how many it leaves out: a smaller group's curve steps at its participants' event times. The pooled table withholds
   such a group's survival at the last time too.
-- A stratified analysis's warning counts its small strata ("1 of 3 strata has fewer than 5 subjects in a group"),
+- A stratified analysis's warning counts its small strata ("1 of 3 strata has fewer than 5 participants in a group"),
   never names them: a stratum's value (a site, a clinic) was copied into the dossier.
 - A replay error no longer quotes values of the data ("could not convert string to float: '...'"), in its message or
   in the log: every quoted text becomes "…", and a path its file name. An id of the trace this version does not know

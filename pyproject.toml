@@ -105,8 +105,6 @@ force-exclude = true
 exclude = [
     "app_pages/about.py",
     "app_pages/analysis_config.py",
-    "app_pages/analysis_diagnostic.py",
-    "app_pages/analysis_extras.py",
     "app_pages/analysis_guidance_ui.py",
     "app_pages/analysis_pooled.py",
     "app_pages/data_enrichment.py",

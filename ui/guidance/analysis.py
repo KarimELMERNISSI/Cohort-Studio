@@ -120,18 +120,21 @@ TAB_GUIDE: tuple[TabGuide, ...] = (
     TabGuide(
         "Analysis",
         "Do groups differ on one or more variables?",
-        "Treatment vs placebo on blood pressure; event rate by arm (risk ratio, odds ratio, NNT). "
-        "Choose Multivariate above to adjust for confounders (ANCOVA).",
+        "Treatment against placebo on blood pressure; an event by arm (risk ratio, odds ratio, NNT). Multivariate, "
+        "on the tab, adjusts for confounders (ANCOVA).",
     ),
     TabGuide(
         "Diagnostic accuracy & agreement",
-        "How well does a test identify a condition? Do two methods or raters agree?",
-        "Sensitivity, specificity, ROC and AUC; Bland-Altman limits of agreement; kappa and ICC.",
+        "How well does a test identify a condition? Do two methods or two raters agree?",
+        "A marker against a reference standard; two devices measuring the same quantity; two readers grading the "
+        "same participants.",
     ),
     TabGuide(
         "Paired, rates & stratified",
-        "Same participants measured twice? Events per person-time? An association adjusted for one stratum?",
-        "Paired t-test, Wilcoxon, McNemar; incidence rates and rate ratios, SMR; Mantel-Haenszel.",
+        "The same participants measured twice? One group against a value fixed beforehand? An association within "
+        "the groups of a third variable? Events per person-time?",
+        "Blood pressure before and after; a mean against a published value; an event by arm within each site; "
+        "15 events over 1,200 person-years.",
     ),
     TabGuide(
         "Power & Sample Size",

@@ -7,6 +7,8 @@ the page compact.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
+
 import pandas as pd
 import streamlit as st
 
@@ -26,22 +28,32 @@ def guidance_on() -> bool:
     return bool(st.session_state.get(GUIDANCE_KEY, True))
 
 
-def render_orientation() -> None:
-    """Which tab answers which question, and a way to the test chooser."""
+def render_orientation(
+    open_analysis: Callable[[str, dict[str, str]], None],
+    selectors: Mapping[str, tuple[str, Mapping[str, str]]],
+) -> None:
+    """
+    Which tab answers which question, as a map that opens what it names: each button opens its tab, and the analysis
+    on it where the tab holds several (``selectors``: a tab's label, the key of its Question selector and the
+    entries, id to label). ``open_analysis`` is the page's callback: a tab or a selector is set before it is drawn.
+    """
     with st.expander("Which tab do I need?", icon=":material/explore:"):
-        table = pd.DataFrame(
-            [{"Tab": g.tab, "Your question": g.question, "For example": g.examples} for g in TAB_GUIDE]
-        )
-        st.dataframe(
-            table,
-            hide_index=True,
-            width="stretch",
-            column_config={
-                "Tab": st.column_config.TextColumn(width="small"),
-                "Your question": st.column_config.TextColumn(width="medium"),
-                "For example": st.column_config.TextColumn(width="large"),
-            },
-        )
+        for guide in TAB_GUIDE:
+            question, buttons = st.columns([3, 4], vertical_alignment="center")
+            question.markdown(f"**{guide.question}**")
+            question.caption(guide.examples)
+            key, entries = selectors.get(guide.tab, ("", {}))
+            with buttons.container(horizontal=True, gap="small"):
+                for entry, label in entries.items() or {"": guide.tab}.items():
+                    st.button(
+                        label,
+                        type="tertiary",
+                        icon=":material/arrow_forward:",
+                        key=f"epi_open::{guide.tab}::{entry}",
+                        on_click=open_analysis,
+                        args=(guide.tab, {key: entry} if entry else {}),
+                        help=f"Opens the tab {guide.tab}" + (", on this analysis." if entry else "."),
+                    )
         page_link("which_test", "Not sure which test fits? Answer four questions", icon=":material/help_center:")
 
 

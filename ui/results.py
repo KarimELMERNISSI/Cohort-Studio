@@ -435,6 +435,18 @@ def stamp_of(key: str) -> ResultStamp | None:
     return stored.stamp if stored is not None else None
 
 
+def stored_settings(key: str) -> tuple[str, str] | None:
+    """
+    The settings of the stored result ``key`` in words, and the time it was computed (hours and minutes); None
+    without one. A page says so where a result computed with other settings is no longer shown: the result did not
+    vanish, it belongs to other choices.
+    """
+    stored = _store().get(key)
+    if stored is None:
+        return None
+    return describe_settings(stored.config), stored.stamp.computed_at[11:16]
+
+
 __all__ = [
     "CURRENT",
     "MISSING",
@@ -459,4 +471,5 @@ __all__ = [
     "single_imputation_warning",
     "stamp_of",
     "status",
+    "stored_settings",
 ]

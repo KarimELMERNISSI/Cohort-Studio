@@ -1782,6 +1782,9 @@ KINDS: dict[str, AnalysisKind] = {
         AnalysisKind("mantel_haenszel", "Mantel-Haenszel stratified analysis"),
         AnalysisKind("diagnostic", "Diagnostic accuracy"),
         AnalysisKind("bland_altman", "Bland-Altman agreement"),
+        AnalysisKind("icc", "Intraclass correlation"),
+        AnalysisKind("kappa", "Cohen's kappa"),
+        AnalysisKind("proportion", "One-sample proportion"),
     )
 }
 

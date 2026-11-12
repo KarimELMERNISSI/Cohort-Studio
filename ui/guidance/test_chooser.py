@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from ui import nav
+
 OUTCOMES = (
     "Continuous (measurement)",
     "Binary (yes/no)",
@@ -32,9 +34,26 @@ class Recommendation:
     available: bool = True
     alternatives: tuple[str, ...] = ()
     caveats: tuple[str, ...] = field(default_factory=tuple)
+    tab: str | None = None  # the tab of that page its link opens (ui.nav.PageDef.tabs)
 
 
 _PLANNED = "Not available in this release; the handbook lists the method."
+_ANALYSIS = "analysis"  # the Analysis tab of the page "analyze": group comparisons
+# the questions the four above cannot reach, and the analysis that answers each (a tab of the page "analyze")
+OTHER_QUESTIONS: tuple[tuple[str, str], ...] = (
+    ("How well does a test identify a condition?", "accuracy"),
+    ("Can two methods replace each other? How reliable is a measurement?", "measurements"),
+    ("Do two raters agree?", "raters"),
+    ("Is an association the same within the groups of a third variable?", "strata"),
+    ("How many events per person-time, in one group or two?", "rates"),
+    ("More events than expected from reference rates?", "expected"),
+)
+
+
+def _on(tab: str) -> dict[str, str]:
+    """A route to an analysis of Hypothesis tests & epidemiology: its page, the tab its link opens, and that place in
+    the words of the navigation (renamed with it, never left behind)."""
+    return {"page": "analyze", "tab": tab, "where": nav.where("analyze", tab)}
 
 
 def recommend(outcome: str, groups: str, design: str, distribution: str) -> Recommendation:
@@ -70,18 +89,16 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 test="Wilcoxon signed-rank test (or one-sample t-test for symmetric measurements)",
                 why="A single group is compared with a fixed reference value.",
                 effect_size="difference from the reference with 95% CI",
-                page="analyze",
-                where="Paired, rates & stratified tab > One sample vs a reference value",
+                **_on("one_mean"),
             )
         if paired:
             return Recommendation(
                 test="Wilcoxon signed-rank test"
                 if (rank_only or not symmetric)
                 else "Paired t-test",
-                why="Each subject contributes two measurements; the pairing must be respected.",
+                why="Each participant contributes two measurements; the pairing must be respected.",
                 effect_size="mean (or pseudo-median) within-pair difference with 95% CI; Cohen's d_z",
-                page="analyze",
-                where="Paired, rates & stratified tab > Paired measurements",
+                **_on("paired_number"),
             )
         if two:
             if rank_only or not symmetric:
@@ -91,6 +108,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                     effect_size="rank-biserial r and the Hodges-Lehmann shift, both with 95% CI",
                     page="analyze",
                     where="Analysis tab > Univariate, test strategy 'Force non-parametric'",
+                    tab=_ANALYSIS,
                     alternatives=(
                         "Welch's t-test if the measurement is symmetric and groups are not tiny",
                     ),
@@ -101,6 +119,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 effect_size="mean difference with 95% CI and Hedges' g with 95% CI",
                 page="analyze",
                 where="Analysis tab > Univariate (default strategy)",
+                tab=_ANALYSIS,
                 alternatives=("Mann-Whitney U when the distribution is skewed",),
             )
         if rank_only or not symmetric:
@@ -110,6 +129,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 effect_size="eta squared (H); rank-biserial r per pair",
                 page="analyze",
                 where="Analysis tab > Univariate, test strategy 'Force non-parametric'; pairwise table in the detail view",
+                tab=_ANALYSIS,
             )
         return Recommendation(
             test="Welch ANOVA, then Games-Howell pairwise comparisons",
@@ -117,6 +137,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
             effect_size="eta squared and omega squared with 95% CI; Hedges' g per pair",
             page="analyze",
             where="Analysis tab > Univariate (default strategy); pairwise table in the detail view",
+            tab=_ANALYSIS,
             alternatives=("Classic ANOVA + Tukey HSD when variances are clearly equal",),
         )
 
@@ -126,21 +147,19 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 test="Exact binomial test with a Wilson confidence interval for the proportion",
                 why="A single proportion is compared with a reference value.",
                 effect_size="proportion with 95% Wilson CI",
-                page="analyze",
-                where="Paired, rates & stratified tab > One-sample proportion",
+                **_on("one_share"),
             )
         if paired and two:
             return Recommendation(
                 test="McNemar's test (exact)",
                 why="Paired binary outcomes: only the discordant pairs carry information.",
                 effect_size="difference in proportions with 95% CI",
-                page="analyze",
-                where="Paired, rates & stratified tab > Paired binary outcomes",
+                **_on("paired_yes_no"),
             )
         if paired:
             return Recommendation(
                 test="Cochran's Q test",
-                why="Three or more related binary measurements per subject.",
+                why="Three or more related binary measurements per participant.",
                 effect_size="pairwise McNemar differences with Holm adjustment",
                 page="analyze",
                 where="planned",
@@ -154,6 +173,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 effect_size="relative risk or odds ratio, risk difference and NNT, all with 95% CI (choose by study design)",
                 page="analyze",
                 where="Analysis tab > Univariate > detail view > 2x2 panel",
+                tab=_ANALYSIS,
                 caveats=(
                     "State the reference group and the event level explicitly; the app asks for both.",
                 ),
@@ -164,6 +184,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
             effect_size="bias-corrected Cramer's V; risk differences per pair with 95% CI",
             page="analyze",
             where="Analysis tab > Univariate",
+            tab=_ANALYSIS,
         )
 
     # categorical 3+ levels
@@ -183,6 +204,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
         effect_size="bias-corrected Cramer's V",
         page="analyze",
         where="Analysis tab > Univariate",
+        tab=_ANALYSIS,
         caveats=(
             "Expected counts below 5 in many cells make the chi-square approximation unreliable; merge sparse levels.",
         ),
@@ -197,6 +219,7 @@ __all__ = [
     "DESIGNS",
     "DISTRIBUTIONS",
     "GROUPS",
+    "OTHER_QUESTIONS",
     "OUTCOMES",
     "Recommendation",
     "all_combinations",

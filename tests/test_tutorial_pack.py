@@ -342,7 +342,7 @@ def test_the_chapter_numbers(analysis_set: pd.DataFrame) -> None:
         "0.64",
         "-5.9 mmHg",
         "-5.0 mmHg",
-        "58 patients quit",
+        "58 participants quit",
         "0.93",
         "0.71",
         "0.76",

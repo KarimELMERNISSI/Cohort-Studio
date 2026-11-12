@@ -254,7 +254,7 @@ def test_tests_are_not_named_like_packages() -> None:
 
 
 # The files not yet formatted (M5b): the list only shrinks. Lower the ceiling with it.
-UNFORMATTED_CEILING = 156
+UNFORMATTED_CEILING = 153
 
 
 def test_the_list_of_unformatted_files_only_shrinks() -> None:

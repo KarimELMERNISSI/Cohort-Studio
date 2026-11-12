@@ -29,8 +29,14 @@ class PageDef:
     admin: bool = False
     default: bool = False
     chapter: str | None = None  # handbook chapter (documentation/<chapter>.md)
-    # the tabs a link can open, by the value of TAB_PARAM (an id kept in the links): their labels, outer tab first
+    # the tabs a link can open, by the value of TAB_PARAM (an id kept in the links): their labels, outer tab first.
+    # A label after the tabs names a choice of the selector that tab opens on (the Question of an analysis tab, then
+    # its second choice): the page reads it as that selector's default.
     tabs: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+
+_DIAGNOSTIC = "Diagnostic accuracy & agreement"
+_PAIRED = "Paired, rates & stratified"
 
 
 PAGES: tuple[PageDef, ...] = (
@@ -120,6 +126,24 @@ PAGES: tuple[PageDef, ...] = (
         "Analyze",
         ":material/science:",
         chapter="05_Epidemiology",
+        # the labels of app_pages.epidemiology.TABS, then those of ui.guidance.measures (an entry, its second choice)
+        tabs=(
+            ("analysis", ("Analysis",)),
+            ("accuracy", (_DIAGNOSTIC, "Accuracy of a test (ROC)")),
+            ("measurements", (_DIAGNOSTIC, "Agreement of two measurements")),
+            ("raters", (_DIAGNOSTIC, "Agreement of two raters (kappa)")),
+            ("paired_number", (_PAIRED, "Paired measurements", "A number (continuous)")),
+            ("paired_yes_no", (_PAIRED, "Paired measurements", "Yes or no (binary)")),
+            ("one_mean", (_PAIRED, "One group against a reference", "A mean (a measurement)")),
+            (
+                "one_share",
+                (_PAIRED, "One group against a reference", "A share (a yes/no variable)"),
+            ),
+            ("strata", (_PAIRED, "Stratified (Mantel-Haenszel)")),
+            ("rates", (_PAIRED, "Rates (from counts)", "Two rates and their ratio")),
+            ("expected", (_PAIRED, "Rates (from counts)", "Observed against expected (SMR, SIR)")),
+            ("power", ("Power & Sample Size",)),
+        ),
     ),
     PageDef(
         "survival",
@@ -211,10 +235,11 @@ def tab_query(key: str, tab: str | None) -> dict[str, str] | None:
 
 def where(key: str, tab: str) -> str:
     """A page's tab as the navigation names it (Data > Clean > Categories), for a sentence that sends the user there:
-    renamed with the page, never left behind."""
+    renamed with the page, never left behind. Every label of the path is named, outer tab first (Analyze > Hypothesis
+    tests & epidemiology > Paired, rates & stratified > Paired measurements > A number (continuous))."""
     definition = page(key)
-    label = dict(definition.tabs)[tab][-1]
-    return " > ".join(part for part in (definition.section, definition.title, label) if part)
+    labels = dict(definition.tabs)[tab]
+    return " > ".join(part for part in (definition.section, definition.title, *labels) if part)
 
 
 def visible_pages(is_admin: bool) -> list[PageDef]:

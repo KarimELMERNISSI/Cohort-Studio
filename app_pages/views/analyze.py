@@ -6,7 +6,9 @@ from ui.components.mi_mode import mi_banner
 from ui.components.population import population_banner
 from ui.state import get_state
 
-page_header("Hypothesis tests & epidemiology", "Group comparisons, 2x2 measures of association, ANCOVA, power and reference z-scores.",
+page_header("Hypothesis tests & epidemiology",
+            "Group comparisons and ANCOVA; the accuracy of a test and agreement; paired measurements, one group against a "
+            "reference, stratified analyses and rates; power and reference z-scores.",
             chapter="05_Epidemiology")
 population_banner()
 app(mi=mi_banner(get_state()))

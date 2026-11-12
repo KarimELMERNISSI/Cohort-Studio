@@ -255,9 +255,15 @@ def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
     _ok(app)
     app.session_state["epi_tab"] = "Diagnostic accuracy & agreement"  # only the open tab runs
     app.run()
-    assert any("analyse the observed data" in i.value for i in app.info)
+    _ok(app)
+    # each analysis says what it reads while imputed data are selected: one note for the tab named four analyses
+    assert any("this analysis reads the observed data" in c.value for c in app.caption)
     app.session_state["epi_tab"] = "Paired, rates & stratified"
     app.run()
+    assert (
+        app.segmented_control(key="paired_question").value == "paired"
+    )  # one analysis is open at a time
+    assert any("Pooled over the 3 imputed datasets" in c.value for c in app.caption)
     app.selectbox(key="pair_before").select("sbp_baseline").run()
     app.selectbox(key="pair_after").select("sbp_6m").run()  # 183 imputed values
     app.button(key="pair_run").click().run()
@@ -270,6 +276,8 @@ def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
     _ok(app)
     assert any("Not pooled with imputed data" in i.value for i in app.info)
     app.radio(key="pair_kind").set_value("Paired t-test").run()
+    app.segmented_control(key="paired_question").set_value("one_group").run()
+    _ok(app)
     app.selectbox(key="one_col").select("hba1c_pct").run()
     app.number_input(key="one_ref").set_value(7.0).run()
     app.button(key="one_run").click().run()

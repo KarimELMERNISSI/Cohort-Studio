@@ -40,7 +40,9 @@ class KappaResult:
     references: list[str] = field(default_factory=list)
 
 
-def _landis_koch(k: float) -> str:
+def landis_koch(k: float) -> str:
+    """The word Landis and Koch (1977) give a kappa: a benchmark for an unweighted kappa, to be read on its interval
+    as well as on its estimate."""
     if k < 0:
         return "poor (less than chance)"
     if k < 0.21:
@@ -52,6 +54,72 @@ def _landis_koch(k: float) -> str:
     if k < 0.81:
         return "substantial"
     return "almost perfect"
+
+
+_landis_koch = landis_koch
+
+
+def category(value: object) -> str:
+    """
+    A rating as the category it is: a number by its value, whatever its type (2, 2.0 and "2.0" are the category
+    "2"), anything else by its text. Two raters' columns are often read as whole numbers for one and as decimals for
+    the other (a missing rating makes a column of decimals): compared as text they share no category.
+    """
+    if isinstance(value, bool | np.bool_):
+        return str(bool(value))
+    if isinstance(value, int | float | np.integer | np.floating):
+        number = float(value)
+    else:
+        text = str(value)
+        try:
+            number = float(text)
+        except ValueError:
+            return text
+        if not np.isfinite(number):
+            return text
+    return str(int(number)) if number.is_integer() else repr(number)
+
+
+def category_order(categories: Sequence[str]) -> list[str]:
+    """The order categories are proposed in: by value when every one is a number, otherwise by name. For a weighted
+    kappa the order is the scale's own, which only its user knows: this is where it starts."""
+    try:
+        return sorted(categories, key=float)
+    except ValueError:
+        return sorted(categories, key=lambda name: (name.casefold(), name))
+
+
+def rater_table(
+    first: pd.Series, second: pd.Series, *, order: Sequence[str] | None = None
+) -> pd.DataFrame:
+    """
+    The cross-table of two raters' categories over the participants rated by both: rows the first rater, columns the
+    second, the same categories in the same order on both sides (:func:`category`: values are compared as values).
+
+    ``order`` gives the categories from the lowest to the highest, as a weighted kappa reads them; it must hold every
+    category either rater used. Without it they are put in the order of :func:`category_order`: fit for an unweighted
+    kappa, where the order does not matter, and a first proposal otherwise (sorted as text, "high, low, medium, none"
+    is no scale, and grades from 1 to 10 read 1, 10, 2).
+    """
+    both = first.notna().to_numpy() & second.notna().to_numpy()
+    a = [category(v) for v in first[both]]
+    b = [category(v) for v in second[both]]
+    used = set(a) | set(b)
+    if order is None:
+        levels = category_order(list(used))
+    else:
+        levels = [str(name) for name in order]
+        missing = sorted(used - set(levels))
+        if missing or len(set(levels)) != len(levels):
+            raise ValueError(
+                "the order must hold every category once"
+                + (f" (it lacks {len(missing)})" if missing else "")
+            )
+    table = pd.crosstab(
+        pd.Categorical(a, categories=levels), pd.Categorical(b, categories=levels), dropna=False
+    )
+    table.index.name, table.columns.name = str(first.name), str(second.name)
+    return table
 
 
 def cohens_kappa(
@@ -105,7 +173,8 @@ class ICCResult:
     references: list[str] = field(default_factory=list)
 
 
-def _koo_li(v: float) -> str:
+def koo_li(v: float) -> str:
+    """The word Koo and Li (2016) give an ICC; its authors read it on the interval, not on the estimate alone."""
     if v < 0.5:
         return "poor"
     if v < 0.75:
@@ -113,6 +182,9 @@ def _koo_li(v: float) -> str:
     if v < 0.9:
         return "good"
     return "excellent"
+
+
+_koo_li = koo_li
 
 
 def icc(
@@ -174,4 +246,14 @@ def icc(
     )
 
 
-__all__ = ["ICCResult", "KappaResult", "cohens_kappa", "icc"]
+__all__ = [
+    "ICCResult",
+    "KappaResult",
+    "category",
+    "category_order",
+    "cohens_kappa",
+    "icc",
+    "koo_li",
+    "landis_koch",
+    "rater_table",
+]

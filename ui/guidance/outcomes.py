@@ -43,7 +43,9 @@ class OutcomeType:
     label: str
     gives: str  # what the page computes for it
     terms: tuple[str, ...]  # its words in the glossary (ui.guidance.glossary)
-    simpler: str = ""  # where an unadjusted comparison is made instead, if anywhere
+    # where a comparison without a model is made instead, if anywhere: what it gives, and the tab of Hypothesis tests
+    # & epidemiology its link opens (ui.nav.PageDef.tabs)
+    simpler: tuple[tuple[str, str], ...] = ()
 
 
 OUTCOME_TYPES: tuple[OutcomeType, ...] = (
@@ -64,14 +66,20 @@ OUTCOME_TYPES: tuple[OutcomeType, ...] = (
         "Binary (yes/no)",
         "Odds ratios from a logistic model, adjusted for the variables you choose.",
         ("Odds ratio (OR)", "Confounder", "Events per parameter (EPV)"),
-        "Risk ratio, risk difference and number needed to treat, without adjustment",
+        (
+            (
+                "Risk ratio, risk difference and number needed to treat, without adjustment",
+                "analysis",
+            ),
+            ("Odds and risk ratios adjusted for one variable (Mantel-Haenszel)", "strata"),
+        ),
     ),
     OutcomeType(
         COUNT,
         "Count or rate",
         "Incidence-rate ratios from a Poisson or negative binomial model, with person-time as offset.",
         ("Incidence rate", "Incidence rate ratio (IRR)", "Over-dispersion"),
-        "Crude rates and the exact rate ratio, without adjustment",
+        (("Crude rates and the exact rate ratio, from counts you type", "rates"),),
     ),
 )
 OUTCOME = {o.id: o for o in OUTCOME_TYPES}

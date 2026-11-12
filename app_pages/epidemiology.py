@@ -13,8 +13,10 @@ import app_pages.group_figures as gf
 import utils.analysis_utils as au
 import utils.visualization_utils as vu
 from app_pages.analysis_config import render_analysis_configuration
+from app_pages.analysis_diagnostic import QUESTION_KEY as DIAGNOSTIC_QUESTION
 from app_pages.analysis_diagnostic import run_diagnostic_accuracy
-from app_pages.analysis_extras import run_paired_and_rates, run_reliability
+from app_pages.analysis_extras import QUESTION_KEY as PAIRED_QUESTION
+from app_pages.analysis_extras import run_paired_and_rates
 from app_pages.analysis_guidance_ui import (
     guidance_on,
     guidance_toggle,
@@ -37,9 +39,10 @@ from biostats.power import (
 )
 from biostats.zscores import reference_zscores
 from core.fingerprint import frame_fingerprint
-from ui.components import error_card, no_dataset, result_card
+from ui.components import error_card, linked_tabs, no_dataset, result_card
 from ui.components.levels import show_level
 from ui.components.text import plain
+from ui.guidance import measures
 from ui.guidance.analysis import (
     HELP,
     ancova_check,
@@ -173,8 +176,24 @@ def _render_twobytwo_panel(epi):
         st.markdown("##### Clinical Epidemiological Guidance")
         for note in epi["guidance"]:
             st.info(note)
+    st.button(
+        "Adjust for one variable (Mantel-Haenszel)",
+        type="tertiary",
+        icon=":material/arrow_forward:",
+        key="epi_open_strata",
+        on_click=open_analysis,
+        args=(TABS[2], {PAIRED_QUESTION: measures.STRATA}),
+        help="Opens Paired, rates & stratified on the stratified analysis: the same odds and risk ratios within the "
+        "groups of a third variable, and combined over them.",
+    )
 
 
+def open_analysis(tab: str, choices: dict[str, str]) -> None:
+    """Open a tab of the page, and the analysis ``choices`` name on it (a selector's key and the id it takes): the
+    ``on_click`` of a button, since a widget's key is set before the widget is drawn."""
+    st.session_state[TAB_KEY] = tab
+    for key, value in choices.items():
+        st.session_state[key] = value
 
 
 # The tabs of Hypothesis tests & epidemiology; only the open one runs (M5b). Their labels are part of the tabs'
@@ -200,9 +219,43 @@ def _transform_of(df: pd.DataFrame) -> tuple[str, tuple[str, ...]]:
     return str(name), tuple(map(str, columns))
 
 
+def _analysis_options(mi) -> tuple[str, str]:
+    """The first row of the Analysis tab: the kind of analysis, and a transformation of the numeric variables (none
+    with imputed data). Only this tab reads them: they stood above the tabs, where they seemed to act on every one."""
+    with st.container(horizontal=True, vertical_alignment="bottom", gap="medium"):
+        analysis_mode = st.segmented_control(
+            "Analysis type",
+            ["Univariate (Group Comparison)", "Multivariate (ANCOVA/Regression)"],
+            default="Univariate (Group Comparison)",
+            required=True,
+            persist_state="page", key="epi_analysis_mode",
+            help="Univariate compares groups one variable at a time; multivariate adjusts for confounders (ANCOVA).",
+        )
+        transformation = (
+            st.selectbox(
+                "Transform numeric variables",
+                ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
+                persist_state="page", key="epi_transformation",
+                width=300,
+                help=HELP["transform"],
+            )
+            if mi is None
+            else "None (Raw Data)"  # with imputed data, no transformation is offered
+        )
+    if mi is not None:
+        from biostats.mi import not_poolable
+
+        entry = not_poolable("standardised_variables")
+        st.caption(
+            "No transformation with imputed data: " + (entry.reason if entry else "")
+            + " For a log scale, derive the variable on Enrich before imputing it."
+        )
+    return analysis_mode, transformation
+
+
 def _transformed(df: pd.DataFrame, numeric_cols: list, transformation: str) -> pd.DataFrame:
     """
-    The data of the Analysis tab, its numeric variables transformed as chosen above the tabs. Computed in that tab
+    The data of the Analysis tab, its numeric variables transformed as chosen on that tab. Computed in that tab
     only (M5b): the other tabs analyse the data as they are. The frame says which transformation changed which
     columns (``TRANSFORM_ATTR``): Log1p leaves a column with a negative value as it is.
     """
@@ -269,48 +322,27 @@ def app(mi=None):
     df = st.session_state['data']
     analyzer = get_state().analyzer()  # its column profile is kept until the rows change (M5b)
 
-    # Page options next to the content (the sidebar belongs to the application shell)
-    with st.container(horizontal=True, vertical_alignment="bottom", gap="medium"):
-        analysis_mode = st.segmented_control(
-            "Analysis type",
-            ["Univariate (Group Comparison)", "Multivariate (ANCOVA/Regression)"],
-            default="Univariate (Group Comparison)",
-            required=True,
-            persist_state="page", key="epi_analysis_mode",
-            help="Univariate compares groups one variable at a time; multivariate adjusts for confounders (ANCOVA).",
-        )
-        transformation = (
-            st.selectbox(
-                "Transform numeric variables",
-                ["None (Raw Data)", "Log Transformation (Log1p)", "Z-Score Standardization", "Min-Max Normalization"],
-                persist_state="page", key="epi_transformation",
-                width=300,
-                help=HELP["transform"],
-            )
-            if mi is None
-            else "None (Raw Data)"  # with imputed data, no transformation is offered
-        )
-        guidance_toggle()
-    if mi is not None:
-        from biostats.mi import not_poolable
-
-        entry = not_poolable("standardised_variables")
-        st.caption(
-            "No transformation with imputed data: " + (entry.reason if entry else "")
-            + " For a log scale, derive the variable on Enrich before imputing it."
-        )
+    # Guidance governs every tab; what only the Analysis tab reads is on that tab (_analysis_options)
+    guidance_toggle()
     if guidance_on():
-        render_orientation()
+        render_orientation(
+            open_analysis,
+            {
+                TABS[1]: (DIAGNOSTIC_QUESTION, {e.id: e.label for e in measures.DIAGNOSTIC_ENTRIES}),
+                TABS[2]: (PAIRED_QUESTION, {e.id: e.label for e in measures.PAIRED_ENTRIES}),
+            },
+        )
 
-
-    # Only the open tab runs (M5b): a click no longer recomputes the six tabs
-    tabs = st.tabs(list(TABS), key=TAB_KEY, on_change="rerun")
+    # Only the open tab runs (M5b): a click no longer recomputes the six tabs. A link opens the tab it names, and the
+    # analysis on it (ui.nav.PageDef.tabs)
+    tabs = linked_tabs("analyze", TABS, key=TAB_KEY, on_change="rerun")
 
     observed_only = (
         "Imputed data selected: this tab analyses the observed data (complete cases of each analysis)."
     )
     with tabs[0]:
         if tabs[0].open:
+            analysis_mode, transformation = _analysis_options(mi)
             if mi is not None:
                 from app_pages.analysis_pooled import run_pooled_ancova, run_pooled_comparison
 
@@ -324,22 +356,14 @@ def app(mi=None):
             else:
                 run_multivariate_analysis(_transformed(df, analyzer.numeric_cols, transformation), analyzer)
 
+    # each analysis of these two tabs says what it reads while imputed data are selected (pooled, or which observed
+    # rows): one note for a whole tab named analyses the reader was not looking at
     with tabs[1]:
         if tabs[1].open:
-            if mi is not None:
-                _observed_agreement_note()
-            run_diagnostic_accuracy(df, analyzer)
-            run_reliability(df, analyzer)
+            run_diagnostic_accuracy(df, analyzer, mi=mi)
 
     with tabs[2]:
         if tabs[2].open:
-            if mi is not None:
-                st.info(
-                    "Imputed data selected: the paired and one-sample t-tests are pooled over the imputed datasets; "
-                    "McNemar and Mantel-Haenszel analyse the observed data. Rates and standardised ratios use the "
-                    "counts you enter.",
-                    icon=":material/info:",
-                )
             run_paired_and_rates(df, analyzer, mi=mi)
 
     with tabs[3]:
@@ -356,26 +380,6 @@ def app(mi=None):
     with tabs[5]:
         if tabs[5].open:
             show_educational_content()
-
-def _observed_agreement_note():
-    """Diagnostic accuracy and agreement with imputed data selected: what is analysed, and why it is not pooled."""
-    from biostats.mi import not_poolable
-
-    st.info(
-        "Imputed data selected: diagnostic accuracy, Bland-Altman, kappa and the ICC analyse the observed data "
-        "(complete cases).",
-        icon=":material/info:",
-    )
-    with st.expander("Why these analyses are not pooled"):
-        st.markdown(
-            "**Diagnostic accuracy and kappa.** Sensitivity, specificity, the AUC and kappa can be pooled on a "
-            "transformed scale; this version does not pool them yet."
-        )
-        for key, label in (("bland_altman", "Bland-Altman limits of agreement"), ("icc", "Intraclass correlation")):
-            entry = not_poolable(key)
-            if entry is not None:
-                st.markdown(f"**{label}.** {entry.reason} {entry.alternative}")
-
 
 def run_univariate_analysis(df, analyzer, transformed=False):
     st.header("Univariate Group Comparison")

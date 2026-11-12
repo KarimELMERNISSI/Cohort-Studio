@@ -303,26 +303,34 @@ baseline makes this estimate more precise than the crude difference of 128.2 vs 
 
 ### 5.3 Paired data and stratified analysis
 
-On the **Paired, rates & stratified** tab:
+On the **Paired, rates & stratified** tab, **Question** opens one analysis at a time. Nothing is chosen for you:
+pick the columns, read the plan, then **Run analysis**.
 
-- **Paired t-test**, `sbp_baseline` vs `sbp_6m`: the mean change is **-5.0 mmHg** (p < 0.001).
-- **McNemar**, `smoker_baseline` vs `smoker_6m`: **58 patients quit and none started** (p < 0.001).
-- **Mantel-Haenszel**, exposure `arm`, outcome `hf_hospitalisation`, stratum **`site_clean`**: the pooled odds
-  ratio is about **0.64**. Breslow-Day p = 0.33, so the effect is consistent across sites. If you choose `site`
-  instead, the uncleaned names give 7 strata: that is why you created `site_clean`.
+- **Paired measurements**, *A number*: first measurement `sbp_baseline`, second `sbp_6m`. The plan says that 778 of
+  the 928 rows hold both. The mean change is **-5.0 mmHg** (95% CI -5.7 to -4.3, p < 0.001).
+- **Paired measurements**, *Yes or no*: `smoker_baseline` and `smoker_6m`. **58 participants quit and none
+  started** (p < 0.001): the share of smokers falls by 6.2 points.
+- **Stratified (Mantel-Haenszel)**: outcome `hf_hospitalisation` (event *Yes*), compare by `arm` with the reference
+  group *Control*, adjust for **`site_clean`**. The adjusted odds ratio is about **0.64**. Breslow-Day p = 0.33: no
+  evidence that the sites differ. If you choose `site` instead, the uncleaned names give 7 strata: that is why you
+  created `site_clean`.
 
 ### 5.4 Diagnostic accuracy and agreement
 
 On the **Diagnostic accuracy & agreement** tab:
 
-- **Diagnostic accuracy:** reference standard `mi_adjudicated`, index test `troponin_ng_l`. **AUC about 0.93**.
-  Read the sensitivity and specificity at the suggested cut-off, and note that the cut-off is optimistic in the
-  same data.
-- **Bland-Altman:** office `sbp_baseline` against `sbp_ambulatory`. Office readings are about **6 mmHg higher**
-  (the white-coat effect), with limits of agreement of about -8 to +20 mmHg.
-- **Kappa:** `nyha_class` (investigator) against `nyha_class_central` (central committee). Kappa is about
-  **0.71**, and the linearly weighted kappa about **0.76** (substantial agreement).
-- **ICC:** `lvef_pct` and `lvef_reader2_pct` (two echo readers, reader 2 about 1 point higher).
+- **Accuracy of a test (ROC):** reference standard `mi_adjudicated` (the condition present when it is *Yes*), test
+  `troponin_ng_l`, the condition more likely when the test is *higher*. **Run analysis**: **AUC about 0.93**. Then
+  set the cut-off to *Found on these data* and run again to read the sensitivity and specificity at 30.9 ng/L. A
+  cut-off found on the data it is judged on is optimistic: the page says so, and a value fixed beforehand is the
+  one to report.
+- **Agreement of two measurements:** office `sbp_baseline` and `sbp_ambulatory`. Office readings are about
+  **6 mmHg higher** (the white-coat effect), with limits of agreement of about -8 to +20 mmHg. The same Run gives
+  the ICC. For two echo readers, choose `lvef_pct` and `lvef_reader2_pct` (reader 2 about 1 point higher): the ICC
+  is about 0.94.
+- **Agreement of two raters (kappa):** `nyha_class` (investigator) against `nyha_class_central` (central
+  committee). Kappa is about **0.71** (substantial agreement by the Landis & Koch benchmark). The classes are
+  ordered: with *Ordered grades*, the linearly weighted kappa is about **0.76**.
 
 ### 5.5 Power
 

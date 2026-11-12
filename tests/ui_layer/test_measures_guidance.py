@@ -1,0 +1,393 @@
+"""
+The guidance of two tabs of Analyze > Hypothesis tests & epidemiology (ui/guidance/measures.py: what is offered, and
+the plan of each analysis, checked on the data) and what the tabs share on the screen (app_pages/analysis_layout.py:
+how a number, an interval and a p-value are written; a field that depends on the column chosen above it).
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+from streamlit.testing.v1 import AppTest
+
+from app_pages import analysis_layout as layout
+from biostats._types import CI
+from ui.guidance import measures as m
+
+N = 240
+
+
+@pytest.fixture(scope="module")
+def df() -> pd.DataFrame:
+    rng = np.random.default_rng(11)
+    ill = rng.random(N) < 0.3
+    marker = np.where(ill, rng.normal(60, 10, N), rng.normal(30, 10, N)).round(1)
+    falling = np.where(ill, rng.normal(30, 6, N), rng.normal(45, 6, N)).round(0)
+    first = rng.normal(130, 15, N).round(0)
+    second = (first - 5 + rng.normal(0, 6, N)).round(0)
+    grade = rng.choice(["mild", "moderate", "severe"], N, p=[0.5, 0.3, 0.2])
+    again = np.where(rng.random(N) < 0.8, grade, rng.choice(["mild", "moderate", "severe"], N))
+    frame = pd.DataFrame(
+        {
+            "ill": np.where(ill, "Yes", "No"),
+            "arm": rng.choice(["Control", "Intervention"], N),
+            "marker": marker,
+            "falling": falling,
+            "sbp_first": first,
+            "sbp_second": second,
+            "height": rng.normal(170, 9, N).round(0),
+            "hba1c": rng.normal(6.55, 0.8, N).round(1),
+            "grade_local": grade,
+            "grade_central": again,
+            "smoker_first": rng.choice(["Yes", "No"], N, p=[0.3, 0.7]),
+            "site": rng.choice(
+                ["Metz", "Metz ", "Luxembourg", "Arlon"], N, p=[0.4, 0.02, 0.38, 0.2]
+            ),
+            "id": [f"P{i:04d}" for i in range(N)],
+        }
+    )
+    frame["smoker_second"] = np.where(
+        (frame["smoker_first"] == "Yes") & (rng.random(N) < 0.3), "No", frame["smoker_first"]
+    )
+    frame.loc[:29, "sbp_second"] = np.nan
+    return frame
+
+
+def _levels(plan) -> list[str]:
+    return [item.level for item in plan.advice]
+
+
+def _text(plan) -> str:
+    return " ".join([*(step.text for step in plan.steps), *(item.text for item in plan.advice)])
+
+
+# ----------------------------------------------------------------------------- what is offered
+
+
+def test_columns_are_offered_by_what_an_analysis_can_read(df: pd.DataFrame) -> None:
+    assert {"marker", "sbp_first", "height"} <= set(
+        m.measurements(df)
+    ) and "id" not in m.measurements(df)
+    assert {"ill", "arm", "smoker_first"} <= set(m.two_valued(df))
+    assert "site" not in m.two_valued(df) and "grade_local" not in m.two_valued(
+        df
+    )  # more than two values
+    assert {"grade_local", "grade_central", "ill"} <= set(m.rated(df)) and "id" not in m.rated(df)
+    assert {"site", "arm", "grade_local"} <= set(m.strata(df)) and "id" not in m.strata(df)
+
+
+def test_a_second_column_is_offered_by_its_name_first(df: pd.DataFrame) -> None:
+    """The first columns of the file were preselected (age against height); a second column named like the first is
+    the likely one."""
+    assert m.look_alikes("sbp_first", m.measurements(df))[0] == "sbp_second"
+    assert "sbp_first" not in m.look_alikes("sbp_first", m.measurements(df))
+    assert m.look_alikes("grade_local", m.rated(df))[0] == "grade_central"
+    assert m.look_alikes(None, ["b", "a"]) == ["b", "a"]
+
+
+def test_the_value_that_says_present_is_offered_only_when_a_word_says_it(df: pd.DataFrame) -> None:
+    assert m.present_value(m.levels_of(df["ill"])) == "Yes"
+    assert (
+        m.present_value(m.levels_of(df["arm"])) is None
+    )  # neither arm is "the condition": a choice to make
+    assert m.present_value([0, 1]) == 1 and m.present_value([]) is None
+
+
+# ----------------------------------------------------------------------------- accuracy of a test
+
+
+def test_the_accuracy_plan_asks_which_way_the_test_points(df: pd.DataFrame) -> None:
+    nothing = m.plan_accuracy(df, None, None, None, None, m.NO_CUTOFF, None, None)
+    assert nothing.status == "idle" and not nothing.steps
+    asked = m.plan_accuracy(df, "ill", "Yes", "marker", None, m.NO_CUTOFF, None, None)
+    assert (
+        asked.status == "idle" and not asked.steps and "which way the test points" in _text(asked)
+    )
+    ready = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.NO_CUTOFF, None, None)
+    assert ready.status == "ok" and len(ready.steps) == 2 and "the direction fits" in _text(ready)
+    assert ready.steps[0].used == N
+
+
+def test_a_direction_the_data_contradict_is_said(df: pd.DataFrame) -> None:
+    """A marker that falls with the condition, read as rising: the cut-off found called everyone positive."""
+    wrong = m.plan_accuracy(df, "ill", "Yes", "falling", m.HIGHER, m.NO_CUTOFF, None, None)
+    assert wrong.status == "caution" and "Check the direction" in _text(wrong)
+    right = m.plan_accuracy(df, "ill", "Yes", "falling", m.LOWER, m.FIXED, 38.0, None)
+    assert right.status == "ok" and "at most 38" in _text(right)
+
+
+def test_a_cut_off_is_checked_against_the_test(df: pd.DataFrame) -> None:
+    none = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.FIXED, None, None)
+    assert none.status == "idle" and not none.steps  # nothing to compute until it is typed
+    beyond = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.FIXED, 1000.0, None)
+    assert beyond.status == "violated" and "no one would be called positive" in _text(beyond)
+    found = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.YOUDEN, None, None)
+    assert found.status == "caution" and "exploratory" in _text(found)
+    typed = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.FIXED, 45.0, 0.02)
+    assert "the prevalence typed (2.0%)" in _text(typed)
+
+
+def test_a_reference_standard_holds_two_values(df: pd.DataFrame) -> None:
+    plan = m.plan_accuracy(df, "site", None, "marker", None, m.NO_CUTOFF, None, None)
+    assert plan.status == "violated" and not plan.steps
+    assert "a reference standard holds two" in _text(plan)
+
+
+# ----------------------------------------------------------------------------- agreement
+
+
+def test_two_measurements_are_checked_to_be_of_one_quantity(df: pd.DataFrame) -> None:
+    one = m.plan_measurements(df, ["sbp_first"], [m.BLAND_ALTMAN, m.ICC], m.ABSOLUTE)
+    assert one.status == "idle" and not one.steps
+    two = m.plan_measurements(df, ["sbp_first", "sbp_second"], [m.BLAND_ALTMAN, m.ICC], m.ABSOLUTE)
+    assert two.status == "ok" and [step.used for step in two.steps] == [N - 30, N - 30]
+    assert "30 lack `sbp_second`" in _text(two)
+    other = m.plan_measurements(df, ["sbp_first", "height"], [m.BLAND_ALTMAN], m.ABSOLUTE)
+    assert other.status == "caution" and "hardly related" in _text(other)
+    three = m.plan_measurements(
+        df, ["sbp_first", "sbp_second", "height"], [m.BLAND_ALTMAN, m.ICC], m.ABSOLUTE
+    )
+    assert len(three.steps) == 1 and "the ICC alone is computed" in _text(three)
+
+
+def test_two_raters_need_the_same_categories_and_a_stated_order(df: pd.DataFrame) -> None:
+    categories, *_ = m.rater_categories(df, "grade_local", "grade_central")
+    assert categories == ["mild", "moderate", "severe"]
+    names = m.plan_raters(df, "grade_local", "grade_central", m.NAMES, None, m.LINEAR)
+    assert names.status == "ok" and "categories without an order" in _text(names)
+    graded = m.plan_raters(df, "grade_local", "grade_central", m.GRADES, categories, m.LINEAR)
+    assert graded.status == "ok" and "Order used: `mild` < `moderate` < `severe`" in _text(graded)
+    short = m.plan_raters(df, "grade_local", "grade_central", m.GRADES, categories[:2], m.LINEAR)
+    assert short.status == "violated" and not short.steps and "it lacks `severe`" in _text(short)
+    apart = m.plan_raters(df, "arm", "ill", m.NAMES, None, m.LINEAR)
+    assert apart.status == "violated" and "share no category" in _text(apart)
+
+
+# ----------------------------------------------------------------------------- paired, one group
+
+
+def test_the_paired_plans_say_who_is_left_out_and_what_a_change_is_not(df: pd.DataFrame) -> None:
+    plan = m.plan_paired(df, "sbp_first", "sbp_second", m.T_TEST)
+    assert plan.status == "ok" and plan.steps[0].used == N - 30
+    assert "30 lack `sbp_second`" in _text(plan) and "not the effect of a treatment" in _text(plan)
+    assert m.plan_paired(df, "sbp_first", None, m.T_TEST).status == "idle"
+
+
+def test_a_change_in_a_yes_or_no_characteristic_needs_the_same_two_values(df: pd.DataFrame) -> None:
+    plan = m.plan_paired_yes_no(df, "smoker_first", "smoker_second", "Yes")
+    assert plan.status == "ok" and "participants changed" in _text(plan)
+    assert m.plan_paired_yes_no(df, "smoker_first", "smoker_second", None).status == "idle"
+    other = m.plan_paired_yes_no(df, "arm", "ill", None)
+    assert other.status == "violated" and "the same two values in both" in _text(other)
+
+
+def test_a_reference_value_is_checked_against_the_measurement(df: pd.DataFrame) -> None:
+    asked = m.plan_one_mean(df, "hba1c", None, m.ONE_T)
+    assert (
+        asked.status == "idle"
+        and not asked.steps
+        and "fixed before looking at these data" in _text(asked)
+    )
+    far = m.plan_one_mean(df, "hba1c", 70.0, m.ONE_T)
+    assert far.status == "caution" and "the right variable, the right unit?" in _text(far)
+    assert m.plan_one_mean(df, "hba1c", 7.0, m.ONE_T).status == "ok"
+
+
+def test_the_datas_own_mean_as_a_reference_is_said_at_the_precision_of_the_data(
+    df: pd.DataFrame,
+) -> None:
+    """Compared at the precision of the reference alone, 7 "was" the mean of values averaging 6.55."""
+    mean = float(df["hba1c"].mean())
+    assert round(mean) == 7 and round(mean, 1) != 7.0
+    assert "these same values" not in _text(m.plan_one_mean(df, "hba1c", 7.0, m.ONE_T))
+    own = m.plan_one_mean(df, "hba1c", round(mean, 1), m.ONE_T)
+    assert (
+        own.status == "caution"
+        and "of these same values: a test against it says nothing" in _text(own)
+    )
+    exact = m.plan_one_mean(df, "hba1c", round(mean, 3), m.ONE_T)
+    assert "these same values" in _text(exact)
+
+
+def test_a_share_is_counted_and_its_reference_checked(df: pd.DataFrame) -> None:
+    with_it, counted = m.share_counts(df, "ill", "Yes")
+    assert (with_it, counted) == (int((df["ill"] == "Yes").sum()), N)
+    assert m.plan_share(df, "ill", "Yes", 0.3).status == "ok"
+    assert m.plan_share(df, "ill", "Yes", 0.0).status == "violated"
+    assert m.plan_share(df, "ill", None, 0.3).status == "idle"
+    assert m.check_share(30, 100, 0.2) == (True, [])
+    ready, advice = m.check_share(30, 20, 0.2)
+    assert not ready and "cannot exceed" in advice[0].text
+    assert m.check_share(None, 100, 0.2) == (
+        False,
+        [],
+    )  # a number is missing: nothing is said, nothing computed
+
+
+# ----------------------------------------------------------------------------- strata, rates
+
+
+def test_the_strata_plan_names_what_cannot_be_combined(df: pd.DataFrame) -> None:
+    plan = m.plan_strata(df, "ill", "Yes", "arm", "Control", "grade_local")
+    assert plan.status == "ok" and "`Intervention` against `Control`" in _text(plan)
+    assert m.plan_strata(df, None, None, None, None, None).status == "idle"
+    spelled = m.plan_strata(df, "ill", "Yes", "arm", "Control", "site")
+    assert spelled.status == "caution" and "written several ways" in _text(spelled)
+    assert [item.column for item in spelled.advice if item.column] == [
+        "site"
+    ]  # cleaned from the plan itself
+
+
+def test_the_calculators_check_the_numbers_typed() -> None:
+    assert m.check_rates(m.TWO_RATES, 15, 1200.0, None, 1000.0) == (
+        False,
+        [],
+    )  # a number is missing
+    ready, advice = m.check_rates(m.TWO_RATES, 15, 1200.0, 4, 1000.0)
+    assert ready and [item.level for item in advice] == ["info"]  # first events only
+    ready, advice = m.check_rates(m.TWO_RATES, 15, 1200.0, 0, 1000.0)
+    assert (
+        ready and "no upper bound" in advice[0].text
+    )  # 0 events meant "one rate" and gave an infinite ratio
+    assert m.check_rates(m.ONE_RATE, 15, 1200.0, None, None)[0]
+    assert not m.check_rates(m.ONE_RATE, 15, 0.0, None, None)[0]  # no person-time, no rate
+    assert m.check_expected(25, 18.4)[0] and not m.check_expected(3, 0.0)[0]
+    assert "almost nothing" in m.check_expected(0, 0.5)[1][0].text
+
+
+# ----------------------------------------------------------------------------- how a result is written
+
+
+def test_numbers_intervals_and_p_values_are_written_for_reading() -> None:
+    assert (
+        layout.p_text(1.5e-43) == "< 0.001" and layout.p_text(0.0) == "< 0.001"
+    )  # never "1.5e-43", never "0"
+    assert (
+        layout.p_text(0.0171) == "= 0.017"
+        and layout.p_text(None) == "n/a"
+        and layout.p_text(float("nan")) == "n/a"
+    )
+    assert (
+        layout.num(5.98707) == "5.99"
+        and layout.num(1234.5) == "1,230"
+        and layout.num(None) == "n/a"
+    )
+    assert layout.percent(0.8614) == "86.1%" and layout.percent(None) == "n/a"
+    # two bounds with the same decimals: each rounded on its own read "-9 to -7.38" and "66% to 82.6%"
+    assert layout.span(-8.998, -7.384) == "-9.00 to -7.38"
+    assert layout.span(19.358, 20.973) == "19.4 to 21.0"
+    assert layout.span(0.996, 12.935) == "0.996 to 12.935"  # "1.00 to 12.94" beside p = 0.051
+    assert layout.span(66.0, 82.6, unit="%") == "66.0% to 82.6%"
+    assert layout.span(None, 1.0) == "n/a to 1"
+    ci = CI(lower=0.9019, upper=0.9527, level=0.95, method="DeLong")
+    assert layout.interval(ci) == "95% CI 0.902 to 0.953" and layout.interval(None) == ""
+    assert layout.interval(ci, scale=100, unit="%") == "95% CI 90.2% to 95.3%"
+
+
+def _dependent_fields() -> None:
+    import streamlit as st
+
+    from app_pages import analysis_layout as layout
+
+    column = st.selectbox("column", ["ill", "arm"], index=None, key="column")
+    layout.depends("level", column, {"ill": "Yes"}.get(column))
+    st.selectbox(
+        "level",
+        {"ill": ["No", "Yes"], "arm": ["Control", "Intervention"]}.get(column, []),
+        index=None,
+        key="level",
+    )
+    layout.depends("reference", column, None)
+    st.number_input("reference", value=None, key="reference")
+
+
+def test_a_field_follows_the_column_chosen_above_it_and_keeps_what_is_typed() -> None:
+    """A level offered for one column, a number typed for it: the next column starts from its own offer, and empty.
+    (The value goes through the widget's state: a default reached the script but not the screen, which went on
+    showing "Choose the value" over a result computed for Yes; the browser check reads the screen.)"""
+    at = AppTest.from_function(_dependent_fields)
+    at.run()
+    assert at.selectbox(key="level").value is None
+    at.selectbox(key="column").select("ill").run()
+    assert at.selectbox(key="level").value == "Yes"  # offered
+    at.selectbox(key="level").select("No").run()
+    at.number_input(key="reference").set_value(4.0).run()
+    at.run()
+    assert (
+        at.selectbox(key="level").value == "No" and at.number_input(key="reference").value == 4.0
+    )  # kept
+    at.selectbox(key="column").select("arm").run()
+    assert not at.exception
+    assert at.selectbox(key="level").value is None  # neither arm says "present": a choice to make
+    assert (
+        at.number_input(key="reference").value is None
+    )  # a reference is in the unit of its measurement
+
+
+# ----------------------------------------------------------------------------- a table an analysis cannot read
+
+
+def _tabs_on_a_poor_table() -> None:
+    import pandas as pd
+    import streamlit as st
+
+    from app_pages.analysis_diagnostic import run_diagnostic_accuracy
+    from app_pages.analysis_extras import run_paired_and_rates
+
+    poor = pd.DataFrame({"id": [f"P{i:02d}" for i in range(30)], "note": ["seen"] * 30})
+    if st.session_state.get("tab") == "paired":
+        run_paired_and_rates(poor, None)
+    else:
+        run_diagnostic_accuracy(poor, None)
+
+
+@pytest.mark.parametrize(
+    ("tab", "choices", "said"),
+    [
+        ("diagnostic", {"diag_question": m.ACCURACY}, "No column with two values"),
+        ("diagnostic", {"diag_question": m.MEASUREMENTS}, "Fewer than two numeric columns"),
+        ("diagnostic", {"diag_question": m.RATERS}, "Fewer than two columns of categories"),
+        (
+            "paired",
+            {"paired_question": m.PAIRED, "pair_measure": m.NUMBER},
+            "Fewer than two numeric columns",
+        ),
+        (
+            "paired",
+            {"paired_question": m.PAIRED, "pair_measure": m.YES_NO},
+            "Fewer than two yes/no columns",
+        ),
+        ("paired", {"paired_question": m.ONE_GROUP, "one_compare": m.MEAN}, "No numeric column"),
+        ("paired", {"paired_question": m.ONE_GROUP, "one_compare": m.SHARE}, "No yes/no column"),
+        ("paired", {"paired_question": m.STRATA}, "Not enough columns for a stratified analysis"),
+    ],
+)
+def test_an_analysis_the_table_cannot_feed_says_what_it_needs(
+    tab: str, choices: dict, said: str
+) -> None:
+    """A table of identifiers and one constant: no form of empty lists, no Run on nothing, but what is missing."""
+    at = AppTest.from_function(_tabs_on_a_poor_table, default_timeout=60)
+    at.session_state["tab"] = tab
+    for key, value in choices.items():
+        at.session_state[key] = value
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert any(said in block.value for block in at.markdown), [
+        block.value for block in at.markdown
+    ][:6]
+    assert not [button for button in at.button if button.label == "Run analysis"]
+
+
+def test_the_calculators_need_no_table() -> None:
+    at = AppTest.from_function(_tabs_on_a_poor_table, default_timeout=60)
+    at.session_state["tab"] = "paired"
+    at.session_state["paired_question"] = m.RATES
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    at.number_input(key="rate_e1").set_value(15).run()
+    at.number_input(key="rate_t1").set_value(1200.0).run()
+    at.number_input(key="rate_e0").set_value(4).run()
+    at.number_input(key="rate_t0").set_value(1000.0).run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    assert {metric.label: metric.value for metric in at.metric}["Rate ratio"] == "3.12"

@@ -55,6 +55,9 @@ TITLES = {
     "mantel_haenszel": "Mantel-Haenszel stratified analysis",
     "diagnostic": "Diagnostic accuracy",
     "bland_altman": "Bland-Altman agreement",
+    "icc": "Intraclass correlation",
+    "kappa": "Cohen's kappa",
+    "proportion": "One-sample proportion",
 }
 
 # the ids a file can hold: a class, a rule, a part's prefix or a number's name is added, never renamed

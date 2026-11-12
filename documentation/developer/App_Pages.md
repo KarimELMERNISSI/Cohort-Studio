@@ -65,14 +65,59 @@ Returns a dictionary with the selected configuration.
 
 ## analysis_diagnostic.py
 
-_Diagnostic accuracy and method agreement tab of the Analyze page (audit S10)._
+_Diagnostic accuracy & agreement, a tab of Analyze > Hypothesis tests & epidemiology: three questions, one open at a
+time (ui.guidance.measures): the accuracy of a test against a reference standard (sensitivity, specificity, the ROC
+curve and its AUC), the agreement of two measurements (Bland-Altman limits and the ICC, on one set of columns), and the
+agreement of two raters on categories (Cohen's kappa).
+
+Each follows the page pattern of Survival & regression (app_pages.analysis_layout): nothing is preselected, the plan
+says what Run will do, one click runs it, and the result reads the estimate first. What each analysis computes is a
+function of its own here (``accuracy_of``, ``kappa_of``), so that the numbers are checked without the page._
 
 **Imports**:
-`__future__.annotations`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.bland_altman`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.section`, `ui.components.status_chip`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`
+`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.bland_altman`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.theme.OKABE_ITO`
 
-### def `_ci_text` (analysis_diagnostic.py)
+### def `_rgba` (analysis_diagnostic.py)
 
-- **Arguments**: `ci`
+- **Arguments**: `colour: str, alpha: float`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_as_measured` (analysis_diagnostic.py)
+
+- **Arguments**: `found: dict`
+
+- **Returns**: `dict`
+
+A cut-off found on the reversed marker (lower values pointing to the condition), on the marker's own scale.
+
+### def `accuracy_of` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame, outcome: str, present: Any, score: str, direction: str, mode: str, cutoff: ComplexType, prevalence: ComplexType`
+
+- **Returns**: `dict[ComplexType]`
+
+The accuracy of ``score`` against ``outcome`` = ``present`` on the rows where both are recorded: the AUC always;
+with a cut-off (fixed beforehand, or found on these data by Youden's J), the 2x2 table and its measures.
+
+``direction`` says which way the test points. For "lower", the same functions read the reversed marker, and the
+cut-off is given back on the marker's own scale (positive when the test is at most the cut-off): a marker that
+falls with the condition had no result (the cut-off found called everyone positive).
+
+### def `range_drawn` (analysis_diagnostic.py)
+
+- **Arguments**: `clean: pd.DataFrame, outcome: str, present: Any`
+
+- **Returns**: `bool`
+
+Whether the range of a cut-off found on the data is drawn at random: only when each group holds enough rows.
+The draws are then part of the result's settings: a result drawn with another seed is another result.
+
+### def `_bound` (analysis_diagnostic.py)
+
+- **Arguments**: `lower: bool`
 
 - **Returns**: `str`
 
@@ -80,44 +125,120 @@ No description available.
 
 ### def `_roc_figure` (analysis_diagnostic.py)
 
-- **Arguments**: `y_true: pd.Series, y_score: pd.Series, pos_label, auc: dict, cutoff: ComplexType`
+- **Arguments**: `truth: np.ndarray, marker: np.ndarray, auc: dict, point: ComplexType, label: ComplexType`
 
 - **Returns**: `go.Figure`
 
-No description available.
+The ROC curve, square, with the point of the 2x2 table when a cut-off is set (the table's own sensitivity and
+specificity: the nearest threshold of the curve was drawn, which is another point for a typed cut-off).
 
-### def `_bland_altman_figure` (analysis_diagnostic.py)
+### def `_accuracy` (analysis_diagnostic.py)
 
-- **Arguments**: `ba, label_a: str, label_b: str`
-
-- **Returns**: `go.Figure`
-
-No description available.
-
-### def `run_diagnostic_accuracy` (analysis_diagnostic.py)
-
-- **Arguments**: `df: pd.DataFrame, analyzer`
+- **Arguments**: `df: pd.DataFrame`
 
 - **Returns**: `None`
 
 No description available.
 
+### def `_show_accuracy` (analysis_diagnostic.py)
+
+- **Arguments**: `res: dict[ComplexType]`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_swap_measurements` (analysis_diagnostic.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_bland_altman_figure` (analysis_diagnostic.py)
+
+- **Arguments**: `ba: Any, first: str, second: str`
+
+- **Returns**: `go.Figure`
+
+No description available.
+
+### def `_measurements` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_bland_altman` (analysis_diagnostic.py)
+
+- **Arguments**: `ba: Any, first: str, second: str, delta: ComplexType`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_icc` (analysis_diagnostic.py)
+
+- **Arguments**: `res: Any, rows: int`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `kappa_of` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame, first: str, second: str`
+
+- **Returns**: `dict[ComplexType]`
+
+Cohen's kappa of two raters' categories on the participants rated by both, with the cross-table it is computed
+on. With ``weights`` (ordered grades), ``order`` gives the grades from the lowest to the highest: the weights
+read distances in that order.
+
+### def `_raters` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_kappa` (analysis_diagnostic.py)
+
+- **Arguments**: `result: dict[ComplexType], first: str, second: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `run_diagnostic_accuracy` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer: Any`
+
+- **Returns**: `None`
+
+The tab: its Question selector, then the analysis it names. ``analyzer`` is the page's column profile (the
+entries read the columns themselves: a whole-number score is a measurement here).
+
 ---
 
 ## analysis_extras.py
 
-_Paired tests, incidence rates, stratified tables, standardised ratios and reliability (audit S11)._
+_Paired, rates & stratified, a tab of Analyze > Hypothesis tests & epidemiology: four questions, one open at a time
+(ui.guidance.measures): two measurements of the same participants (a number: paired t-test or Wilcoxon signed-rank; yes
+or no: McNemar), one group against a reference (a mean, or a share), an association within strata
+(Mantel-Haenszel), and rates from counts (a calculator).
+
+The analyses of the dataset follow the page pattern of Survival & regression (app_pages.analysis_layout): nothing is
+preselected, the plan says what Run will do, one click runs it, the result reads the estimate first and is kept with
+what it was computed on. The calculators read the numbers typed: their fields start empty, they have no button, and
+their result says where its numbers came from._
 
 **Imports**:
-`__future__.annotations`, `pandas`, `streamlit`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.standardised_ratio`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.result_card`, `ui.components.section`, `ui.components.status_chip`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
-
-### def `_ci` (analysis_extras.py)
-
-- **Arguments**: `ci`
-
-- **Returns**: `str`
-
-No description available.
+`__future__.annotations`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.standardised_ratio`, `biostats.reliability.category`, `biostats.reliability.category_order`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_not_pooled` (analysis_extras.py)
 
@@ -127,30 +248,208 @@ No description available.
 
 The reason a test has no pooling rule, and what to run instead (biostats.mi.not_poolable).
 
-### def `_show_test` (analysis_extras.py)
+### def `_held` (analysis_extras.py)
 
-- **Arguments**: `res, key: str`
+- **Arguments**: `columns: list[str], mi: Any`
 
-- **Returns**: `None`
+- **Returns**: `list[str]`
 
-A stored test result: the pooled test with its notes and complete-case comparison, or the observed one.
+With imputed data, a pooled analysis offers the columns of the imputed datasets only: one created after the
+imputation is not in them.
 
-### def `run_paired_and_rates` (analysis_extras.py)
+### def `_rows_read` (analysis_extras.py)
 
-- **Arguments**: `df: pd.DataFrame, analyzer`
+- **Arguments**: `result: Any, mi: Any`
 
-- **Returns**: `None`
+- **Returns**: `int`
 
-Paired and one-sample tests (pooled over the imputed datasets ``mi`` when given), McNemar, rates,
-Mantel-Haenszel and standardised ratios.
+The rows a pooled test read: those of its result (every row of the population was stamped as analysed, where
+a column left out of the imputation lacks 150 values).
 
-### def `run_reliability` (analysis_extras.py)
+### def `_pooled` (analysis_extras.py)
 
-- **Arguments**: `df: pd.DataFrame, analyzer`
+- **Arguments**: `stored: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+A stored test as it is shown: the pooled test with its notes, or the observed one.
+
+### def `_paired_number` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
 
 - **Returns**: `None`
 
 No description available.
+
+### def `_show_change` (analysis_extras.py)
+
+- **Arguments**: `result: TestResult, df: pd.DataFrame, before: str, after: str, kind: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_paired_yes_no` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_yes_no` (analysis_extras.py)
+
+- **Arguments**: `result: TestResult, table: pd.DataFrame, before: str, after: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_one_mean` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_show_mean` (analysis_extras.py)
+
+- **Arguments**: `result: TestResult, column: str, reference: float, kind: str, rows: int`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_share_metrics` (analysis_extras.py)
+
+- **Arguments**: `result: TestResult, with_it: int, counted: int, reference: float, what: str, where: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_one_share` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_levels_as_text` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame, column: ComplexType`
+
+- **Returns**: `list[str]`
+
+No description available.
+
+### def `_strata` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_ratio` (analysis_extras.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `str`
+
+A ratio to three significant figures: at two decimals, a lower bound of 0.996 read "1.00" beside p = 0.051.
+
+### def `_ratio_ci` (analysis_extras.py)
+
+- **Arguments**: `ci: Any`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_show_strata` (analysis_extras.py)
+
+- **Arguments**: `res: Any, outcome: str, event: str, compare: str, exposed: str, reference: str, stratum: str`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_count` (analysis_extras.py)
+
+- **Arguments**: `label: str, key: str, column: Any, example: str`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_time` (analysis_extras.py)
+
+- **Arguments**: `label: str, key: str, column: Any, example: str`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `_rate_metric` (analysis_extras.py)
+
+- **Arguments**: `label: str, rate: Any, per: int, unit: str`
+
+- **Returns**: `Metric`
+
+No description available.
+
+### def `_more_or_fewer` (analysis_extras.py)
+
+- **Arguments**: `ratio: float`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_rates` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_expected` (analysis_extras.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_paired` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_one_group` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `run_paired_and_rates` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame, analyzer: Any`
+
+- **Returns**: `None`
+
+The tab: its Question selector, then the analysis it names. With imputed data (``mi``), the paired and the
+one-sample t-tests are pooled over the imputed datasets; every other analysis says which rows it reads.
 
 ---
 
@@ -162,7 +461,7 @@ Everything here is shown only while the page's Guidance switch is on, so experie
 the page compact._
 
 **Imports**:
-`__future__.annotations`, `pandas`, `streamlit`, `ui.components.page_link`, `ui.components.status_chip`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.TAB_GUIDE`, `ui.guidance.analysis.TEST_NOTES`, `ui.guidance.analysis.AnalysisPlan`, `ui.guidance.analysis.AncovaCheck`
+`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `pandas`, `streamlit`, `ui.components.page_link`, `ui.components.status_chip`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.TAB_GUIDE`, `ui.guidance.analysis.TEST_NOTES`, `ui.guidance.analysis.AnalysisPlan`, `ui.guidance.analysis.AncovaCheck`
 
 ### def `guidance_toggle` (analysis_guidance_ui.py)
 
@@ -182,11 +481,13 @@ No description available.
 
 ### def `render_orientation` (analysis_guidance_ui.py)
 
-- **Arguments**: ``
+- **Arguments**: `open_analysis: Callable[ComplexType], selectors: Mapping[ComplexType]`
 
 - **Returns**: `None`
 
-Which tab answers which question, and a way to the test chooser.
+Which tab answers which question, as a map that opens what it names: each button opens its tab, and the analysis
+on it where the tab holds several (``selectors``: a tab's label, the key of its Question selector and the
+entries, id to label). ``open_analysis`` is the page's callback: a tab or a selector is set before it is drawn.
 
 ### def `_advice` (analysis_guidance_ui.py)
 
@@ -219,6 +520,227 @@ No description available.
 - **Returns**: `None`
 
 No description available.
+
+---
+
+## analysis_layout.py
+
+_What the analysis tabs share on the screen (Hypothesis tests & epidemiology: Diagnostic accuracy & agreement; Paired,
+rates & stratified), in the pattern of Survival & regression: the selector of one analysis among a tab's entries, the
+plan shown before a run, one Run, the headline of a result (the estimate with its interval first, then the test, then
+the counts), the place of a result that is not there yet, the line of an analysis under imputed data and the line of
+a calculator's result.
+
+One analysis is open at a time; each keeps its choices (``persist_state="page"``) and its result (ui.results) while
+another is open. A link can open an entry: the page declares its tabs and entries (``ui.nav.PageDef.tabs``), and the
+selectors read the link's labels as their default._
+
+**Imports**:
+`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `streamlit`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats._types.TestResult`, `biostats.assumptions.read_assumptions`, `ui.nav`, `ui.components.glossary_popover`, `ui.components.help_popover`, `ui.components.page_link`, `ui.components.status_chip`, `ui.components.text.plain`, `ui.guidance.interpretation.how_to_read`, `ui.guidance.measures.HELP`, `ui.guidance.measures.Entry`, `ui.guidance.outcomes.ModelPlan`, `ui.results.MISSING`, `ui.results.STALE_CONFIG`, `ui.results.recall`, `ui.results.status`, `ui.results.stored_settings`, `ui.state.get_state`
+
+### class `Metric` (analysis_layout.py)
+
+No description available.
+
+### def `p_text` (analysis_layout.py)
+
+- **Arguments**: `p: Any`
+
+- **Returns**: `str`
+
+A p-value as a sentence writes it after "p": "< 0.001", "= 0.017"; "n/a" when it was not computed.
+
+### def `num` (analysis_layout.py)
+
+- **Arguments**: `value: Any, digits: int`
+
+- **Returns**: `str`
+
+A number of a result: ``digits`` significant figures, no exponent, "n/a" when it has no value.
+
+### def `_decimals` (analysis_layout.py)
+
+- **Arguments**: `value: float, digits: int`
+
+- **Returns**: `int`
+
+The decimals that give ``value`` ``digits`` significant figures.
+
+### def `span` (analysis_layout.py)
+
+- **Arguments**: `lower: Any, upper: Any, digits: int`
+
+- **Returns**: `str`
+
+"0.902 to 0.953": two bounds written with the same decimals, those the bound nearer 0 needs for ``digits``
+significant figures (each rounded on its own, an interval read "-9 to -7.38"); a percentage with one decimal.
+
+### def `interval` (analysis_layout.py)
+
+- **Arguments**: `ci: Any, digits: int`
+
+- **Returns**: `str`
+
+"95% CI 0.902 to 0.953" from an interval object; "" without one.
+
+### def `percent` (analysis_layout.py)
+
+- **Arguments**: `value: Any, digits: int`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `headline` (analysis_layout.py)
+
+- **Arguments**: `metrics: Sequence[Metric], words: str, warnings: int`
+
+- **Returns**: `None`
+
+The result first: the estimate with its interval, the test and the counts, then one sentence saying what was
+compared and in which direction.
+
+### def `linked` (analysis_layout.py)
+
+- **Arguments**: `depth: int, labels: Mapping[ComplexType]`
+
+- **Returns**: `ComplexType`
+
+The id a link to this page names at ``depth`` of its path (the tab is 0, its entry 1, the entry's second choice
+2), among ``labels`` (id to label); None when the page was not opened by such a link.
+
+### def `_start` (analysis_layout.py)
+
+- **Arguments**: `key: str, value: str`
+
+- **Returns**: `dict[ComplexType]`
+
+A selector's ``default``, given only while it holds no value: a button of the page may have set its key (the
+orientation, a suggestion), and a widget given both a default and a value set in the session is reported.
+
+### def `choose_entry` (analysis_layout.py)
+
+- **Arguments**: `entries: Sequence[Entry]`
+
+- **Returns**: `Entry`
+
+The Question selector of a tab: one entry is open at a time. Under it, what the entry answers, its terms, and
+(Guidance on) the way to the test chooser.
+
+### def `choose` (analysis_layout.py)
+
+- **Arguments**: `label: str, options: Mapping[ComplexType]`
+
+- **Returns**: `str`
+
+A second choice of an entry (the kind of measurement, what a calculator computes): ids kept in the state, their
+labels shown; a link names it at ``depth`` of its path.
+
+### def `depends` (analysis_layout.py)
+
+- **Arguments**: `key: str, on: Any, value: Any`
+
+- **Returns**: `None`
+
+Give the widget ``key`` the value offered for what it depends on (``on``: the column chosen above it, with its
+levels), once each time that changes: the level that says "present" for a reference standard, no cut-off for
+another test, no reference value for another measurement. Call it before the widget is drawn, and give the
+widget no default of its own.
+
+The value goes through the widget's state because that is what reaches both sides. A default (``index=``,
+``value=``) is read by the script, not by a widget the browser already shows: the field went on reading "Choose
+the value" over a result computed for Yes. A value cleared by removing its key stayed on the screen the same
+way. And a value kept from another column was reported ("PPV at prevalence 0.502" for a condition 10.9% of
+participants have).
+
+### def `kept` (analysis_layout.py)
+
+- **Arguments**: `name: str, key: tuple, compute: Callable[ComplexType]`
+
+- **Returns**: `Any`
+
+A plan kept until the data, the analysis population or ``key`` (the panel's choices) changes: computed at every
+rerun, it would be read again at each click.
+
+### def `plan_box` (analysis_layout.py)
+
+- **Arguments**: `plan: ModelPlan`
+
+- **Returns**: `None`
+
+What Run will do, checked on the data: a status, each step with its rows, the advice. ``clean`` gives, for a
+variable whose values are written several ways, the widget it was chosen in (the arguments of
+app_pages.clean_dialog.clean_actions): it is then cleaned here, and replaced by its copy.
+
+### def `checks` (analysis_layout.py)
+
+- **Arguments**: `plan: ModelPlan`
+
+- **Returns**: `None`
+
+With Guidance off the plan is not drawn: what would make the result wrong, or impossible, is still said.
+
+### def `run_button` (analysis_layout.py)
+
+- **Arguments**: `key: str`
+
+- **Returns**: `bool`
+
+The one Run of an analysis of the dataset. Disabled only while nothing can be computed: advice never blocks.
+Its help shows while it is disabled (what is missing): on a button just clicked, a help stays open as long as the
+button keeps the focus, and lay over the last lines of the plan.
+
+### def `result_place` (analysis_layout.py)
+
+- **Arguments**: `key: str, config: Any`
+
+- **Returns**: `ComplexType`
+
+The stored result of these choices, or None with a word on why none is shown: nothing was run yet (Guidance on),
+or the last result belongs to other choices (it did not vanish). A change of the data or of the population is
+announced by ``recall``. ``silent``: the second result of one Run, whose first has said it.
+
+### def `imputed_line` (analysis_layout.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `None`
+
+What an analysis reads while imputed data are selected in the sidebar: pooled, or which observed rows.
+
+### def `typed_line` (analysis_layout.py)
+
+- **Arguments**: `numbers: str`
+
+- **Returns**: `None`
+
+Under a calculator's result, in place of the line "computed on": where its numbers came from.
+
+### def `advice_lines` (analysis_layout.py)
+
+- **Arguments**: `advice: Sequence[Any]`
+
+- **Returns**: `None`
+
+The checks of the numbers typed in a calculator.
+
+### def `warn` (analysis_layout.py)
+
+- **Arguments**: `warnings: Sequence[str]`
+
+- **Returns**: `None`
+
+A result's own warnings, each once (the result card never showed them: 34 pairs left out by a rank test, fewer
+than 10 pairs that changed).
+
+### def `details` (analysis_layout.py)
+
+- **Arguments**: `result: TestResult`
+
+- **Returns**: `None`
+
+Folded under a test's headline: the statistic, the effect sizes, the assumption checks (diagnostics, not
+gates) and the method.
 
 ---
 
@@ -2849,7 +3371,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.run_reliability`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.QUESTION_KEY`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.QUESTION_KEY`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 
@@ -2893,6 +3415,15 @@ Reference-group / event-level / design selectors; recomputes the 2x2 analysis wi
 
 Labelled 2x2 table, measures of association (comparison vs reference) and guidance.
 
+### def `open_analysis` (epidemiology.py)
+
+- **Arguments**: `tab: str, choices: dict[ComplexType]`
+
+- **Returns**: `None`
+
+Open a tab of the page, and the analysis ``choices`` name on it (a selector's key and the id it takes): the
+``on_click`` of a button, since a widget's key is set before the widget is drawn.
+
 ### def `_transform_of` (epidemiology.py)
 
 - **Arguments**: `df: pd.DataFrame`
@@ -2902,13 +3433,22 @@ Labelled 2x2 table, measures of association (comparison vs reference) and guidan
 The transformation the Analysis tab applied to ``df`` and the columns it changed: part of each result's
 settings, so that a result computed on other values is never shown or stored as current.
 
+### def `_analysis_options` (epidemiology.py)
+
+- **Arguments**: `mi`
+
+- **Returns**: `tuple[ComplexType]`
+
+The first row of the Analysis tab: the kind of analysis, and a transformation of the numeric variables (none
+with imputed data). Only this tab reads them: they stood above the tabs, where they seemed to act on every one.
+
 ### def `_transformed` (epidemiology.py)
 
 - **Arguments**: `df: pd.DataFrame, numeric_cols: list, transformation: str`
 
 - **Returns**: `pd.DataFrame`
 
-The data of the Analysis tab, its numeric variables transformed as chosen above the tabs. Computed in that tab
+The data of the Analysis tab, its numeric variables transformed as chosen on that tab. Computed in that tab
 only (M5b): the other tabs analyse the data as they are. The frame says which transformation changed which
 columns (``TRANSFORM_ATTR``): Log1p leaves a column with a negative value as it is.
 
@@ -2929,14 +3469,6 @@ Handles:
 
 With multiply imputed data (``mi``, see ui.components.mi_mode) the group comparison and the ANCOVA are
 pooled over the imputed datasets (app_pages.analysis_pooled).
-
-### def `_observed_agreement_note` (epidemiology.py)
-
-- **Arguments**: ``
-
-- **Returns**: `None`
-
-Diagnostic accuracy and agreement with imputed data selected: what is analysed, and why it is not pooled.
 
 ### def `run_univariate_analysis` (epidemiology.py)
 
@@ -4385,6 +4917,6 @@ _Visualize page: distributions, categorical charts, time series, relationships (
 _Which test? Four questions -> the recommended analysis, why, and where to run it._
 
 **Imports**:
-`streamlit`, `ui.components.glossary_popover`, `ui.components.page_header`, `ui.components.page_link`, `ui.components.section`, `ui.components.status_chip`, `ui.guidance.DESIGNS`, `ui.guidance.DISTRIBUTIONS`, `ui.guidance.GROUPS`, `ui.guidance.OUTCOMES`, `ui.guidance.recommend`
+`streamlit`, `ui.components.glossary_popover`, `ui.components.page_header`, `ui.components.page_link`, `ui.components.section`, `ui.components.status_chip`, `ui.guidance.DESIGNS`, `ui.guidance.DISTRIBUTIONS`, `ui.guidance.GROUPS`, `ui.guidance.OUTCOMES`, `ui.guidance.recommend`, `ui.guidance.test_chooser.OTHER_QUESTIONS`
 
 ---
