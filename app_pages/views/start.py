@@ -128,7 +128,7 @@ with left, st.container(border=True):
 with right:
     with st.container(border=True):
         st.subheader("Sample cohort", icon=":material/science:", anchor=False)
-        st.caption("500 synthetic patients with a treatment effect, a prognostic score, time-to-event data, "
+        st.caption("500 synthetic participants with a treatment effect, a prognostic score, time-to-event data, "
                    "documented missingness and one data-entry anomaly.")
         with st.container(horizontal=True, vertical_alignment="center"):
             if st.button("Load the sample cohort", key="start_sample", type="primary", icon=":material/play_arrow:"):
@@ -144,7 +144,7 @@ with right:
         st.subheader("Tutorial cohort", icon=":material/school:", anchor=False)
         st.caption(
             "A randomised heart-failure cohort from 4 sites (1,206 rows, 41 variables) with planted data-entry errors, "
-            "patients to exclude, documented missingness, variables computed from others, two raters, paired "
+            "participants to exclude, documented missingness, variables computed from others, two raters, paired "
             "measurements and survival data. "
             "Its study configuration (8 plausibility rules, 4 inclusion criteria) is loaded with it."
         )

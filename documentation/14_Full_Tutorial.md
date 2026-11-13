@@ -1,8 +1,8 @@
 # Full tutorial: from a raw file to a reproducible report
 
 This tutorial walks through every step of CohortStudio with the **tutorial cohort**: a synthetic, randomised
-heart-failure study run at 4 sites (Luxembourg, Esch-sur-Alzette, Ettelbruck, Metz). There are 1,200 patients
-in 1,206 rows, because 6 patients were entered twice. There are 41 variables, and errors and gaps were planted
+heart-failure study run at 4 sites (Luxembourg, Esch-sur-Alzette, Ettelbruck, Metz). There are 1,200 participants
+in 1,206 rows, because 6 participants were entered twice. There are 41 variables, and errors and gaps were planted
 in the data on purpose. No real patient is involved. Each step says what you should see, so you can check that you are on track.
 
 **Time needed:** about 45 minutes. **AI engine:** not needed except for the optional step 7.
@@ -13,7 +13,7 @@ in the data on purpose. No real patient is involved. Each step says what you sho
 | --- | --- | --- |
 | `tutorial_cohort.csv` | The cohort (1,206 rows, 41 columns, dates in dd/mm/yyyy) | Step 1 |
 | `tutorial_config.json` | The study configuration: 8 plausibility rules and 4 inclusion criteria | Step 2 |
-| `tutorial_followup_labs.csv` | The 6-month laboratory visit (1,017 patients), to merge on `patient_id` | Step 3 |
+| `tutorial_followup_labs.csv` | The 6-month laboratory visit (1,017 participants), to merge on `patient_id` | Step 3 |
 | `tutorial_dictionary.md` | The data dictionary and the list of planted problems | Throughout |
 
 Download them from **Start > Tutorial cohort > Tutorial files**. They are also in `assets/tutorial/` in the repository.
@@ -78,8 +78,8 @@ The global score is about **98/100** (*excellent*). Hover the segments of the ri
    you would correct these values at the source; here, excluding them keeps the tutorial simple.
 4. **Add your own rule.** In *New Plausibility Rule*, create an expression rule named *Possible undiagnosed
    diabetes*: `(df['diabetes'] == 'No') & (df['hba1c_pct'] >= 6.5)`. Run the check again: **32 rows** are flagged,
-   the 16 of the 8 rules and **16 patients** this rule flags. Their values are plausible: the recorded diagnosis may
-   be incomplete, so they are patients to review clinically, not data-entry errors, and such a rule does not belong
+   the 16 of the 8 rules and **16 participants** this rule flags. Their values are plausible: the recorded diagnosis may
+   be incomplete, so they are participants to review clinically, not data-entry errors, and such a rule does not belong
    among the plausibility rules. **Leave it unticked** in the sidebar. As long as it is declared, the dashboard
    counts it: Domain Validity reads 99.70% instead of 99.83% (the rule fails on 16 of the 940 rows recording both
    values), and the rule leads the list of rules broken.
@@ -94,14 +94,14 @@ The global score is about **98/100** (*excellent*). Hover the segments of the ri
 | Criterion not met | Rows |
 | --- | --- |
 | Written consent | 14 |
-| Age 18 to 85 (3 minors, older patients) | 71 |
+| Age 18 to 85 (3 minors, older participants) | 71 |
 | Symptomatic heart failure (NYHA II-IV) | 183 |
 | No severe kidney disease | 8 |
 
-A patient can fail several criteria, so the rows do not add up to 262.
+A participant can fail several criteria, so the rows do not add up to 262.
 
 3. Click **Restrict the analysis population to these criteria**. With the plausibility rules, 12 criteria are
-   ticked and the analysis set has **928 patients**: 462 Control and 466 Intervention. The sidebar shows *928 of
+   ticked and the analysis set has **928 participants**: 462 Control and 466 Intervention. The sidebar shows *928 of
    1,206 rows*, and every analysis page shows the same population in a banner.
 4. Open the **Analysis population** tab: it shows the participant flow (1,206 rows, 16 excluded by the plausibility
    rules, 1,190, 262 excluded by the inclusion criteria, 928), what each criterion excludes, and the excluded rows
@@ -111,7 +111,7 @@ A patient can fail several criteria, so the rows do not add up to 262.
 ### 2.4 Outliers
 
 In **Handle Outliers**, run the IQR method on `nt_probnp_pg_ml`. Many high values are flagged because NT-proBNP is
-strongly right-skewed. These are real patients, not errors: **do not exclude them** from the analysis population
+strongly right-skewed. These are real participants, not errors: **do not exclude them** from the analysis population
 (the button would add them as an *outliers* criterion) and analyse NT-proBNP on a log scale.
 
 ### 2.5 Missing data
@@ -121,10 +121,10 @@ The dashboard's missing-data views show these documented patterns:
 | Variable | Missing | Pattern |
 | --- | --- | --- |
 | `ldl_mmol_l` | about 6% | completely at random (MCAR) |
-| `hba1c_pct` | about 22% | depends on `diabetes`: rarely measured in patients without diabetes (MAR) |
+| `hba1c_pct` | about 22% | depends on `diabetes`: rarely measured in participants without diabetes (MAR) |
 | `nt_probnp_pg_ml` | about 15% | depends on NYHA class: less often measured in mild disease (MAR) |
-| `sbp_6m` | about 16% | **structural**: the patient died or left before the 6-month visit |
-| `height_cm` | about 5% | depends on `age`: less often measured in older patients (MAR); a few heights were measured but not transcribed |
+| `sbp_6m` | about 16% | **structural**: the participant died or left before the 6-month visit |
+| `height_cm` | about 5% | depends on `age`: less often measured in older participants (MAR); a few heights were measured but not transcribed |
 | `bmi_kg_m2`, `egfr_ml_min_1_73m2`, `hf_phenotype` | 3 to 7% | not transcribed, no BMI without a height, no eGFR under 18: each is **computed from other variables**, which can fill most of them (step 3.3) |
 
 Finally, save a version with **Save** in the sidebar. Validate is now ticked on the Start page.
@@ -162,7 +162,7 @@ a draft is open, the banner offers to redo the changes on the new data instead.
 
 In **Import External Data**, upload `tutorial_followup_labs.csv`. Choose to add *Columns*, the *left* join and a
 *Common Row Identifier* on `patient_id`. This adds `visit_6m_date`, `nt_probnp_6m_pg_ml` and
-`creatinine_6m_umol_l`. **778 of the 928 patients** of the analysis population have a 6-month visit; the others
+`creatinine_6m_umol_l`. **778 of the 928 participants** of the analysis population have a 6-month visit; the others
 keep empty cells.
 
 ### 3.2 Derive variables
@@ -182,7 +182,7 @@ With the AI engine on, you can also start from **AI Variable Suggestions (RAG)**
 *eGFR*, read the formula and its source, and **Apply to Editor** puts it in the editor, to check against the formula
 above before you compute it.
 
-`egfr_6m` uses `sex_clean`, written in step 2.6. It averages about 68 mL/min/1.73 m2 in the 778 patients with a
+`egfr_6m` uses `sex_clean`, written in step 2.6. It averages about 68 mL/min/1.73 m2 in the 778 participants with a
 6-month visit; `np.where(age >= 18, ..., np.nan)` keeps this adult equation away from
 minors. Apply the draft. On the Start page, *Enrich* is ticked and *Validate* turns amber with **run again**: the
 data changed, so check the quality once more (step 2.1).
@@ -210,7 +210,7 @@ rather than an imputation. Under **Add a definition**, add:
   report. With `sex` instead of `sex_clean`, the 4 women typed *Female*, *f*, *F* with a trailing space and *female*
   disagree too: clean the codes first.
 - `hf_phenotype` agrees in **1,171 of 1,172 rows**: the one that disagrees is the ejection fraction of 155%. Try the
-  ESC 2016 cut-off instead, `lvef_pct < 40` for HFrEF: it only **mostly agrees**, because the 39 patients at
+  ESC 2016 cut-off instead, `lvef_pct < 40` for HFrEF: it only **mostly agrees**, because the 39 participants at
   exactly 40% are HFmrEF in 2016 and HFrEF in 2021.
 
 Data > Validate's dashboard repeats these checks on every row among its recommendations, with a link back to this tab.
@@ -219,7 +219,7 @@ The line of each definition says how many missing values of the analysis populat
 **34** BMIs, **49** eGFRs and **30** phenotypes. Under **2. Fill exactly**, the table adds the **10** heights the
 inverse recovers; each fill is counted as observed (exact) and rounded as its variable is written. Click **Fill 123
 values**: four steps join the draft, each recorded with the definition it used, so that a replay computes the same
-values. Apply the draft. 24 patients have neither a height nor a BMI: an imputation below gives them a height, and
+values. Apply the draft. 24 participants have neither a height nor a BMI: an imputation below gives them a height, and
 their BMI is then computed from it. With the AI engine on, **Find them with the AI engine**
 proposes definitions from the column names and their typical values, each checked in the same way: if it proposes
 both CKD-EPI equations, only the 2021 one agrees. The definitions are saved with the criteria, in the configuration
@@ -228,13 +228,13 @@ downloaded from Data > Validate.
 Then:
 
 - `ldl_mmol_l` is missing completely at random: single imputation (KNN or MICE) is acceptable for exploration.
-  The imputation is fitted on, and fills, the 928 rows of the analysis population only; the excluded patients
+  The imputation is fitted on, and fills, the 928 rows of the analysis population only; the excluded participants
   keep their missing values. Every result computed on the filled values then shows a warning, because the
   analyses treat them as observed. With the derived variables declared, keep **Compute the declared derived
   variables' missing values from the imputed values** ticked: the BMI, the one still missing, is kept out of the
   imputation, and its 24 missing values are computed from the imputed heights, single-imputed as those heights are. If you plan inferential analyses, skip
   this and use the multiple imputation below for every incomplete variable.
-- **Do not impute `sbp_6m`.** Its values are missing because the patient died or left. Analyse the patients who
+- **Do not impute `sbp_6m`.** Its values are missing because the participant died or left. Analyse the participants who
   have the measurement and say so.
 - For inferential models with MAR variables (`hba1c_pct`, `nt_probnp_pg_ml`), use **multiple imputation** on
   the **Multiple imputation (for inference)** tab:
@@ -242,7 +242,7 @@ Then:
      number of imputations.
   2. Step 2 keeps the variables of the planned analyses in the model, outcomes included (`death`, `fu_days`,
      `hf_hospitalisation`): leaving an outcome out would bias its associations towards zero. Set the method of
-     `sbp_6m` to *do not impute*: its values are missing because the patient died or left. Keep **Compute the
+     `sbp_6m` to *do not impute*: its values are missing because the participant died or left. Keep **Compute the
      declared derived variables in each imputed dataset from its imputed values** ticked: `bmi_kg_m2` leaves the
      methods table and each imputed dataset computes its 24 missing BMIs from its own imputed heights, instead of
      imputing a BMI that would not be the weight over the height squared. Once filled exactly,
@@ -251,7 +251,7 @@ Then:
      value), tick the planned Cox model with time `fu_days` and event `death`, and use several processor
      cores.
   4. Run it. In step 4 the chain traces should mix without a trend. The imputed HbA1c values are lower than the
-     observed ones: HbA1c is mostly missing in patients without diabetes, whose values are lower.
+     observed ones: HbA1c is mostly missing in participants without diabetes, whose values are lower.
   5. Step 5 saves the imputation with a version, exports it for R or Stata, and writes a methods paragraph.
 
   The dataset itself is unchanged: the analyses use the imputed datasets when you choose **Analysis data:
@@ -335,7 +335,7 @@ On the **Diagnostic accuracy & agreement** tab:
 ### 5.5 Power
 
 On the **Power & Sample Size** tab, choose *Chi-Square* with *Expected event proportions* `0.33, 0.28`. That is
-roughly the observed 2-year mortality by arm. About **2,660 patients** would be needed for 80% power. The study
+roughly the observed 2-year mortality by arm. About **2,660 participants** would be needed for 80% power. The study
 has 928, so the mortality question in step 6 was always going to be inconclusive.
 
 ---
@@ -363,8 +363,8 @@ of the 928 rows. Back on **Time to event**, compare by `arm` and adjust for `age
 
 - under *Model details*, each hazard ratio comes with its 95% CI, the Barnard-Rubin df, the fraction of missing
   information (FMI) and the relative increase in variance (RIV); `hba1c_pct` has the largest FMI;
-- *Complete-case analysis, for comparison: Cox model* fits the same model on the patients with every value: about
-  a fifth fewer patients and wider intervals.
+- *Complete-case analysis, for comparison: Cox model* fits the same model on the participants with every value: about
+  a fifth fewer participants and wider intervals.
 
 On **Hypothesis tests & epidemiology**, compare `hba1c_pct` between the arms: the Welch t-test is pooled, and
 the Mann-Whitney test is listed as not poolable, with the reason. Untick a criterion in the sidebar: the pages
@@ -404,7 +404,7 @@ Then build the study dossier. Under the Cox model of step 6 (and any other resul
 **Add to the study dossier**. Open **Reproduce > Study dossier**: the participant flow goes from the 1,206
 records of `tutorial_cohort.csv` to 1,190 after the implausible values (16 excluded) and 928 after the inclusion
 criteria (262 not meeting them), with a box per analysis below. Click the *Not meeting: study inclusion* box to
-see how many patients each criterion excluded first. **Download the Word dossier**: it has the provenance, the
+see how many participants each criterion excluded first. **Download the Word dossier**: it has the provenance, the
 flow figure, the criteria, the missing data and the multiple imputation with its methods paragraph, your
 results and the references. Download the **Word report**: it documents the whole
 pipeline with what each step did to the table. On **Start**, every core step is now ticked.

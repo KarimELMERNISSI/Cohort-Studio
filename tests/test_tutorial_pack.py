@@ -164,7 +164,8 @@ def test_chapter_formulas_work_in_the_enrich_evaluator(analysis_set: pd.DataFram
     egfr_6m = pd.to_numeric(result)
     assert int(egfr_6m.notna().sum()) == 778 and round(float(egfr_6m.mean())) == 68
     assert (
-        "It averages about 68 mL/min/1.73 m2 in the 778 patients with a\n6-month visit" in CHAPTER
+        "It averages about 68 mL/min/1.73 m2 in the 778 participants with a\n6-month visit"
+        in CHAPTER
     )
 
 
@@ -243,7 +244,7 @@ def test_the_derived_variables_agree_but_in_the_planted_errors(
         "1,171 of 1,172 rows",
         "**34** BMIs, **49** eGFRs and **30** phenotypes",
         "the **10** heights the\ninverse recovers",
-        "24 patients have neither",
+        "24 participants have neither",
     ):
         assert number in CHAPTER, number
 

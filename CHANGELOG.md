@@ -157,6 +157,12 @@ with its own form and button, the first columns of the file already chosen. They
   are visible on the dark theme; the reference share is cleared when its variable changes; "Adjust for" stands
   in the left half, under what is compared.
 
+### Documentation: the tutorial says "participants"
+
+- The tutorial chapter, the dictionary of the tutorial cohort and the two cards of the Start page say
+  "participants", as the application does (they said "patients"). The column `patient_id` keeps its name, and "No
+  real patient is involved" stays.
+
 ### Security: the Ollama and Qdrant addresses are chosen from the server's lists, never typed
 
 - Settings > AI engine offers the Ollama addresses the server allows, in a list that cannot be typed in, instead of a
