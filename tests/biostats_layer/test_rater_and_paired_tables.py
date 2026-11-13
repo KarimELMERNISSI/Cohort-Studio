@@ -13,6 +13,7 @@ import pytest
 from biostats.diagnostic import diagnostic_accuracy
 from biostats.paired import mcnemar_test, paired_table
 from biostats.reliability import (
+    by_value,
     category,
     category_order,
     cohens_kappa,
@@ -49,6 +50,31 @@ def test_two_raters_codes_are_compared_as_values() -> None:
     # as text, the way the page built it: no category in common
     as_text = pd.crosstab(first.astype(str), second.astype(str))
     assert not set(as_text.index) & set(as_text.columns)
+
+
+def test_two_codes_are_one_category_only_beside_a_column_of_numbers() -> None:
+    """Texts that read as the same number were one category whatever the columns: "250.0" and "250.00", "01" and
+    "1" are codes, and two raters who never wrote the same code had a kappa of 1. Two columns of texts are compared
+    as written; texts beside a column of numbers are the same grades written two ways, compared by value."""
+    first = pd.Series(["250.0", "250.0", "401.9", "01", "250.0", "401.9"], name="a")
+    second = pd.Series(["250.00", "250.0", "401.9", "1", "250.00", "401.9"], name="b")
+    assert not by_value(first, second)
+    table = rater_table(first, second)
+    # two writings of one number are two categories, in an order that no run changes
+    assert list(table.index) == ["01", "1", "250.0", "250.00", "401.9"] == list(table.columns)
+    assert int(np.trace(table.to_numpy())) == 3 and int(table.to_numpy().sum()) == 6
+    assert cohens_kappa(table).kappa < 1
+    # a column of numbers beside a column of texts: by value
+    grades = pd.Series([2, 3, 2, 4, 3, 4], name="a")
+    typed = pd.Series(["2.0", "3", "2", "04", "3.0", "4"], name="b")
+    assert by_value(grades, typed) and by_value(typed, grades)
+    table = rater_table(grades, typed)
+    assert list(table.index) == ["2", "3", "4"] and int(np.trace(table.to_numpy())) == 6
+    # a column of True and False is no column of numbers
+    assert not by_value(pd.Series([True, False]), pd.Series(["1", "0"]))
+    # a category "nan" is a text: sorted as a number it stood between 2 and 1
+    assert category_order(["2", "nan", "1"]) == ["1", "2", "nan"]
+    assert category_order(["10", "9", "09"]) == ["09", "9", "10"]
 
 
 def test_a_weighted_kappa_reads_the_grades_in_their_stated_order() -> None:

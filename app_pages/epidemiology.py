@@ -16,7 +16,7 @@ from app_pages.analysis_config import render_analysis_configuration
 from app_pages.analysis_diagnostic import QUESTION_KEY as DIAGNOSTIC_QUESTION
 from app_pages.analysis_diagnostic import run_diagnostic_accuracy
 from app_pages.analysis_extras import QUESTION_KEY as PAIRED_QUESTION
-from app_pages.analysis_extras import run_paired_and_rates
+from app_pages.analysis_extras import run_paired_and_rates, strata_choices
 from app_pages.analysis_guidance_ui import (
     MAP_KEY,
     guidance_on,
@@ -121,8 +121,9 @@ def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
         return None
 
 
-def _render_twobytwo_panel(epi):
-    """Labelled 2x2 table, measures of association (comparison vs reference) and guidance."""
+def _render_twobytwo_panel(epi, carried=None):
+    """Labelled 2x2 table, measures of association (comparison vs reference) and guidance. ``carried``: the
+    choices of the panel as the stratified analysis takes them (``strata_choices``), for its button."""
     col_tbl, col_metrics = st.columns([1, 1])
     with col_tbl:
         st.markdown("##### 2x2 Contingency Table")
@@ -183,9 +184,10 @@ def _render_twobytwo_panel(epi):
         icon=":material/arrow_forward:",
         key="epi_open_strata",
         on_click=open_analysis,
-        args=(TABS[2], {PAIRED_QUESTION: measures.STRATA}),
-        help="Opens Paired, rates & stratified on the stratified analysis: the same odds and risk ratios within the "
-        "groups of a third variable, and combined over them.",
+        args=(TABS[2], {PAIRED_QUESTION: measures.STRATA, **(carried or {})}),
+        help="Opens Paired, rates & stratified on the stratified analysis, with the outcome, its event, the groups "
+        "and the reference group chosen here: the same odds and risk ratios within the groups of a third variable, "
+        "and combined over them.",
     )
 
 
@@ -755,7 +757,16 @@ def run_univariate_analysis(df, analyzer, transformed=False):
             st.subheader("Epidemiological Risk & Association Analysis (2x2)")
             epi = _render_twobytwo_controls(df_analysis_filtered, group_col, selected_detail, detail_res["epi_2x2"])
             if epi is not None:
-                _render_twobytwo_panel(epi)
+                # the panel's own choices go with its button: the stratified analysis opened with every field empty
+                carried = strata_choices(
+                    df,
+                    outcome=selected_detail,
+                    event=epi.get("event_level"),
+                    compare=group_col,
+                    reference=epi.get("reference_level"),
+                    stratum=st.session_state.get("mh_stratum"),
+                )
+                _render_twobytwo_panel(epi, carried)
 
         # Visualizations (the Q-Q plot of each group is in the grid, next to the histograms)
         visualize_result(df_analysis_filtered, group_col, selected_detail, analyzer)

@@ -122,6 +122,7 @@ def _paired_number(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         key="pair_kind",
         persist_state="page",
         help=HELP["change"],
+        **layout.start_at("pair_kind", m.CHANGES, 3),
     )
     if before and after:
         st.caption(f"Change = {as_code(after)} - {as_code(before)}.")
@@ -420,6 +421,7 @@ def _one_mean(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         key="one_kind",
         persist_state="page",
         help=HELP["summary"],
+        **layout.start_at("one_kind", m.SUMMARIES, 3),
     )
     pooled = mi is not None
     if pooled and kind == m.SIGNED_RANK:
@@ -697,6 +699,42 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
 
 def _levels_as_text(df: pd.DataFrame, column: str | None) -> list[str]:
     return sorted(df[column].dropna().astype(str).unique()) if column else []
+
+
+def strata_choices(
+    df: pd.DataFrame,
+    *,
+    outcome: str,
+    event: Any,
+    compare: str,
+    reference: Any,
+    stratum: str | None = None,
+) -> dict[str, Any]:
+    """
+    The session values that open the stratified analysis on choices made elsewhere on the page: the 2x2 panel of
+    the Analysis tab holds the outcome, its event, the two groups and the reference group, and its button opened
+    this analysis with every field empty. They are the researcher's own choices, not a guess: the plan shows
+    them before Run, and the variable to adjust for is left to choose.
+
+    Each is carried only when this analysis offers it on ``df`` (the panel can compare two groups of a variable
+    that holds more: such a variable is not offered here); what is not carried is left empty. ``stratum``: the
+    variable to adjust for kept from an earlier use, let go when it is now the outcome or the groups.
+    """
+    offered = m.two_valued(df)
+    chosen: dict[str, Any] = {"mh_outcome": None, "mh_exposure": None}
+    if outcome in offered:
+        chosen["mh_outcome"] = outcome
+        events = _levels_as_text(df, outcome)
+        if str(event) in events:
+            chosen |= layout.given("mh_ev_level", (outcome, tuple(events)), str(event))
+    if compare in offered and compare != outcome:
+        chosen["mh_exposure"] = compare
+        compared = _levels_as_text(df, compare)
+        if str(reference) in compared:
+            chosen |= layout.given("mh_reference", (compare, tuple(compared)), str(reference))
+    if stratum is not None and stratum in (outcome, compare):
+        chosen["mh_stratum"] = None
+    return chosen
 
 
 def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
@@ -1210,4 +1248,4 @@ def run_paired_and_rates(df: pd.DataFrame, analyzer: Any, *, mi: Any = None) -> 
     panel(df, mi=mi, guided=guided)
 
 
-__all__ = ["QUESTION_KEY", "category_order", "run_paired_and_rates"]
+__all__ = ["QUESTION_KEY", "category_order", "run_paired_and_rates", "strata_choices"]

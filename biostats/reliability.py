@@ -89,13 +89,44 @@ def category(value: object) -> str:
     return str(int(number)) if number.is_integer() else repr(number)
 
 
+def number_of(text: str) -> float:
+    """The number a category's text reads as; ValueError for a text that is no finite number. "nan" and "inf" parse
+    as floats: sorted by them, a category "nan" stood between 2 and 1."""
+    number = float(text)
+    if not np.isfinite(number):
+        raise ValueError(text)
+    return number
+
+
 def category_order(categories: Sequence[str]) -> list[str]:
     """The order categories are proposed in: by value when every one is a number, otherwise by name. For a weighted
     kappa the order is the scale's own, which only its user knows: this is where it starts."""
     try:
-        return sorted(categories, key=float)
+        return sorted(
+            categories, key=lambda name: (number_of(name), name)
+        )  # two writings of one number: by name
     except ValueError:
         return sorted(categories, key=lambda name: (name.casefold(), name))
+
+
+def by_value(first: pd.Series, second: pd.Series) -> bool:
+    """
+    Whether the texts of two raters' columns are compared as numbers: when one of the two columns holds numbers.
+    A column of numbers beside a column of texts (2 against "2.0") holds the same grades written two ways. Two
+    columns of texts are compared as written: "250.0" and "250.00", "01" and "1" are codes, and two codes
+    are two categories (read as numbers, two raters who gave the same code to 10 participants of 30 had a kappa
+    of 1).
+    """
+    return any(
+        pd.api.types.is_numeric_dtype(values.dtype) and not pd.api.types.is_bool_dtype(values.dtype)
+        for values in (first, second)
+    )
+
+
+def rating(value: object, *, valued: bool) -> str:
+    """A rating as its category: a number by its value (2 and 2.0 are one grade whatever the column's type), a text
+    as written unless the texts of the pair are read as numbers (``valued``, :func:`by_value`)."""
+    return value if isinstance(value, str) and not valued else category(value)
 
 
 def rater_table(
@@ -103,7 +134,8 @@ def rater_table(
 ) -> pd.DataFrame:
     """
     The cross-table of two raters' categories over the participants rated by both: rows the first rater, columns the
-    second, the same categories in the same order on both sides (:func:`category`: values are compared as values).
+    second, the same categories in the same order on both sides (:func:`rating`: numbers are compared as values,
+    and texts too when one of the two columns holds numbers; two columns of texts are compared as written).
 
     ``order`` gives the categories from the lowest to the highest, as a weighted kappa reads them; it must hold every
     category either rater used. Without it they are put in the order of :func:`category_order`: fit for an unweighted
@@ -111,8 +143,9 @@ def rater_table(
     is no scale, and grades from 1 to 10 read 1, 10, 2).
     """
     both = first.notna().to_numpy() & second.notna().to_numpy()
-    a = [category(v) for v in first[both]]
-    b = [category(v) for v in second[both]]
+    valued = by_value(first, second)
+    a = [rating(v, valued=valued) for v in first[both]]
+    b = [rating(v, valued=valued) for v in second[both]]
     used = set(a) | set(b)
     if order is None:
         levels = category_order(list(used))
@@ -263,11 +296,14 @@ __all__ = [
     "NEAR_MISSES",
     "ICCResult",
     "KappaResult",
+    "by_value",
     "category",
     "category_order",
     "cohens_kappa",
     "icc",
     "koo_li",
     "landis_koch",
+    "number_of",
     "rater_table",
+    "rating",
 ]

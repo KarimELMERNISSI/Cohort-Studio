@@ -22,7 +22,7 @@ import pandas as pd
 from scipy import stats
 
 from biostats.diagnostic import YOUDEN_MIN_CLASS, delong_auc
-from biostats.reliability import category, category_order
+from biostats.reliability import by_value, category, category_order, number_of, rating
 from biostats.survival import EVENT_WORDS
 from core.registry import as_code
 from ui.guidance.analysis import Advice
@@ -802,8 +802,9 @@ def rater_categories(
     """The categories either rater used on the participants rated by both (in the order proposed), how many
     participants each rater put in each, and the participants rated by both."""
     both = df[first].notna() & df[second].notna()
-    a = pd.Series([category(v) for v in df.loc[both, first]]).value_counts().to_dict()
-    b = pd.Series([category(v) for v in df.loc[both, second]]).value_counts().to_dict()
+    valued = by_value(df[first], df[second])  # as the table of the result reads them
+    a = pd.Series([rating(v, valued=valued) for v in df.loc[both, first]]).value_counts().to_dict()
+    b = pd.Series([rating(v, valued=valued) for v in df.loc[both, second]]).value_counts().to_dict()
     return category_order(list({*a, *b})), a, b, int(both.sum())
 
 
@@ -828,12 +829,68 @@ def grade_order(categories: Sequence[str]) -> list[str]:
     the one input of this analysis the software cannot know: its user places each grade.
     """
     try:
-        return sorted(categories, key=float)
+        return sorted(
+            categories, key=lambda name: (number_of(name), name)
+        )  # a grade "nan" is no number
     except ValueError:
         values = [_roman(name) for name in categories]
         if any(value is None for value in values):
             return []
         return [name for _, name in sorted(zip(values, categories, strict=True))]  # type: ignore[type-var]
+
+
+def _writings(
+    df: pd.DataFrame, first: str, second: str, a: Mapping[str, int], b: Mapping[str, int]
+) -> list[Advice]:
+    """
+    What a plan says of ratings written as numbers. A column of numbers beside a column of texts: the texts are
+    read as numbers, and the plan names the writings that were read as one ("2.0" as 2). Two columns of texts:
+    they are compared as written, and the plan names the writings that read as the same number and are kept as
+    two categories ("250.0" and "250.00", "01" and "1"): codes, unless their user says otherwise by cleaning
+    the column.
+    """
+    if by_value(df[first], df[second]):
+        both = df[first].notna() & df[second].notna()
+        read: dict[str, str] = {}
+        where = None
+        for column in (first, second):
+            for value in df.loc[both, column].unique():
+                if isinstance(value, str) and category(value) != value:
+                    read.setdefault(value, category(value))
+                    where = where or column
+        if not read:
+            return []
+        shown = ", ".join(
+            f"{_value(text)} as {_value(number)}" for text, number in list(read.items())[:3]
+        )
+        return [
+            Advice(
+                "info",
+                f"{as_code(where)} holds texts beside a column of numbers: its values are read as numbers "
+                f"({shown}{', ...' if len(read) > 3 else ''}).",
+            )
+        ]
+    numbers: dict[float, list[str]] = {}
+    for name in {*a, *b}:
+        try:
+            numbers.setdefault(number_of(name), []).append(name)
+        except ValueError:
+            continue
+    apart = [sorted(names) for names in numbers.values() if len(names) > 1]
+    if not apart:
+        return []
+    shown = "; ".join(" and ".join(_value(n) for n in names) for names in sorted(apart)[:3])
+    odd = {name for names in apart for name in names if category(name) != name}
+    where = next((c for c, own in ((first, a), (second, b)) if odd & set(own)), first)
+    return [
+        Advice(
+            "caution",
+            f"{shown} read as the same number and count as categories of their own: two columns of texts are "
+            "compared as written, since codes are not numbers. If they are one grade, clean the column into a "
+            "copy beside it, which the analysis then uses.",
+            column=where,
+        )
+    ]
 
 
 def _look_ordered(categories: Sequence[str]) -> bool:
@@ -878,6 +935,7 @@ def plan_raters(
                 column=where,
             )
         )
+    spelt += _writings(df, first, second, a, b)
     if not shared:
         return _refused(
             rows,
@@ -1317,7 +1375,18 @@ def plan_strata(
 ) -> ModelPlan:
     rows = len(df)
     if not outcome or not compare or not stratum:
-        return _idle(rows, "Choose the outcome, what is compared and the variable to adjust for.")
+        # what is still to choose, by name: opened from the 2x2 panel, only the variable to adjust for is
+        missing = [
+            what
+            for chosen, what in (
+                (outcome, "the outcome"),
+                (compare, "what is compared"),
+                (stratum, "the variable to adjust for"),
+            )
+            if not chosen
+        ]
+        listed = " and ".join(filter(None, (", ".join(missing[:-1]), missing[-1])))
+        return _idle(rows, f"Choose {listed}.")
     if len({outcome, compare, stratum}) < 3:
         return _refused(
             rows,

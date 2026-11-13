@@ -874,6 +874,78 @@ def test_a_link_opens_its_analysis_after_another_was_open(app: AppTest) -> None:
     _ok(app)
 
 
+def test_a_link_opens_the_page_on_the_summary_of_a_rank_test(app: AppTest) -> None:
+    """ "Which test?" recommended the signed-rank test, and its link opened the page on the mean (the t-test)."""
+    for tab, selector, radio, compared in (
+        ("paired_rank", "pair_measure", "pair_kind", m.NUMBER),
+        ("one_rank", "one_compare", "one_kind", m.MEAN),
+    ):
+        app.switch_page(
+            nav.page_path("which_test")
+        ).run()  # another page: the choices of this one are let go
+        app.switch_page(nav.page_path("analyze")).run()
+        app.query_params[nav.TAB_PARAM] = tab
+        app.run()
+        _ok(app)
+        assert app.segmented_control(key=selector).value == compared
+        assert app.radio(key=radio).value == m.SIGNED_RANK
+        # the link gives where the page starts, not a rule: a choice made afterwards is kept
+        mean = m.T_TEST if tab == "paired_rank" else m.ONE_T
+        app.radio(key=radio).set_value(mean).run()
+        app.run()
+        _ok(app)
+        assert app.radio(key=radio).value == mean
+        del app.query_params[nav.TAB_PARAM]
+        app.run()
+        _ok(app)
+
+
+def test_the_choices_of_the_2x2_panel_are_carried_into_the_stratified_analysis(
+    app: AppTest,
+) -> None:
+    """The panel's button opened the stratified analysis with every field empty, although the panel holds the
+    outcome, its event, the two groups and the reference group. They are carried: the reference chosen in the
+    panel (not the first group, which the field offers on its own), and nothing for the variable to adjust for."""
+    app.switch_page(nav.page_path("which_test")).run()  # the choices of the page are let go
+    app.switch_page(nav.page_path("analyze")).run()
+    app.session_state["epi_tab"] = "Analysis"
+    app.run()
+    _ok(app)
+    app.selectbox(key="group_col").select("arm").run()
+    app.multiselect(key="target_cols").set_value(["hf_hospitalisation"]).run()
+    app.button(key="univariate_run").click().run()
+    _ok(app)
+    app.selectbox(key="ref_hf_hospitalisation").select("Intervention").run()
+    _ok(app)
+    assert app.selectbox(key="event_hf_hospitalisation").value == "Yes"
+    app.button(key="epi_open_strata").click().run()
+    _ok(app)
+    assert app.session_state["epi_tab"] == PAIRED
+    assert app.segmented_control(key="paired_question").value == m.STRATA
+    held = {
+        key: app.selectbox(key=key).value
+        for key in ("mh_outcome", "mh_ev_level", "mh_exposure", "mh_reference", "mh_stratum")
+    }
+    assert held == {
+        "mh_outcome": "hf_hospitalisation",
+        "mh_ev_level": "Yes",
+        "mh_exposure": "arm",
+        "mh_reference": "Intervention",
+        "mh_stratum": None,
+    }
+    assert app.button(key="mh_run").disabled  # the variable to adjust for is left to choose
+    assert "Choose the variable to adjust for." in _texts(
+        app
+    )  # the plan names what is missing, no more
+    _pick(app, "mh_stratum", "nyha_class")
+    _run(app, "mh_run")
+    turned = _stored(app, "mantel_haenszel")
+    assert (turned.compared, turned.reference, turned.event) == ("Control", "Intervention", "Yes")
+    assert turned.or_mh == pytest.approx(1 / 0.6278365838812753, rel=1e-12)
+    app.run()
+    assert app.selectbox(key="mh_reference").value == "Intervention"  # kept at the next run
+
+
 def test_every_entry_of_the_two_tabs_can_be_linked_to() -> None:
     """A label renamed on one side only fails here, not as a link that opens the page on its first tab."""
     from app_pages.epidemiology import TABS
@@ -889,6 +961,10 @@ def test_every_entry_of_the_two_tabs_can_be_linked_to() -> None:
         m.ENTRY[m.ONE_GROUP].label: set(m.COMPARED.values()),
         m.ENTRY[m.RATES].label: set(m.CALCULATIONS.values()),
     }
+    thirds = {
+        m.MEASURES[m.NUMBER]: set(m.CHANGES.values()),
+        m.COMPARED[m.MEAN]: set(m.SUMMARIES.values()),
+    }
     linked = {tab: set() for tab in entries}
     for labels in paths.values():
         if labels[0] not in entries:
@@ -897,6 +973,8 @@ def test_every_entry_of_the_two_tabs_can_be_linked_to() -> None:
         linked[labels[0]].add(labels[1])
         if len(labels) > 2:
             assert labels[2] in seconds[labels[1]], labels
+        if len(labels) > 3:  # the summary of a rank test, on the radio of a number or of a mean
+            assert labels[3] in thirds[labels[2]], labels
     assert linked == entries  # every entry has a link
 
 
@@ -926,6 +1004,26 @@ def test_which_test_opens_the_analysis_it_recommends() -> None:
         "Roughly symmetric, at least 15 per group",
     )
     assert share.tab == "one_share"
+    # a signed-rank test has a link of its own, which opens the page on its summary: the link opened the page on
+    # the mean, and Run gave a test that was not the one recommended
+    skewed = "Skewed, outliers or fewer than 15 per group"
+    ranks = recommend(
+        "Continuous (measurement)", "Two groups", "Paired / repeated measures", skewed
+    )
+    assert ranks.test == "Wilcoxon signed-rank test" and ranks.tab == "paired_rank"
+    assert ranks.where.endswith("> A number (continuous) > Typical change (Wilcoxon signed-rank)")
+    one = recommend(
+        "Continuous (measurement)", "One group vs a reference value", "Independent groups", skewed
+    )
+    assert one.test == "Wilcoxon signed-rank test" and one.tab == "one_rank"
+    assert one.where.endswith("> A mean (a measurement) > Typical value (Wilcoxon signed-rank)")
+    mean = recommend(
+        "Continuous (measurement)",
+        "One group vs a reference value",
+        "Independent groups",
+        "Roughly symmetric, at least 15 per group",
+    )
+    assert mean.test == "One-sample t-test" and mean.tab == "one_mean"
     assert {tab for _, tab in OTHER_QUESTIONS} <= set(paths)
     # the four questions compare groups: what they cannot reach is linked beside them
     assert {"accuracy", "measurements", "raters", "strata", "rates", "expected"} == {

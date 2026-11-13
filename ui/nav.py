@@ -135,6 +135,25 @@ PAGES: tuple[PageDef, ...] = (
             ("paired_number", (_PAIRED, "Paired measurements", "A number (continuous)")),
             ("paired_yes_no", (_PAIRED, "Paired measurements", "Yes or no (binary)")),
             ("one_mean", (_PAIRED, "One group against a reference", "A mean (a measurement)")),
+            # the summary of a signed-rank test, which "Which test?" recommends: the page opens on it
+            (
+                "paired_rank",
+                (
+                    _PAIRED,
+                    "Paired measurements",
+                    "A number (continuous)",
+                    "Typical change (Wilcoxon signed-rank)",
+                ),
+            ),
+            (
+                "one_rank",
+                (
+                    _PAIRED,
+                    "One group against a reference",
+                    "A mean (a measurement)",
+                    "Typical value (Wilcoxon signed-rank)",
+                ),
+            ),
             (
                 "one_share",
                 (_PAIRED, "One group against a reference", "A share (a yes/no variable)"),

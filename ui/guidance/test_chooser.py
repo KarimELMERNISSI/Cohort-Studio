@@ -50,12 +50,11 @@ OTHER_QUESTIONS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _on(tab: str, then: str = "") -> dict[str, str]:
+def _on(tab: str) -> dict[str, str]:
     """A route to an analysis of Hypothesis tests & epidemiology: its page, the tab its link opens, and that place in
-    the words of the navigation (renamed with it, never left behind). ``then``: the choice to make there, when the
-    page opens on another (the summary of a rank test: the page opens on the mean)."""
-    where = nav.where("analyze", tab) + (f", then {then}" if then else "")
-    return {"page": "analyze", "tab": tab, "where": where}
+    the words of the navigation (renamed with it, never left behind). A rank test has a link of its own, which
+    opens the page on its summary: the page opened on the mean, and Run gave a test that was not recommended."""
+    return {"page": "analyze", "tab": tab, "where": nav.where("analyze", tab)}
 
 
 def recommend(outcome: str, groups: str, design: str, distribution: str) -> Recommendation:
@@ -95,8 +94,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 alternatives=()
                 if ranks
                 else ("Wilcoxon signed-rank test when the values are skewed or few",),
-                # the page opens on the mean: the summary to choose there is named
-                **_on("one_mean", "Summary: Typical value (Wilcoxon signed-rank)" if ranks else ""),
+                **_on("one_rank" if ranks else "one_mean"),
             )
         if paired:
             return Recommendation(
@@ -105,12 +103,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 else "Paired t-test",
                 why="Each participant contributes two measurements; the pairing must be respected.",
                 effect_size="mean (or pseudo-median) within-pair difference with 95% CI; Cohen's d_z",
-                **_on(
-                    "paired_number",
-                    "Summary of the change: Typical change (Wilcoxon signed-rank)"
-                    if (rank_only or not symmetric)
-                    else "",
-                ),
+                **_on("paired_rank" if (rank_only or not symmetric) else "paired_number"),
             )
         if two:
             if rank_only or not symmetric:

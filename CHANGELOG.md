@@ -43,7 +43,8 @@ with its own form and button, the first columns of the file already chosen. They
 - **Links open the analysis they name.** "Which tab do I need?" is a map whose buttons open a tab and its analysis;
   "Which test?" opens the analysis it recommends and lists the questions its four cannot reach (accuracy,
   agreement, strata, rates); Survival & regression links to the 2x2 panel, to the stratified analysis and to the
-  rates; the 2x2 panel links to the stratified analysis.
+  rates; the 2x2 panel links to the stratified analysis, and carries its outcome, its event, its groups and its
+  reference group there (the variable to adjust for is left to choose).
 
 **Results corrected with it:**
 
@@ -142,8 +143,8 @@ with its own form and button, the first columns of the file already chosen. They
   group"), where it named its methods; the figures are labelled "Rate, group compared" and "Rate, reference
   group"; the second row of fields no longer repeats "(reference group)".
 - **Words on the screen.** "Last result here" names the options as the page labels them ("Names without an
-  order", not "names"). "Which test?" names the summary to choose when it recommends a signed-rank test (the
-  page opens on the mean). The Terms of each analysis hold the tests it runs. "Create new variables" in an empty
+  order", not "names"). When "Which test?" recommends a signed-rank test, its link opens the page on that
+  summary (it opened on the mean, and Run gave the t-test). The Terms of each analysis hold the tests it runs. "Create new variables" in an empty
   state opens Enrich on that tab.
 - **The dossier writes what the page writes:** "mean difference" and the slope with its two readings for
   Bland-Altman (it read "Proportional bias", and its warning "consider ratios or log scale"); the
@@ -151,6 +152,12 @@ with its own form and button, the first columns of the file already chosen. They
   read; "number counted" for a share (it read "successes"); the sentence on near misses beside a weighted kappa.
 - **A share whose test and interval part** says so under the result: the exact binomial test and the Wilson
   interval are two methods (3 of 10 against 10% gives p = 0.070 beside 10.8% to 60.3%).
+- **Kappa: two codes are one category only beside a column of numbers.** Texts that read as the same number
+  ("250.0" and "250.00", "01" and "1") were merged whatever the columns: two raters who never wrote the
+  same code could reach a kappa of 1. Two columns of texts are now compared as written, and the plan names such
+  writings, with the column to clean if they are one grade. A column of numbers beside a column of texts is
+  still compared by value (2 against "2.0"), and the plan says which writings were read as numbers. A
+  category written "nan" no longer upsets the order of the others.
 - **Known limits** of the two tabs are listed in the handbook (chapter 5).
 - Smaller: the cut-off field says "at least" or "at most" only once a direction is chosen; the options of the
   ICC and of the limits of agreement show with their analysis only; the intervals of the limits of agreement

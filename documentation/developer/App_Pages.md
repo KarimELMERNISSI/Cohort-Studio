@@ -402,6 +402,21 @@ No description available.
 
 No description available.
 
+### def `strata_choices` (analysis_extras.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `dict[ComplexType]`
+
+The session values that open the stratified analysis on choices made elsewhere on the page: the 2x2 panel of
+the Analysis tab holds the outcome, its event, the two groups and the reference group, and its button opened
+this analysis with every field empty. They are the researcher's own choices, not a guess: the plan shows
+them before Run, and the variable to adjust for is left to choose.
+
+Each is carried only when this analysis offers it on ``df`` (the panel can compare two groups of a variable
+that holds more: such a variable is not offered here); what is not carried is left empty. ``stratum``: the
+variable to adjust for kept from an earlier use, let go when it is now the outcome or the groups.
+
 ### def `_strata` (analysis_extras.py)
 
 - **Arguments**: `df: pd.DataFrame`
@@ -743,6 +758,35 @@ The value goes through the widget's state because that is what reaches both side
 the value" over a result computed for Yes. A value cleared by removing its key stayed on the screen the same
 way. And a value kept from another column was reported ("PPV at prevalence 0.502" for a condition 10.9% of
 participants have).
+
+### def `_mark` (analysis_layout.py)
+
+- **Arguments**: `key: str`
+
+- **Returns**: `str`
+
+Where :func:`depends` keeps what the value of the widget ``key`` was given for.
+
+### def `given` (analysis_layout.py)
+
+- **Arguments**: `key: str, on: Any, value: Any`
+
+- **Returns**: `dict[ComplexType]`
+
+The session values that give the widget ``key`` a value chosen elsewhere (a button of another tab) for what it
+depends on (``on``, as :func:`depends` is called with on the page): the value, and the mark ``depends`` keeps,
+so that the field shows the choice carried and not its own offer. To be set before the widget is drawn (the
+``on_click`` of the button).
+
+### def `start_at` (analysis_layout.py)
+
+- **Arguments**: `key: str, options: Mapping[ComplexType], depth: int`
+
+- **Returns**: `dict[ComplexType]`
+
+A radio's ``index``, given only while it holds no value: the option a link to this page names at ``depth`` of
+its path (the summary of a signed-rank test, which "Which test?" recommends: the page opened on the mean, and
+Run gave a test that was not the one recommended). A choice made afterwards is kept.
 
 ### def `kept` (analysis_layout.py)
 
@@ -3465,7 +3509,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.QUESTION_KEY`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.QUESTION_KEY`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_guidance_ui.MAP_KEY`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.QUESTION_KEY`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.QUESTION_KEY`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.strata_choices`, `app_pages.analysis_guidance_ui.MAP_KEY`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 
@@ -3503,11 +3547,12 @@ Reference-group / event-level / design selectors; recomputes the 2x2 analysis wi
 
 ### def `_render_twobytwo_panel` (epidemiology.py)
 
-- **Arguments**: `epi`
+- **Arguments**: `epi, carried`
 
 - **Returns**: `None`
 
-Labelled 2x2 table, measures of association (comparison vs reference) and guidance.
+Labelled 2x2 table, measures of association (comparison vs reference) and guidance. ``carried``: the
+choices of the panel as the stratified analysis takes them (``strata_choices``), for its button.
 
 ### def `open_analysis` (epidemiology.py)
 

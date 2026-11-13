@@ -352,6 +352,34 @@ def test_values_that_differ_by_a_space_are_written_apart(df: pd.DataFrame) -> No
     assert [item.column for item in said.advice if item.column] == ["grade_central"]
 
 
+def test_codes_that_read_as_one_number_are_kept_apart_and_said() -> None:
+    """Two columns of texts: "250.0" and "250.00" are two codes, and the plan says so with the column to clean if
+    they are one. A column of numbers beside a column of texts: the texts are read as numbers, and the plan names
+    the writings that were read as one."""
+    codes = pd.DataFrame(
+        {"a": ["250.0"] * 12 + ["401.9"] * 18, "b": ["250.00"] * 6 + ["250.0"] * 6 + ["401.9"] * 18}
+    )
+    plan = m.plan_raters(codes, "a", "b", m.NAMES, None, m.LINEAR)
+    text = _text(plan)
+    assert plan.steps and plan.status == "caution"
+    assert (
+        "`250.0` and `250.00` read as the same number and count as categories of their own" in text
+    )
+    assert "3 categories" in text  # as written
+    assert [item.column for item in plan.advice if getattr(item, "column", None)] == ["a"]
+    grades = pd.DataFrame({"a": [2.0, 3.0, 2.0, 4.0] * 6, "b": ["2.0", "3", "2", "04"] * 6})
+    plan = m.plan_raters(grades, "a", "b", m.NAMES, None, m.LINEAR)
+    text = _text(plan)
+    assert plan.steps and "3 categories" in text
+    assert "`b` holds texts beside a column of numbers: its values are read as numbers" in text
+    assert "`2.0` as `2`" in text and "`04` as `4`" in text
+    # two columns of numbers, whole against decimal: one grade, and nothing to say
+    whole = pd.DataFrame({"a": [2, 3, 2, 4] * 6, "b": [2.0, 3.0, 2.0, 4.0] * 6})
+    assert "read as" not in _text(m.plan_raters(whole, "a", "b", m.NAMES, None, m.LINEAR))
+    # a grade written "nan" gives no order to offer
+    assert m.grade_order(["2", "nan", "1"]) == []
+
+
 def test_kappa_at_its_edges_is_said_before_the_run() -> None:
     one = pd.DataFrame({"a": ["X"] * 30, "b": ["X"] * 30})
     nothing = m.plan_raters(one, "a", "b", m.NAMES, None, m.LINEAR)
@@ -711,6 +739,62 @@ def test_a_link_of_an_empty_state_opens_the_tab_it_names(monkeypatch: pytest.Mon
     for module in (analysis_diagnostic, analysis_extras):
         source = __import__("inspect").getsource(module)
         assert '("enrich", "Create new variables")' not in source, module.__name__
+
+
+def test_what_the_2x2_panel_holds_is_given_as_the_stratified_analysis_takes_it(
+    df: pd.DataFrame,
+) -> None:
+    """The values a button of another tab sets before the stratified analysis is drawn: each choice with the mark
+    the dependent field keeps (so that the field shows the choice carried, not its own offer), and only what
+    the analysis offers."""
+    from app_pages.analysis_extras import strata_choices
+
+    carried = strata_choices(
+        df, outcome="ill", event="Yes", compare="arm", reference="Intervention"
+    )
+    assert carried == {
+        "mh_outcome": "ill",
+        "mh_ev_level": "Yes",
+        "mh_ev_level::for": ("ill", ("No", "Yes")),
+        "mh_exposure": "arm",
+        "mh_reference": "Intervention",
+        "mh_reference::for": ("arm", ("Control", "Intervention")),
+    }
+    assert layout.given("level", ("ill", ("No", "Yes")), "Yes") == {
+        "level": "Yes",
+        "level::for": ("ill", ("No", "Yes")),
+    }
+    # a variable of more than two values is not offered here: it is left empty, with its reference
+    partly = strata_choices(df, outcome="ill", event="Yes", compare="site", reference="Metz")
+    assert partly["mh_outcome"] == "ill" and partly["mh_exposure"] is None
+    assert "mh_reference" not in partly
+    # a level the outcome does not hold is not carried: the field then makes its own offer
+    assert "mh_ev_level" not in strata_choices(
+        df, outcome="ill", event="1", compare="arm", reference="Control"
+    )
+    # the plan then names what is still to choose, and nothing that is chosen
+    said = [
+        m.plan_strata(df, outcome, "Yes", compare, "Control", stratum).advice[0].text
+        for outcome, compare, stratum in (
+            ("ill", "arm", None),
+            ("ill", None, None),
+            (None, None, None),
+        )
+    ]
+    assert said == [
+        "Choose the variable to adjust for.",
+        "Choose what is compared and the variable to adjust for.",
+        "Choose the outcome, what is compared and the variable to adjust for.",
+    ]
+    # the variable to adjust for kept from an earlier use is let go when it is now the outcome or the groups
+    kept = strata_choices(
+        df, outcome="ill", event="Yes", compare="arm", reference="Control", stratum="arm"
+    )
+    assert kept["mh_stratum"] is None
+    other = strata_choices(
+        df, outcome="ill", event="Yes", compare="arm", reference="Control", stratum="site"
+    )
+    assert "mh_stratum" not in other
 
 
 def test_the_calculators_need_no_table() -> None:

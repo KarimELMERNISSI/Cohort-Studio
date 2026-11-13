@@ -233,10 +233,37 @@ def depends(key: str, on: Any, value: Any) -> None:
     way. And a value kept from another column was reported ("PPV at prevalence 0.502" for a condition 10.9% of
     participants have).
     """
-    marker = f"{key}::for"
+    marker = _mark(key)
     if marker not in st.session_state or st.session_state[marker] != on:
         st.session_state[marker] = on
         st.session_state[key] = value
+
+
+def _mark(key: str) -> str:
+    """Where :func:`depends` keeps what the value of the widget ``key`` was given for."""
+    return f"{key}::for"
+
+
+def given(key: str, on: Any, value: Any) -> dict[str, Any]:
+    """
+    The session values that give the widget ``key`` a value chosen elsewhere (a button of another tab) for what it
+    depends on (``on``, as :func:`depends` is called with on the page): the value, and the mark ``depends`` keeps,
+    so that the field shows the choice carried and not its own offer. To be set before the widget is drawn (the
+    ``on_click`` of the button).
+    """
+    return {key: value, _mark(key): on}
+
+
+def start_at(key: str, options: Mapping[str, str], depth: int) -> dict[str, int]:
+    """
+    A radio's ``index``, given only while it holds no value: the option a link to this page names at ``depth`` of
+    its path (the summary of a signed-rank test, which "Which test?" recommends: the page opened on the mean, and
+    Run gave a test that was not the one recommended). A choice made afterwards is kept.
+    """
+    if key in st.session_state:
+        return {}
+    named = linked(depth, options)
+    return {} if named is None else {"index": list(options).index(named)}
 
 
 def kept(name: str, key: tuple, compute: Callable[[], Any]) -> Any:
@@ -417,6 +444,7 @@ __all__ = [
     "choose_entry",
     "depends",
     "details",
+    "given",
     "headline",
     "imputed_line",
     "interval",
@@ -429,6 +457,7 @@ __all__ = [
     "result_place",
     "run_button",
     "span",
+    "start_at",
     "typed_line",
     "warn",
     "with_interval",

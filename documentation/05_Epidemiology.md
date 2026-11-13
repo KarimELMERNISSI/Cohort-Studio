@@ -9,7 +9,8 @@ you know the page.
 
 - **Which tab do I need?** — a map from your question to the analysis that answers it. Each button opens its tab,
   and on *Diagnostic accuracy & agreement* and *Paired, rates & stratified* the analysis it names. It also links
-  to the *Which test?* chooser, whose recommendation opens its analysis the same way.
+  to the *Which test?* chooser, whose recommendation opens its analysis the same way (a signed-rank test opens on
+  its own summary, not on the mean).
 - **Every parameter is explained** — hover the help icon of any input: what it means, typical values and what
   changes when you change it.
 - **Before you run: the plan** — once the groups and variables are chosen, the page shows, for each variable,
@@ -295,7 +296,10 @@ time; each keeps its choices and its result while another is open.
   participants were taken as they came; under **More options**, type the prevalence where the test will be used to
   read them there as well.
 - **Kappa** is computed on the participants rated by both, with the same categories on both sides of the table, so
-  that the diagonal is agreement even when one rater never uses a category. For ordered grades the order is offered
+  that the diagonal is agreement even when one rater never uses a category. Numbers are compared by value (2 and
+  2.0 are one grade), and so are texts beside a column of numbers ("2.0" against 2: the plan says which writings
+  were read as numbers). Two columns of texts are compared as written: "250.0" and "250.00", "01" and "1" are
+  two codes, which the plan names, with the column to clean if they are one grade. For ordered grades the order is offered
   when the grades themselves say it (numbers, Roman numerals); grades written in words ("low", "medium", "high")
   are placed by you, lowest first, before Run: their alphabetical order is no scale. Its benchmark (Landis & Koch) is read on
   the interval and given for the unweighted kappa only; the ICC's (Koo & Li) is read on its interval too.
@@ -314,6 +318,9 @@ time; each keeps its choices and its result while another is open.
 - **Rates is a calculator.** It reads the numbers you type, not the dataset: its fields start empty, it has no Run
   button, and its result follows the numbers and says where they came from. The analysis population and the
   imputation do not apply to it. The typed share of *One group against a reference* works the same way.
+- **From the 2x2 panel.** The button *Adjust for one variable (Mantel-Haenszel)* of the 2x2 panel (Analysis tab)
+  opens the stratified analysis with the panel's outcome, its event, its two groups and its reference group
+  already chosen: only the variable to adjust for is left to choose, and the plan shows the rest before Run.
 - **The strata.** One combined ratio sums the strata up only when their ratios are alike. The result says so in three
   ways: no evidence that they differ (which is no proof that they are alike: the test has little power in small
   strata), they differ (said beside the combined ratio: report the ratio of each stratum), or not tested (fewer

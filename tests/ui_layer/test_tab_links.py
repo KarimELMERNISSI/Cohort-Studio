@@ -28,12 +28,17 @@ def _opened(at: AppTest) -> dict[tuple[str, ...], str]:
 
 
 def _chosen(at: AppTest) -> dict[tuple[str, ...], str]:
-    """Each selector on the page (its labels) and the choice it holds: a label after the tabs of a path names one."""
-    return {
+    """Each selector on the page (its labels) and the choice it holds: a label after the tabs of a path names one,
+    in a segmented control (an analysis, its second choice) or in a radio (the summary a rank test reads)."""
+    found = {
         tuple(control.options): control.formatted_values[0]
         for control in at.segmented_control
         if control.formatted_values
     }
+    for radio in at.radio:
+        if radio.index is not None:
+            found.setdefault(tuple(radio.options), radio.options[radio.index])
+    return found
 
 
 DECLARED = [(p.key, tab, labels) for p in nav.PAGES for tab, labels in p.tabs]
