@@ -266,6 +266,13 @@ def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
     assert any("Pooled over the 3 imputed datasets" in c.value for c in app.caption)
     app.selectbox(key="pair_before").select("sbp_baseline").run()
     app.selectbox(key="pair_after").select("sbp_6m").run()  # 183 imputed values
+    # the plan is that of what runs: it counted the complete pairs and said the others were left out
+    plan = " ".join(md.value for md in app.markdown)
+    assert (
+        "pooled over the 3 imputed datasets" in plan
+        and "183 values of `sbp_6m` are imputed" in plan
+    )
+    assert "left out" not in plan
     app.button(key="pair_run").click().run()
     _ok(app)
     paired = _stored(app, "paired_mi").extra["result"]
@@ -275,6 +282,9 @@ def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
     app.radio(key="pair_kind").set_value("Wilcoxon signed-rank").run()
     _ok(app)
     assert any("Not pooled with imputed data" in i.value for i in app.info)
+    # no plan reads "ready" over an analysis that has no Run
+    assert "Before you run: the plan" not in " ".join(md.value for md in app.markdown)
+    assert "pair_run" not in {b.key for b in app.button}
     app.radio(key="pair_kind").set_value("Paired t-test").run()
     app.segmented_control(key="paired_question").set_value("one_group").run()
     _ok(app)

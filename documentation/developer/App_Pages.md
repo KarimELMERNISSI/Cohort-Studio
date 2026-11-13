@@ -106,6 +106,24 @@ with a cut-off (fixed beforehand, or found on these data by Youden's J), the 2x2
 cut-off is given back on the marker's own scale (positive when the test is at most the cut-off): a marker that
 falls with the condition had no result (the cut-off found called everyone positive).
 
+### def `_pairs` (analysis_diagnostic.py)
+
+- **Arguments**: `with_it: np.ndarray, values: np.ndarray`
+
+- **Returns**: `tuple[ComplexType]`
+
+Of every pair of one participant with the condition and one without: the shares in which the one with it
+has the value pointing further to the condition, the same value, the other. The AUC is the first plus half
+the second: with ties, "in 66 of 100 pairs the higher value" was said of 51.
+
+### def `_in_100` (analysis_diagnostic.py)
+
+- **Arguments**: `share: float`
+
+- **Returns**: `str`
+
+A share as "51 of 100 pairs" is said: never "100" for less than all, never "0" for some.
+
 ### def `range_drawn` (analysis_diagnostic.py)
 
 - **Arguments**: `clean: pd.DataFrame, outcome: str, present: Any`
@@ -242,11 +260,12 @@ their result says where its numbers came from._
 
 ### def `_not_pooled` (analysis_extras.py)
 
-- **Arguments**: `analysis: str`
+- **Arguments**: `analysis: str, instead: ComplexType`
 
 - **Returns**: `None`
 
-The reason a test has no pooling rule, and what to run instead (biostats.mi.not_poolable).
+The reason a test has no pooling rule, and what to run instead (biostats.mi.not_poolable); ``instead``
+where the catalogue's alternative is another analysis's (it names the paired test for one group too).
 
 ### def `_held` (analysis_extras.py)
 
@@ -372,7 +391,7 @@ No description available.
 
 ### def `_show_strata` (analysis_extras.py)
 
-- **Arguments**: `res: Any, outcome: str, event: str, compare: str, exposed: str, reference: str, stratum: str`
+- **Arguments**: `res: Any, outcome: str, event: str, compare: str, exposed: str, reference: str, stratum: str, total: int`
 
 - **Returns**: `None`
 

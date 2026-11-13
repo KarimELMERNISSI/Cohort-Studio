@@ -276,6 +276,89 @@ def test_a_cut_off_found_for_a_falling_marker_is_on_the_markers_own_scale(app: A
     assert found["auc"]["auc"] > 0.5 > rising["auc"]["auc"]
 
 
+def test_the_caution_of_a_direction_the_data_contradict_is_in_the_words_of_the_page(
+    app: AppTest,
+) -> None:
+    """Troponin read as "lower", cut-off found on the data. The functions read the reversed marker, and their own
+    caution was shown as it was: "higher values go with the other level ... Take the other level as positive", the
+    opposite of the data and an advice that gives the accuracy for the absence of the condition."""
+    from app_pages.analysis_diagnostic import accuracy_of
+
+    data = app.session_state["data"]
+    found = accuracy_of(
+        data, "mi_adjudicated", "Yes", "troponin_ng_l", m.LOWER, m.YOUDEN, None, None
+    )
+    assert found["auc"]["auc"] < 0.1
+    (caution,) = found["cautions"]
+    assert caution.startswith("These data contradict the direction chosen: read with lower values")
+    assert "Choose higher above" in caution and "other level" not in caution
+    right = accuracy_of(
+        data, "mi_adjudicated", "Yes", "troponin_ng_l", m.HIGHER, m.YOUDEN, None, None
+    )
+    assert right["cautions"] == []
+    # through the page: the caution is under the result, and the engine's own is not
+    _open(app, DIAGNOSTIC, m.ACCURACY)
+    _pick(app, "diag_outcome", "mi_adjudicated")
+    _pick(app, "diag_score", "troponin_ng_l")
+    app.radio(key="diag_direction").set_value(m.LOWER).run()
+    app.radio(key="diag_mode").set_value(m.YOUDEN).run()
+    _type(app, "diag_prev", None)
+    _run(app, "diag_run")
+    warnings = " ".join(w.value for w in app.warning)
+    assert "These data contradict the direction chosen" in warnings
+    assert (
+        "Take the other level as positive" not in warnings and "reverse the marker" not in warnings
+    )
+
+
+def test_a_score_of_few_values_is_not_said_to_call_no_one_positive() -> None:
+    """A grade from 1 to 5 whose best cut-off is 5, the largest score: more than a hundred of 400 are called positive,
+    and the caution read "nearly no one is called positive. The marker hardly separates the two levels"."""
+    from app_pages.analysis_diagnostic import accuracy_of
+
+    rng = np.random.default_rng(4)
+    ill = rng.random(400) < 0.3
+    grade = np.where(
+        ill, rng.choice([3, 4, 5], 400, p=[0.02, 0.03, 0.95]), rng.choice([1, 2, 3, 4, 5], 400)
+    )
+    frame = __import__("pandas").DataFrame(
+        {"ill": np.where(ill, "Yes", "No"), "grade": grade.astype(float)}
+    )
+    found = accuracy_of(frame, "ill", "Yes", "grade", m.HIGHER, m.YOUDEN, None, None)
+    assert found["cutoff"] == 5.0 and found["acc"].tp + found["acc"].fp > 100
+    assert found["cautions"] == [] and found["acc"].warnings == []
+    assert found["youden"]["caution"] == ""  # the engine's own words: silent too
+
+
+def test_the_sentence_under_the_auc_counts_ties_apart() -> None:
+    """A grade in three values, AUC 0.66: "in 66 of 100 pairs the one with the condition has the higher value" was
+    said of 51 pairs, with 30 ties counted for a half."""
+    import pandas as pd
+
+    from app_pages.analysis_diagnostic import _in_100, accuracy_of
+
+    frame = pd.DataFrame(
+        {
+            "ill": ["Yes"] * 10 + ["No"] * 10,
+            "grade": [3.0] * 5 + [2.0] * 3 + [1.0] * 2 + [3.0] * 2 + [2.0] * 3 + [1.0] * 5,
+        }
+    )
+    found = accuracy_of(frame, "ill", "Yes", "grade", m.HIGHER, m.NO_CUTOFF, None, None)
+    further, same, other = found["pairs"]
+    # by hand over the 100 pairs: 5*8 + 3*5 higher, 5*2 + 3*3 + 2*5 the same, the rest lower
+    assert (round(100 * further), round(100 * same), round(100 * other)) == (55, 29, 16)
+    assert found["auc"]["auc"] == pytest.approx(further + same / 2)
+    turned = accuracy_of(frame, "ill", "Yes", "grade", m.LOWER, m.NO_CUTOFF, None, None)["pairs"]
+    assert turned == pytest.approx((other, same, further))
+    assert (_in_100(0.9996), _in_100(1.0), _in_100(0.0004), _in_100(0.0), _in_100(0.514)) == (
+        "more than 99",
+        "100",
+        "fewer than 1",
+        "0",
+        "51",
+    )
+
+
 # ----------------------------------------------------------------------------- agreement of two measurements
 
 
@@ -391,6 +474,7 @@ def test_the_change_between_two_measurements(app: AppTest) -> None:
     assert shown["Mean change"] == "-5.01" and shown["Pairs"] == "778"
     captions = " ".join(c.value for c in app.caption)
     assert "p < 0.001" in captions and "e-43" not in captions
+    assert "e-43" not in _texts(app)  # nor in "How to read this"
     ranks = _paired(app, m.SIGNED_RANK)
     assert ranks.statistic == 60962.5 and ranks.estimate == -5.5 and ranks.n_total == 744
     assert ranks.p_value == pytest.approx(5.169548445645164e-40, rel=1e-9)
@@ -413,6 +497,8 @@ def _yes_no(app: AppTest) -> dict:
 def test_a_change_in_a_yes_or_no_characteristic(app: AppTest) -> None:
     held = _yes_no(app)
     result, table = held["res"], held["table"]
+    # without it the dossier's "difference in proportions (after - before) = -0.0625" did not say of which value
+    assert result.estimate_label.startswith("change in the share with smoker_baseline = Yes")
     assert table.to_numpy().tolist() == [[744, 0], [58, 126]]
     assert [str(v) for v in table.index] == ["No", "Yes"] == [str(v) for v in table.columns]
     assert result.estimate == pytest.approx(-0.0625, **TIGHT)
@@ -548,9 +634,12 @@ def test_an_association_within_strata_whose_ratios_differ(app: AppTest) -> None:
     assert "Report the ratio of each stratum" in _texts(app)
 
 
-def test_strata_that_cannot_be_tested_are_said_so_and_cleaned_from_the_plan(app: AppTest) -> None:
-    """`site` as recorded: 7 strata, three of them one site written with a space. The homogeneity test could not
-    be computed and read "heterogeneous across strata"; the plan now offers to clean the variable where it stands."""
+def test_strata_without_information_are_left_out_of_the_tests_and_cleaned_from_the_plan(
+    app: AppTest,
+) -> None:
+    """`site` as recorded: 7 strata, three of them one site written with a space, two of those holding one group
+    only. The tests had no value and the page read "heterogeneous across strata"; the tests now read the five strata
+    that hold both groups and both outcomes, and the plan offers to clean the variable where it stands."""
     _open(app, PAIRED, m.STRATA)
     _pick(app, "mh_outcome", "hf_hospitalisation")
     _pick(app, "mh_exposure", "arm")
@@ -558,15 +647,26 @@ def test_strata_that_cannot_be_tested_are_said_so_and_cleaned_from_the_plan(app:
     _pick(app, "mh_stratum", "site")
     text = _texts(app)
     assert "written several ways" in text and "site_clean" in text
+    assert "2 of 7 strata hold one group only or one outcome only" in text
     assert any("Clean" in str(b.label) for b in app.button), [b.label for b in app.button]
     _run(app, "mh_run")  # advice never blocks a run
     res = _stored(app, "mantel_haenszel")
-    assert res.n_strata == 7
-    assert not np.isfinite(
-        res.breslow_day_p
-    )  # two strata hold one group only: the test has no value
+    assert (res.n_strata, res.n_tested, res.n) == (7, 5, 928)
+    assert np.isfinite(res.breslow_day_p) and np.isfinite(res.mh_test_p)
     text = _texts(app)
-    assert "was not tested" in text and "they differ" not in text and "heterogeneous" not in text
+    assert "the two tests read the other 5" in text  # the result's own warning, shown
+    assert "heterogeneous" not in text and "928 of 928 rows" in text
+    assert app.session_state["_results"]["mantel_haenszel"].stamp.n_analysed == 928
+
+
+def test_strata_that_differ_are_said_beside_the_combined_ratio(app: AppTest) -> None:
+    """The headline gave one combined ratio with no mark, and the line under it said not to report it."""
+    _strata(app, "diabetes")
+    badges = [md.value for md in app.markdown if "badge" in md.value]
+    assert any("the strata differ: read each stratum" in badge for badge in badges), badges
+    _strata(app, "nyha_class")
+    badges = [md.value for md in app.markdown if "badge" in md.value]
+    assert not any("the strata differ" in badge or "not compared" in badge for badge in badges)
 
 
 def test_the_reference_group_decides_which_way_the_ratios_read(app: AppTest) -> None:

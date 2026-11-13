@@ -105,7 +105,10 @@ def test_the_accuracy_plan_asks_which_way_the_test_points(df: pd.DataFrame) -> N
         asked.status == "idle" and not asked.steps and "which way the test points" in _text(asked)
     )
     ready = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.NO_CUTOFF, None, None)
-    assert ready.status == "ok" and len(ready.steps) == 2 and "the direction fits" in _text(ready)
+    assert ready.status == "ok" and len(ready.steps) == 2
+    assert (
+        not ready.advice
+    )  # the data agree with the direction: the medians stand beside the question already
     assert ready.steps[0].used == N
 
 
@@ -159,7 +162,11 @@ def test_two_raters_need_the_same_categories_and_a_stated_order(df: pd.DataFrame
     graded = m.plan_raters(df, "grade_local", "grade_central", m.GRADES, categories, m.LINEAR)
     assert graded.status == "ok" and "Order used: `mild` < `moderate` < `severe`" in _text(graded)
     short = m.plan_raters(df, "grade_local", "grade_central", m.GRADES, categories[:2], m.LINEAR)
-    assert short.status == "violated" and not short.steps and "it lacks `severe`" in _text(short)
+    assert (
+        short.status == "violated"
+        and not short.steps
+        and "the order lacks `severe`" in _text(short)
+    )
     apart = m.plan_raters(df, "arm", "ill", m.NAMES, None, m.LINEAR)
     assert apart.status == "violated" and "share no category" in _text(apart)
 
@@ -194,20 +201,29 @@ def test_a_reference_value_is_checked_against_the_measurement(df: pd.DataFrame) 
     assert m.plan_one_mean(df, "hba1c", 7.0, m.ONE_T).status == "ok"
 
 
-def test_the_datas_own_mean_as_a_reference_is_said_at_the_precision_of_the_data(
-    df: pd.DataFrame,
-) -> None:
-    """Compared at the precision of the reference alone, 7 "was" the mean of values averaging 6.55."""
+def test_a_reference_that_is_the_datas_own_summary_is_asked_about(df: pd.DataFrame) -> None:
+    """The mean for the mean, the median for the typical value. Compared at the reference's own precision, 7 "was"
+    the mean of values averaging 6.55; at the precision of the values, 50 "was" the mean of ages averaging 50.43,
+    which a t-test tells apart from 50."""
     mean = float(df["hba1c"].mean())
     assert round(mean) == 7 and round(mean, 1) != 7.0
-    assert "these same values" not in _text(m.plan_one_mean(df, "hba1c", 7.0, m.ONE_T))
-    own = m.plan_one_mean(df, "hba1c", round(mean, 1), m.ONE_T)
+    assert "also the mean" not in _text(m.plan_one_mean(df, "hba1c", 7.0, m.ONE_T))
+    own = m.plan_one_mean(df, "hba1c", round(mean, 2), m.ONE_T)
     assert (
         own.status == "caution"
-        and "of these same values: a test against it says nothing" in _text(own)
+        and "is also the mean of these values: was it read from them?" in _text(own)
     )
-    exact = m.plan_one_mean(df, "hba1c", round(mean, 3), m.ONE_T)
-    assert "these same values" in _text(exact)
+    assert "also the mean" in _text(m.plan_one_mean(df, "hba1c", round(mean, 3), m.ONE_T))
+    # values recorded to 0.1: their mean rounded to 0.1 is not "the mean" (it is known one decimal finer)
+    assert "also the mean" not in _text(m.plan_one_mean(df, "hba1c", round(mean, 1), m.ONE_T))
+    ages = pd.DataFrame(
+        {"age": np.r_[np.full(57, 50.0), np.full(43, 51.0)]}
+    )  # mean 50.43, median 50
+    assert "also the" not in _text(m.plan_one_mean(ages, "age", 50.0, m.ONE_T))
+    typical = m.plan_one_mean(ages, "age", 50.0, m.SIGNED_RANK)
+    assert "50 is also the median of these values" in _text(
+        typical
+    )  # a question: a reference may well be round
 
 
 def test_a_share_is_counted_and_its_reference_checked(df: pd.DataFrame) -> None:
@@ -254,6 +270,189 @@ def test_the_calculators_check_the_numbers_typed() -> None:
     assert not m.check_rates(m.ONE_RATE, 15, 0.0, None, None)[0]  # no person-time, no rate
     assert m.check_expected(25, 18.4)[0] and not m.check_expected(3, 0.0)[0]
     assert "almost nothing" in m.check_expected(0, 0.5)[1][0].text
+
+
+# ----------------------------------------------------------------------------- what the two reads of the tabs found
+
+
+def test_data_that_show_no_direction_are_not_said_to_fit_one(df: pd.DataFrame) -> None:
+    """The same data read "the direction fits" for higher and for lower: the plan read the interval of the AUC only
+    to say that the data contradict the direction."""
+    flat = df.assign(noise=np.random.default_rng(3).normal(50, 10, N).round(1))
+    for direction in (m.HIGHER, m.LOWER):
+        plan = m.plan_accuracy(flat, "ill", "Yes", "noise", direction, m.NO_CUTOFF, None, None)
+        assert "the direction fits" not in _text(plan) and "Check the direction" not in _text(plan)
+        assert "do not show which way the test points (AUC 0." in _text(plan)
+        assert plan.status == "ok"  # said, never a block
+    none = df.assign(empty=np.nan)
+    refused = m.plan_accuracy(none, "ill", "Yes", "empty", m.HIGHER, m.NO_CUTOFF, None, None)
+    assert (
+        refused.status == "violated"
+        and "No row holds both `ill` and a number in `empty`" in _text(refused)
+    )
+
+
+def test_the_order_of_grades_is_offered_only_when_the_grades_say_it() -> None:
+    """ "high, low, medium, none" is the alphabet's order: offered under a plan that read "ready", it gave a weighted
+    kappa of 0.63 for 0.76."""
+    assert m.grade_order(["10", "2", "1"]) == ["1", "2", "10"]
+    assert m.grade_order(["V", "IX", "I", "X", "iv"]) == [
+        "I",
+        "iv",
+        "V",
+        "IX",
+        "X",
+    ]  # by value: IX after V
+    assert m.grade_order(["low", "medium", "high"]) == []
+    assert m.grade_order(["I", "II", "severe"]) == [] and m.grade_order(["mild", "mix"]) == []
+    assert m.grade_order([]) == []
+
+
+def test_grades_written_in_words_are_placed_by_their_user(df: pd.DataFrame) -> None:
+    categories, *_ = m.rater_categories(df, "grade_local", "grade_central")
+    offered = m.grade_order(categories)
+    assert offered == []  # mild, moderate, severe: words
+    plan = m.plan_raters(df, "grade_local", "grade_central", m.GRADES, offered, m.LINEAR)
+    assert plan.status == "violated" and not plan.steps  # no Run until every grade is placed
+    assert "Grades written in words carry no order of their own" in _text(plan)
+    placed = m.plan_raters(df, "grade_local", "grade_central", m.GRADES, categories, m.LINEAR)
+    assert placed.status == "ok" and len(placed.steps) == 1
+
+
+def test_one_reads_as_present_beside_zero_only() -> None:
+    """With the codes 1 and 2 the fields opened on 1: 1 = censored and 2 = event is a coding too (R's survival)."""
+    assert m.present_value([0, 1]) == 1 and m.present_value([False, True]) is True
+    assert m.present_value([1, 2]) is None and m.present_value(["1", "2"]) is None
+    assert m.present_value(["No", "Yes"]) == "Yes"
+
+
+def test_values_that_differ_by_a_space_are_written_apart(df: pd.DataFrame) -> None:
+    """Written as code alone, "`after` holds `No` and `Yes`" refused a column for not holding No and Yes."""
+    spaced = df.assign(smoker_second=df["smoker_second"].replace({"Yes": "Yes "}))
+    plan = m.plan_paired_yes_no(spaced, "smoker_first", "smoker_second", None)
+    assert plan.status == "violated" and "`smoker_second` holds `No` and `Yes␣`" in _text(plan)
+    assert [item.column for item in plan.advice if item.column] == [
+        "smoker_second"
+    ]  # cleaned from the plan
+    raters = df.assign(grade_central=df["grade_central"].replace({"mild": "mild "}))
+    said = m.plan_raters(raters, "grade_local", "grade_central", m.NAMES, None, m.LINEAR)
+    assert "written alike but not identical (`mild`, `mild␣`)" in _text(said)
+    assert "`mild␣` is given by `grade_central` only" in _text(said)
+    assert [item.column for item in said.advice if item.column] == ["grade_central"]
+
+
+def test_kappa_at_its_edges_is_said_before_the_run() -> None:
+    one = pd.DataFrame({"a": ["X"] * 30, "b": ["X"] * 30})
+    nothing = m.plan_raters(one, "a", "b", m.NAMES, None, m.LINEAR)
+    assert nothing.status == "violated" and "there is nothing kappa can compare" in _text(nothing)
+    fixed = pd.DataFrame({"a": ["X"] * 40, "b": ["X"] * 30 + ["Y"] * 10})
+    zero = m.plan_raters(fixed, "a", "b", m.NAMES, None, m.LINEAR)
+    assert (
+        zero.status == "caution"
+        and "`a` puts every participant in `X`: kappa is 0 by construction" in _text(zero)
+    )
+    # 95 of 100 in X for one rater and in Y for the other: no agreement, and no word on "the same category"
+    apart = pd.DataFrame({"a": ["X"] * 95 + ["Y"] * 5, "b": ["Y"] * 95 + ["X"] * 5})
+    assert "the same category" not in _text(m.plan_raters(apart, "a", "b", m.NAMES, None, m.LINEAR))
+    alike = pd.DataFrame({"a": ["X"] * 95 + ["Y"] * 5, "b": ["X"] * 93 + ["Y"] * 7})
+    assert "90% or more of the participants in the same category" in _text(
+        m.plan_raters(alike, "a", "b", m.NAMES, None, m.LINEAR)
+    )
+
+
+def test_agreement_of_columns_that_do_not_vary_is_refused() -> None:
+    """Two constant columns: the plan read "ready", the headline "ICC nan" and the benchmark "excellent"."""
+    constant = pd.DataFrame({"a": [5.0] * 20, "b": [6.0] * 20})
+    plan = m.plan_measurements(constant, ["a", "b"], [m.BLAND_ALTMAN, m.ICC], m.ABSOLUTE)
+    assert plan.status == "violated" and not plan.steps and "one value only" in _text(plan)
+
+
+def test_the_roughness_of_the_limits_is_the_one_of_their_interval() -> None:
+    """ "About 0.65 SD either way" was printed for any number of pairs below 30: it is 0.65 at 30, 1.24 at 10."""
+    rng = np.random.default_rng(5)
+
+    def said(pairs: int) -> str:
+        first = rng.normal(100, 10, pairs).round(0)
+        frame = pd.DataFrame({"a": first, "b": first + rng.normal(0, 3, pairs).round(0)})
+        return _text(m.plan_measurements(frame, ["a", "b"], [m.BLAND_ALTMAN], m.ABSOLUTE))
+
+    assert "10 pairs: each limit of agreement is known to about 1.24 SD" in said(10)
+    assert "the limits are rough" in said(10) and "the limits are rough" not in said(30)
+    assert "30 pairs: each limit of agreement is known to about 0.65 SD" in said(30)
+    assert "limit of agreement is known" not in said(60)
+
+
+def _imputed(df: pd.DataFrame, columns: list[str]):
+    """Three imputed datasets of ``df`` in which ``columns`` are filled (with their mean, 1 to 3 added)."""
+    from biostats.mi import MIData
+
+    completed = [df.fillna({c: float(df[c].mean()) + i for c in columns}) for i in range(1, 4)]
+    return MIData.from_completed(df, completed, methods=dict.fromkeys(columns, "pmm"))
+
+
+def test_the_plan_of_a_pooled_test_counts_what_the_imputed_datasets_give(df: pd.DataFrame) -> None:
+    """With imputed data the plan counted the complete pairs and said the others were left out, over a test that
+    reads every row."""
+    numbers = df[["sbp_first", "sbp_second", "hba1c"]]
+    filled = m.pooled_rows(_imputed(numbers, ["sbp_second"]), ["sbp_first", "sbp_second"])
+    assert (filled.rows, filled.used, filled.imputed["sbp_second"], filled.datasets) == (
+        N,
+        N,
+        30,
+        3,
+    )
+    plan = m.plan_paired(df, "sbp_first", "sbp_second", m.T_TEST, filled)
+    assert plan.rows == N and plan.steps[0].used == N and plan.status == "ok"
+    assert "pooled over the 3 imputed datasets" in plan.steps[0].text
+    assert "30 values of `sbp_second` are imputed" in _text(plan) and "left out" not in _text(plan)
+    # a column left out of the imputation: each dataset reads the pairs that have it, and the plan says why
+    left = m.pooled_rows(_imputed(numbers, ["hba1c"]), ["sbp_first", "sbp_second"])
+    assert (left.used, left.imputed) == (N - 30, {"sbp_first": 0, "sbp_second": 0})
+    partial = m.plan_paired(df, "sbp_first", "sbp_second", m.T_TEST, left)
+    assert partial.steps[0].used == N - 30
+    assert (
+        "`sbp_second` is not imputed: each imputed dataset reads the 210 rows that have it"
+        in _text(partial)
+    )
+    one = m.plan_one_mean(
+        df.assign(hba1c=numbers["hba1c"].mask(df.index < 20)), "hba1c", 7.0, m.ONE_T
+    )
+    assert one.steps[0].used == N - 20  # observed: the values recorded
+    gaps = numbers.assign(hba1c=numbers["hba1c"].mask(numbers.index < 20))
+    pooled = m.plan_one_mean(
+        gaps, "hba1c", 7.0, m.ONE_T, m.pooled_rows(_imputed(gaps, ["hba1c"]), ["hba1c"])
+    )
+    assert pooled.steps[0].used == N and "20 values of `hba1c` are imputed" in _text(pooled)
+
+
+def test_a_pooled_paired_test_is_stamped_with_the_rows_its_datasets_read(df: pd.DataFrame) -> None:
+    """Every row of the population was stamped as analysed, where a column left out of the imputation lacks 30."""
+    from app_pages.analysis_extras import _rows_read
+    from biostats.mi import analyze_mi
+    from biostats.paired import paired_t
+
+    numbers = df[["sbp_first", "sbp_second", "hba1c"]]
+    mi = _imputed(numbers, ["hba1c"])  # sbp_second keeps its 30 missing values
+    found = analyze_mi(
+        lambda d: paired_t(d["sbp_second"], d["sbp_first"]), mi, columns=["sbp_first", "sbp_second"]
+    )
+    assert _rows_read(found, mi) == N - 30 == m.pooled_rows(mi, ["sbp_first", "sbp_second"]).used
+    whole = _imputed(numbers, ["sbp_second"])
+    found = analyze_mi(
+        lambda d: paired_t(d["sbp_second"], d["sbp_first"]),
+        whole,
+        columns=["sbp_first", "sbp_second"],
+    )
+    assert _rows_read(found, whole) == N
+
+
+def test_the_strata_plan_counts_the_strata_the_tests_read(df: pd.DataFrame) -> None:
+    lone = df.assign(group=np.where(df.index < 6, "small", df["grade_local"]))
+    lone.loc[lone.index < 6, "arm"] = "Control"  # a stratum of one group only
+    plan = m.plan_strata(lone, "ill", "Yes", "arm", "Control", "group")
+    assert "1 of 4 strata holds one group only or one outcome only" in _text(plan)
+    assert "it adds nothing to the odds ratio, and the two tests read the other 3" in _text(plan)
+    assert "cannot be computed" not in _text(plan)
 
 
 # ----------------------------------------------------------------------------- how a result is written

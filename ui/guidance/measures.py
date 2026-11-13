@@ -11,7 +11,8 @@ what the user chose. A plan without a step means that nothing can be computed ye
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -328,7 +329,14 @@ def present_value(levels: Sequence[Any]) -> Any | None:
     for Abnormal / Normal and "Survived" for Died / Survived.
     """
     reads = [level for level in levels if category(level).strip().casefold() in PRESENT_WORDS]
-    return reads[0] if len(reads) == 1 else None
+    if len(reads) != 1:
+        return None
+    # 1 reads as "present" beside 0 or False only: beside 2 the coding is unknown (1 = censored and 2 = event in
+    # R's survival package), and the survival page refuses it rather than guess
+    others = {category(level).strip().casefold() for level in levels if level is not reads[0]}
+    if category(reads[0]).strip() == "1" and not others <= {"0", "false"}:
+        return None
+    return reads[0]
 
 
 def group_medians(
@@ -347,6 +355,77 @@ def group_medians(
         int(has.sum()),
         int((~has).sum()),
     )
+
+
+def _value(value: Any) -> str:
+    """A value of the data in a sentence, as code, a hidden space shown as the lists show it ("Yes␣"): written
+    as code alone, "Yes" and "Yes " read the same in the sentence that refused them for being two values."""
+    from ui.components.levels import show_level  # the lists' own reading of a level
+
+    return as_code(show_level(value))
+
+
+@dataclass(frozen=True)
+class Pooled:
+    """What the imputed datasets give a pooled test of some columns: their rows, the rows one dataset gives the
+    test (those that hold every value, observed or imputed), and the values imputed per column."""
+
+    rows: int
+    used: int
+    imputed: Mapping[str, int]
+    datasets: int
+
+
+def pooled_rows(mi: Any, columns: Sequence[str]) -> Pooled:
+    """The rows a test pooled over ``mi`` (biostats.mi.MIData) reads on ``columns``."""
+    first = mi.complete(1, list(columns)).apply(pd.to_numeric, errors="coerce")
+    return Pooled(
+        rows=len(first),
+        used=int(first.notna().all(axis=1).sum()),
+        # the cells given a value: a column left out of the imputation model can be listed with none
+        imputed={
+            c: int(mi.imputations[c][1].notna().sum()) if c in mi.imputations else 0
+            for c in columns
+        },
+        datasets=int(mi.m),
+    )
+
+
+def _imputed(df: pd.DataFrame, columns: Sequence[str], pooled: Pooled) -> list[Advice]:
+    """Under a pooled test, in place of "rows left out": the values imputed, and a column that was not imputed
+    (the plan counted the complete rows and said the others were left out, over a test that reads them all)."""
+    said: list[Advice] = []
+    filled = [
+        f"{n:,} value{'s' if n != 1 else ''} of {as_code(c)}"
+        for c, n in pooled.imputed.items()
+        if n
+    ]
+    if filled:
+        one = len(filled) == 1 and filled[0].startswith("1 value ")
+        said.append(
+            Advice(
+                "info",
+                f"{' and '.join(filled)} {'is' if one else 'are'} imputed: each imputed dataset gives the test "
+                f"{pooled.used:,} of the {pooled.rows:,} rows.",
+            )
+        )
+    lacking = [
+        c
+        for c in dict.fromkeys(columns)
+        if not pooled.imputed.get(c) and int(pd.to_numeric(df[c], errors="coerce").isna().sum())
+    ]
+    if lacking and pooled.used < pooled.rows:
+        share = (pooled.rows - pooled.used) / pooled.rows
+        names = " and ".join(as_code(c) for c in lacking)
+        said.append(
+            Advice(
+                "caution" if share >= LEFT_OUT else "info",
+                f"{names} {'is' if len(lacking) == 1 else 'are'} not imputed: each imputed dataset reads the "
+                f"{pooled.used:,} rows that have {'it' if len(lacking) == 1 else 'them'} "
+                f"({pooled.rows - pooled.used:,} of {pooled.rows:,} are left out).",
+            )
+        )
+    return said
 
 
 def _num(value: float) -> str:
@@ -430,6 +509,14 @@ def plan_accuracy(
     frame = pd.DataFrame(
         {"y": df[outcome], "x": pd.to_numeric(df[score], errors="coerce")}
     ).dropna()
+    if frame.empty:
+        return _refused(
+            rows,
+            Advice(
+                "violated",
+                f"No row holds both {as_code(outcome)} and a number in {as_code(score)}.",
+            ),
+        )
     held = levels_of(frame["y"])
     if len(held) != 2:
         said = Advice(
@@ -501,21 +588,16 @@ def plan_accuracy(
                 "the value that means the condition is present.",
             )
         )
-    else:
+    elif auc["ci"].lower <= 0.5:
+        # neither "fits" nor "contradicts": the same data read "the direction fits" for both directions
         advice.append(
             Advice(
                 "info",
-                f"In these data the median of {as_code(score)} is {_num(with_it)} with the condition and "
-                f"{_num(without)} without: the direction fits.",
+                f"These data do not show which way the test points (AUC {auc['auc']:.2f}, 95% CI "
+                f"{auc['ci'].lower:.2f} to {auc['ci'].upper:.2f}; median {_num(with_it)} with the condition, "
+                f"{_num(without)} without): it hardly separates the two groups.",
             )
         )
-        if auc["ci"].lower <= 0.5:
-            advice.append(
-                Advice(
-                    "info",
-                    "The interval of the AUC holds 0.5: the test hardly separates the two groups in these data.",
-                )
-            )
     if mode != NO_CUTOFF:
         for n, what in ((n_pos, "sensitivity"), (n_neg, "specificity")):
             if n < LEVEL_MIN:
@@ -599,6 +681,15 @@ def plan_measurements(
             ),
             *_left_out(df, columns, used),
         )
+    if all(float(frame[c].max()) == float(frame[c].min()) for c in columns):
+        return _refused(
+            rows,
+            Advice(
+                "violated",
+                "Each column holds one value only in these rows: there is no difference between participants "
+                "for an agreement to be read on.",
+            ),
+        )
     pair = len(columns) == 2
     steps: list[PlanStep] = []
     advice: list[Advice] = []
@@ -635,20 +726,16 @@ def plan_measurements(
     for other in columns[1:]:
         advice += _same_quantity(first, frame[other])
     if pair and BLAND_ALTMAN in analyses:
-        if used < FEW_PAIRS:
+        if used < 50:
+            # the half-width of a limit's 95% interval (Bland & Altman 1986): t x sqrt(3 / n) SD. "About 0.65 SD"
+            # was printed for any number of pairs below 30: it is 0.65 at 30, 1.24 at 10, 2.15 at 5
+            width = float(stats.t.ppf(0.975, used - 1)) * (3 / used) ** 0.5
             advice.append(
                 Advice(
-                    "caution",
-                    f"{used:,} pairs: the limits of agreement are rough (each is known to about 0.65 SD of the "
-                    "differences either way).",
-                )
-            )
-        elif used < 50:
-            advice.append(
-                Advice(
-                    "info",
-                    f"{used:,} pairs: each limit of agreement is known to about half an SD of the differences "
-                    "either way.",
+                    "caution" if used < FEW_PAIRS else "info",
+                    f"{used:,} pairs: each limit of agreement is known to about {width:.2f} SD of the "
+                    "differences either way"
+                    + (": the limits are rough." if used < FEW_PAIRS else "."),
                 )
             )
         differences = (frame[columns[0]] - frame[columns[1]]).to_numpy(dtype=float)
@@ -686,14 +773,37 @@ def rater_categories(
     return category_order(list({*a, *b})), a, b, int(both.sum())
 
 
-def _look_ordered(categories: Sequence[str]) -> bool:
-    roman = {"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"}
-    lowered = [name.strip().casefold() for name in categories]
+_ROMAN = re.compile(r"^(x{0,3})(ix|iv|v?i{0,3})$")  # I to XXXIX: the grades and stages of a scale
+
+
+def _roman(name: str) -> int | None:
+    text = name.strip().casefold()
+    found = _ROMAN.match(text) if text else None
+    if found is None:
+        return None
+    tens, units = found.groups()
+    ones = {"ix": 9, "iv": 4}.get(units, 5 * units.count("v") + units.count("i"))
+    return 10 * len(tens) + ones
+
+
+def grade_order(categories: Sequence[str]) -> list[str]:
+    """
+    The order of the grades when the grades themselves say it: numbers by value, Roman numerals by value (IX after
+    V). Any other grades give no order: "high, low, medium, none" is the alphabet's, and a weighted kappa computed
+    on it is another number (0.63 for 0.76 on the tutorial's ratings). The order of a scale written in words is
+    the one input of this analysis the software cannot know: its user places each grade.
+    """
     try:
-        [float(name) for name in lowered]
-        return True
+        return sorted(categories, key=float)
     except ValueError:
-        return all(name in roman for name in lowered)
+        values = [_roman(name) for name in categories]
+        if any(value is None for value in values):
+            return []
+        return [name for _, name in sorted(zip(values, categories, strict=True))]  # type: ignore[type-var]
+
+
+def _look_ordered(categories: Sequence[str]) -> bool:
+    return len(grade_order(categories)) == len(categories) > 0
 
 
 def plan_raters(
@@ -714,37 +824,64 @@ def plan_raters(
         )
     shared = [name for name in categories if name in a and name in b]
     advice: list[Advice] = []
+    folded: dict[str, list[str]] = {}
+    for name in categories:
+        folded.setdefault(" ".join(name.split()).casefold(), []).append(name)
+    alike = [names for names in folded.values() if len(names) > 1]
+    spelt: list[Advice] = []
+    if alike:
+        # a hidden space is shown as the lists show it: as code alone, `Yes` and `Yes ` read the same here
+        shown = "; ".join(", ".join(_value(n) for n in names) for names in alike[:3])
+        odd = {
+            n for names in alike for n in names if n != " ".join(n.split())
+        }  # written with hidden spaces
+        where = next((c for c, own in ((first, a), (second, b)) if odd & set(own)), None)
+        spelt.append(
+            Advice(
+                "caution",
+                f"Categories written alike but not identical ({shown}): each counts as a category of its own until "
+                "the column is cleaned into a copy beside it, which the analysis then uses.",
+                column=where,
+            )
+        )
     if not shared:
         return _refused(
             rows,
             Advice(
                 "violated",
                 f"{as_code(first)} and {as_code(second)} share no category "
-                f"({', '.join(as_code(n) for n in list(a)[:3])} against "
-                f"{', '.join(as_code(n) for n in list(b)[:3])}): kappa would be 0 by construction. The two columns "
+                f"({', '.join(_value(n) for n in list(a)[:3])} against "
+                f"{', '.join(_value(n) for n in list(b)[:3])}): kappa would be 0 by construction. The two columns "
                 "are coded differently (capitals, spaces, other words).",
             ),
+            *spelt,
         )
-    folded: dict[str, list[str]] = {}
-    for name in categories:
-        folded.setdefault(" ".join(name.split()).casefold(), []).append(name)
-    alike = [names for names in folded.values() if len(names) > 1]
-    if alike:
-        shown = "; ".join(", ".join(as_code(n) for n in names) for names in alike[:3])
-        advice.append(
+    if len(categories) < 2:
+        return _refused(
+            rows,
             Advice(
-                "caution",
-                f"Categories written alike but not identical ({shown}): each counts as a category of its own until "
-                "the columns are cleaned (Data > Clean).",
-            )
+                "violated",
+                f"Both raters put every participant in {_value(categories[0])}: there is nothing kappa can "
+                "compare.",
+            ),
         )
+    advice += spelt
+    for column, own in ((first, a), (second, b)):
+        if len(own) == 1:
+            advice.append(
+                Advice(
+                    "caution",
+                    f"{as_code(column)} puts every participant in {_value(next(iter(own)))}: kappa is 0 by "
+                    "construction, whatever the other rater says. Read the share of same categories.",
+                )
+            )
     for name in categories:
         for column, own, other in ((first, a, b), (second, b, a)):
             if name in own and name not in other:
                 advice.append(
                     Advice(
                         "info",
-                        f"{as_code(name)} is given by {as_code(column)} only ({own[name]:,} participant"
+                        f"{_value(name)} is given by {as_code(column)} only ({own[name]:,} participant"
                         f"{'s' if own[name] != 1 else ''}).",
                     )
                 )
@@ -752,15 +889,17 @@ def plan_raters(
         advice.append(
             Advice("caution", f"{used:,} participants rated by both: kappa's interval is wide.")
         )
-    if max(a.values()) / used >= 0.9 and max(b.values()) / used >= 0.9:
+    # the same category for both: 95 of 100 in X for one and in Y for the other is no agreement at all
+    most_a, most_b = max(a, key=lambda name: a[name]), max(b, key=lambda name: b[name])
+    if most_a == most_b and a[most_a] / used >= 0.9 and b[most_b] / used >= 0.9:
         advice.append(
             Advice(
                 "info",
-                "Both raters put 90% or more of the participants in one category: kappa can be low although the "
+                "Both raters put 90% or more of the participants in the same category: kappa can be low although the "
                 "raters agree on most participants. Read the share of same categories beside it.",
             )
         )
-    listed = ", ".join(as_code(name) for name in categories)
+    listed = ", ".join(_value(name) for name in categories)
     graded = scale == GRADES and len(categories) > 2
     if graded:
         stated = [str(name) for name in order or ()]
@@ -770,15 +909,16 @@ def plan_raters(
                 rows,
                 Advice(
                     "violated",
-                    f"Put every grade in the order, lowest first: it lacks "
-                    f"{', '.join(as_code(n) for n in missing[:4]) or 'none, but repeats one'}.",
+                    "Put every grade in the order of the scale, lowest first: the order lacks "
+                    f"{', '.join(_value(n) for n in missing[:6]) or 'none, but repeats one'}. Grades written in "
+                    "words carry no order of their own.",
                 ),
                 *advice,
             )
         advice.append(
             Advice(
                 "info",
-                f"Order used: {' < '.join(as_code(n) for n in stated)}. Correct it if it is not the order of the "
+                f"Order used: {' < '.join(_value(n) for n in stated)}. Correct it if it is not the order of the "
                 "scale.",
             )
         )
@@ -813,8 +953,15 @@ WITHIN_ONE_GROUP = (
 )
 
 
-def plan_paired(df: pd.DataFrame, before: str | None, after: str | None, kind: str) -> ModelPlan:
-    rows = len(df)
+def plan_paired(
+    df: pd.DataFrame,
+    before: str | None,
+    after: str | None,
+    kind: str,
+    pooled: Pooled | None = None,
+) -> ModelPlan:
+    """``pooled``: the test is pooled over imputed datasets, and reads their rows (the mean change only)."""
+    rows = len(df) if pooled is None else pooled.rows
     if not before or not after:
         return _idle(rows, "Choose the first and the second measurement.")
     if before == after:
@@ -822,12 +969,16 @@ def plan_paired(df: pd.DataFrame, before: str | None, after: str | None, kind: s
             rows, Advice("violated", "The first and the second measurement are the same column.")
         )
     frame = df[[before, after]].apply(pd.to_numeric, errors="coerce").dropna()
-    used = len(frame)
+    used = len(frame) if pooled is None else pooled.used
     if used < 2:
         return _refused(
             rows,
             Advice("violated", "Fewer than two participants have both measurements."),
-            *_left_out(df, [before, after], used),
+            *(
+                _left_out(df, [before, after], used)
+                if pooled is None
+                else _imputed(df, [before, after], pooled)
+            ),
         )
     differences = (frame[after] - frame[before]).to_numpy(dtype=float)
     advice: list[Advice] = []
@@ -851,6 +1002,8 @@ def plan_paired(df: pd.DataFrame, before: str | None, after: str | None, kind: s
             )
     else:
         text = f"The mean change {as_code(after)} - {as_code(before)} with its 95% interval, paired t-test"
+        if pooled is not None:
+            text += f", pooled over the {pooled.datasets} imputed datasets"
         if used < FEW_VALUES and abs(_skew(differences)) > SKEWED:
             advice.append(
                 Advice(
@@ -859,12 +1012,15 @@ def plan_paired(df: pd.DataFrame, before: str | None, after: str | None, kind: s
                 )
             )
     advice += _same_quantity(frame[before], frame[after])
-    advice += _left_out(
-        df,
-        [before, after],
-        used,
-        "The change is that of the participants measured twice; the others may differ.",
-    )
+    if pooled is None:
+        advice += _left_out(
+            df,
+            [before, after],
+            used,
+            "The change is that of the participants measured twice; the others may differ.",
+        )
+    else:
+        advice += _imputed(df, [before, after], pooled)
     advice.append(Advice("info", WITHIN_ONE_GROUP))
     return ModelPlan(rows, (PlanStep(text, used),), tuple(advice))
 
@@ -897,9 +1053,20 @@ def plan_paired_yes_no(
             rows,
             Advice(
                 "violated",
-                f"{as_code(before)} holds {' and '.join(as_code(v) for v in sorted(first))}, {as_code(after)} holds "
-                f"{' and '.join(as_code(v) for v in sorted(second))}: the test needs the same two values in both.",
+                f"{as_code(before)} holds {' and '.join(_value(v) for v in sorted(first))}, {as_code(after)} holds "
+                f"{' and '.join(_value(v) for v in sorted(second))}: the test needs the same two values in both.",
             ),
+            # the column written with hidden spaces is cleaned from the plan (a copy beside it, used in its place)
+            *[
+                Advice(
+                    "caution",
+                    f"{as_code(column)} holds values written with hidden spaces: clean it into a copy beside it, "
+                    "which the analysis then uses.",
+                    column=str(column),
+                )
+                for column, held in ((before, first), (after, second))
+                if any(value != " ".join(value.split()) for value in held)
+            ],
         )
     if len(first) != 2:
         return _refused(
@@ -950,9 +1117,14 @@ def _decimals(value: float) -> int:
 
 
 def plan_one_mean(
-    df: pd.DataFrame, column: str | None, reference: float | None, kind: str
+    df: pd.DataFrame,
+    column: str | None,
+    reference: float | None,
+    kind: str,
+    pooled: Pooled | None = None,
 ) -> ModelPlan:
-    rows = len(df)
+    """``pooled``: the test is pooled over imputed datasets, and reads their rows (the mean only)."""
+    rows = len(df) if pooled is None else pooled.rows
     if not column:
         return _idle(rows, "Choose the measurement.")
     values = pd.to_numeric(df[column], errors="coerce").dropna()
@@ -977,19 +1149,25 @@ def plan_one_mean(
             )
         )
     array = values.to_numpy(dtype=float)
-    # the data's own mean or median, typed as a reference: compared at the finer of the two precisions, the one the
-    # reference is typed to and the one the values are recorded to (at the reference's alone, 7 "was" a mean of 6.552)
+    # the data's own summary typed as a reference: the mean for the mean, the median for the typical value. The mean
+    # is compared one decimal finer than the values are recorded (7 "was" the mean of values averaging 6.552; 50
+    # "was" the mean of ages averaging 50.43, which a t-test tells apart from 50). A median of whole numbers is a
+    # round number, and so is many a reference fixed beforehand: a question, not a verdict
     recorded = max((_decimals(float(value)) for value in array[:2000]), default=0)
-    digits = min(6, max(_decimals(reference), recorded))
-    for name, own in (("median", float(values.median())), ("mean", float(values.mean()))):
-        if round(own, digits) == round(reference, digits):
-            advice.append(
-                Advice(
-                    "caution",
-                    f"{_num(reference)} is the {name} of these same values: a test against it says nothing.",
-                )
+    name, own, finer = (
+        ("median", float(values.median()), recorded)
+        if kind == SIGNED_RANK
+        else ("mean", float(values.mean()), recorded + 1)
+    )
+    digits = min(6, max(_decimals(reference), finer))
+    if round(own, digits) == round(reference, digits):
+        advice.append(
+            Advice(
+                "caution",
+                f"{_num(reference)} is also the {name} of these values: was it read from them? A reference comes "
+                "from outside the data.",
             )
-            break
+        )
     if kind == SIGNED_RANK:
         same = int((array == reference).sum())
         text = (
@@ -1008,6 +1186,9 @@ def plan_one_mean(
         text = (
             f"Is the mean of {as_code(column)} different from {_num(reference)}? One-sample t-test"
         )
+        if pooled is not None:
+            used = pooled.used
+            text += f", pooled over the {pooled.datasets} imputed datasets"
         if used < FEW_VALUES and abs(_skew(array)) > SKEWED:
             advice.append(
                 Advice(
@@ -1015,7 +1196,7 @@ def plan_one_mean(
                     "Few values and a skewed distribution: the signed-rank summary is the safer one.",
                 )
             )
-    advice += _left_out(df, [column], used)
+    advice += _left_out(df, [column], used) if pooled is None else _imputed(df, [column], pooled)
     return ModelPlan(rows, (PlanStep(text, used),), tuple(advice))
 
 
@@ -1157,9 +1338,10 @@ def plan_strata(
         e, y = exposed.loc[index], happened.loc[index]
         n1, n0, m1, n = int(e.sum()), int((~e).sum()), int(y.sum()), len(index)
         sizes.append(n)
-        if not n1 or not n0 or not m1 or m1 == n or n < 2:
-            empty += 1
-        elif min(n1, n0) < SMALL_STRATUM:
+        if not n1 or not n0 or not m1 or m1 == n:
+            empty += 1  # no odds ratio of its own: the two tests do not read it (biostats.rates)
+            continue
+        if min(n1, n0) < SMALL_STRATUM:
             small += 1
         expected += n1 * m1 / n
         lowest += max(0, m1 - n0)
@@ -1169,8 +1351,14 @@ def plan_strata(
         advice.append(
             Advice(
                 "caution",
-                f"{empty} of {total} strata hold one group only, one outcome only or a single row: they add nothing "
-                "to the combined ratio, and the two tests cannot be computed with them.",
+                f"{empty} of {total} strata hold{'s' if empty == 1 else ''} one group only or one outcome only: "
+                f"{'it adds' if empty == 1 else 'they add'} nothing to the odds ratio, and the two tests read the "
+                f"other {total - empty}."
+                + (
+                    " With fewer than two such strata, whether the strata differ cannot be tested."
+                    if total - empty < 2
+                    else ""
+                ),
             )
         )
     if small:
@@ -1181,7 +1369,7 @@ def plan_strata(
                 "participants in a group.",
             )
         )
-    if not empty and min(expected - lowest, highest - expected) < 5:
+    if total > empty and min(expected - lowest, highest - expected) < 5:
         advice.append(
             Advice(
                 "info",
@@ -1229,7 +1417,19 @@ def check_rates(
         return False, []
     times = [person_time, *((reference_time,) if two else ())]
     if any(float(t) <= 0 for t in times):  # type: ignore[arg-type]
-        return False, [Advice("violated", "A person-time at risk is above 0.")]
+        which = (
+            ""
+            if not two
+            else (
+                " for the group compared" if float(person_time) <= 0 else " for the reference group"  # type: ignore[arg-type]
+            )
+        )
+        return False, [
+            Advice(
+                "violated",
+                f"Type a person-time at risk above 0{which}: a rate is events over time.",
+            )
+        ]
     advice: list[Advice] = []
     if two and not reference_events and not events:
         advice.append(
@@ -1268,7 +1468,11 @@ def check_expected(observed: int | None, expected: float | None) -> tuple[bool, 
     if observed is None or expected is None:
         return False, []
     if float(expected) <= 0:
-        return False, [Advice("violated", "The expected number of events is above 0.")]
+        return False, [
+            Advice(
+                "violated", "Type an expected number of events above 0: the ratio divides by it."
+            )
+        ]
     advice: list[Advice] = []
     if float(expected) < 1:
         advice.append(

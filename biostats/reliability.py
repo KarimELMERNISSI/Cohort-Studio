@@ -42,7 +42,9 @@ class KappaResult:
 
 def landis_koch(k: float) -> str:
     """The word Landis and Koch (1977) give a kappa: a benchmark for an unweighted kappa, to be read on its interval
-    as well as on its estimate."""
+    as well as on its estimate. A kappa without a value has no word."""
+    if not np.isfinite(k):
+        return "no value"
     if k < 0:
         return "poor (less than chance)"
     if k < 0.21:
@@ -143,8 +145,9 @@ def cohens_kappa(
     return KappaResult(
         kappa=kappa,
         ci=CI(
-            lower=kappa - z * se,
-            upper=kappa + z * se,
+            # kappa lies between -1 and 1: 19 of 20 in the same category gave an interval up to 1.09
+            lower=max(-1.0, kappa - z * se),
+            upper=min(1.0, kappa + z * se),
             level=1 - alpha,
             method="normal approximation",
         ),
@@ -174,7 +177,10 @@ class ICCResult:
 
 
 def koo_li(v: float) -> str:
-    """The word Koo and Li (2016) give an ICC; its authors read it on the interval, not on the estimate alone."""
+    """The word Koo and Li (2016) give an ICC; its authors read it on the interval, not on the estimate alone. An
+    ICC without a value has no word (a missing value compared with 0.9 read "excellent")."""
+    if not np.isfinite(v):
+        return "no value"
     if v < 0.5:
         return "poor"
     if v < 0.75:

@@ -119,8 +119,23 @@ def accuracy_of(
         )
     shown = None if at is None else (-at if lower else at)
     point = None if acc is None else (1 - acc.specificity, acc.sensitivity)
+    with_it = np.asarray([v == present for v in truth])
+    values = np.asarray(marker, dtype=float)
+    cautions: list[str] = []
+    if auc["ci"].upper < 0.5:
+        # in the words of the direction asked above: the functions read the reversed marker for "lower", and their
+        # own caution then said the opposite ("higher values go with the other level") and advised to take the
+        # other level as positive, which gives the accuracy for the absence of the condition
+        other = m.HIGHER if lower else m.LOWER
+        cautions.append(
+            f"These data contradict the direction chosen: read with {direction} values pointing to the condition, "
+            f"the area under the curve is {auc['auc']:.3f}, below 0.5. Choose {other} above, or check the value "
+            "that means the condition is present."
+        )
     return {
         "auc": auc,
+        "pairs": _pairs(with_it, values),
+        "cautions": cautions,
         "youden": youden,
         "cutoff": shown,
         "acc": acc,
@@ -132,13 +147,39 @@ def accuracy_of(
         "direction": direction,
         "prevalence": None if prevalence is None else float(prevalence),
         "fig": _roc_figure(
-            np.asarray([v == present for v in truth]),
-            np.asarray(marker, dtype=float),
+            with_it,
+            values,
             auc,
             point,
             None if shown is None else f"cut-off {_bound(lower)} {layout.num(shown)}",
         ),
     }
+
+
+def _pairs(with_it: np.ndarray, values: np.ndarray) -> tuple[float, float, float]:
+    """Of every pair of one participant with the condition and one without: the shares in which the one with it
+    has the value pointing further to the condition, the same value, the other. The AUC is the first plus half
+    the second: with ties, "in 66 of 100 pairs the higher value" was said of 51."""
+    ill, well = np.sort(values[with_it]), np.sort(values[~with_it])
+    total = len(ill) * len(well)
+    if not total:
+        return float("nan"), float("nan"), float("nan")
+    below = np.searchsorted(
+        well, ill, side="left"
+    )  # those without it strictly below each one with it
+    upto = np.searchsorted(well, ill, side="right")
+    further, same = float(below.sum()) / total, float((upto - below).sum()) / total
+    return further, same, 1.0 - further - same
+
+
+def _in_100(share: float) -> str:
+    """A share as "51 of 100 pairs" is said: never "100" for less than all, never "0" for some."""
+    count = round(100 * share)
+    if count == 100 and share < 1:
+        return "more than 99"
+    if count == 0 and share > 0:
+        return "fewer than 1"
+    return str(count)
 
 
 def range_drawn(clean: pd.DataFrame, outcome: str, present: Any) -> bool:
@@ -387,7 +428,7 @@ def _show_accuracy(res: dict[str, Any]) -> None:
         )
     ]
     words = f"{score} against {outcome} = {present}, {'lower' if lower else 'higher'} values pointing to the condition."
-    cautions: list[str] = []
+    cautions: list[str] = list(res.get("cautions") or [])
     if acc is None:
         metrics += [
             Metric(
@@ -395,11 +436,13 @@ def _show_accuracy(res: dict[str, Any]) -> None:
             ),
             Metric("Without", f"{auc['n_negative']:,}"),
         ]
-        share = round(100 * auc["auc"])
+        further, same, _ = res.get("pairs") or (auc["auc"], 0.0, 1 - auc["auc"])
         words += (
-            f" In {share} of 100 pairs of one participant with the condition and one without, the one with it has "
-            f"the {'lower' if lower else 'higher'} value."
+            f" In {_in_100(further)} of 100 pairs of one participant with the condition and one without, the one "
+            f"with it has the {'lower' if lower else 'higher'} value"
         )
+        # the AUC counts a tie for a half: said apart as soon as ties are a pair in 100
+        words += f"; in {_in_100(same)} the two have the same value." if same >= 0.01 else "."
     else:
         found = res["mode"] == m.YOUDEN
         origin = "found on these data: optimistic" if found else "fixed beforehand"
@@ -424,8 +467,6 @@ def _show_accuracy(res: dict[str, Any]) -> None:
             ),
         ]
         cautions += list(acc.warnings)
-        if found and youden and youden.get("caution"):
-            cautions.append(youden["caution"])
     layout.headline(metrics, words, len(cautions))
     left, right = st.columns(2)
     left.plotly_chart(res["fig"], width="stretch")
@@ -754,9 +795,19 @@ def _show_icc(res: Any, rows: int) -> None:
         (words for key, words in m.ICC_FORMS.items() if res.model.startswith(key)), res.model
     )
     left_out = rows - res.n_subjects
+    known = bool(np.isfinite(res.icc))
+    # at 1, absolute agreement is the same value; consistency is the same ranking and spacing (two columns 10 apart
+    # everywhere give 1)
+    top = "they agree fully" if res.model.startswith(m.ABSOLUTE) else "the same ranking and spacing"
     layout.headline(
         [
-            Metric("ICC", f"{res.icc:.3f}", f"{layout.interval(res.ci)} (Shrout-Fleiss)"),
+            Metric(
+                "ICC",
+                f"{res.icc:.3f}" if known else "n/a",
+                f"{layout.interval(res.ci)} (Shrout-Fleiss)"
+                if known
+                else "no value on these columns",
+            ),
             Metric(
                 "Participants",
                 f"{res.n_subjects:,}",
@@ -764,15 +815,16 @@ def _show_icc(res: Any, rows: int) -> None:
             ),
             Metric("Columns", f"{res.n_raters}"),
         ],
-        f"{form}, one measurement each. 0 = the measurements do not tell participants apart, 1 = they agree fully.",
+        f"{form}, one measurement each. 0 = the measurements do not tell participants apart, 1 = {top}.",
     )
     with st.expander("Details: the test, the benchmark and the method"):
         low, high = koo_li(res.ci.lower), koo_li(res.ci.upper)
-        st.caption(
-            f"F = {res.f_statistic:.3f}, df = {res.df1:.0f}, {res.df2:.0f}, p {layout.p_text(res.p_value)}. "
-            "Benchmark (Koo & Li), read on the interval: "
-            + (f"{low}." if low == high else f"from {low} to {high}.")
-        )
+        text = f"F = {layout.num(res.f_statistic)}, df = {res.df1:.0f}, {res.df2:.0f}, p {layout.p_text(res.p_value)}."
+        if known:  # an ICC without a value has no word
+            text += " Benchmark (Koo & Li), read on the interval: " + (
+                f"{low}." if low == high else f"from {low} to {high}."
+            )
+        st.caption(text)
         st.caption("Method: " + " | ".join(res.references))
     help_popover(
         "The ICC is the share of the differences between measurements that comes from the participants themselves "
@@ -843,7 +895,9 @@ def _raters(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             help=HELP["scale"],
         )
         if scale == m.GRADES:
-            layout.depends("kappa_order", (first, second, tuple(categories)), list(categories))
+            layout.depends(
+                "kappa_order", (first, second, tuple(categories)), m.grade_order(categories)
+            )
             order = s2.multiselect(
                 "Order of the grades, lowest first",
                 categories,
@@ -868,7 +922,15 @@ def _raters(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         lambda: m.plan_raters(df, first, second, scale, order, weights),
     )
     if guided:
-        layout.plan_box(plan)
+        # a column whose categories are written several ways is cleaned from the plan, and its copy takes its place:
+        # sent to Data > Clean, the researcher lost every choice made on this page
+        fields = ((first, "kappa_a", "first"), (second, "kappa_b", "second"))
+        clean = {
+            column: {"group_key": key, "groupable": offered, "use": f"Use as the {which} rater:"}
+            for column, key, which in fields
+            if column
+        }
+        layout.plan_box(plan, clean=clean)
     else:
         layout.checks(plan)
     if mi is not None:
@@ -916,12 +978,21 @@ def _show_kappa(result: dict[str, Any], first: str, second: str) -> None:
     )
     if weights:
         words += " A weighted kappa also counts near misses, which the share of same categories does not."
+    counts = table.to_numpy()
+    # one rater puts everyone in one category: kappa is 0 whatever the other says, and its interval has no width
+    fixed = int((counts.sum(axis=1) > 0).sum()) == 1 or int((counts.sum(axis=0) > 0).sum()) == 1
     layout.headline(
         [
             Metric(
                 "Same category", layout.percent(res.observed_agreement), f"{same:,} of {res.n:,}"
             ),
-            Metric(name, f"{res.kappa:.3f}", f"{layout.interval(res.ci)} · {scale}"),
+            Metric(
+                name,
+                f"{res.kappa:.3f}",
+                "0 by construction: one rater uses one category only"
+                if fixed
+                else f"{layout.interval(res.ci)} · {scale}",
+            ),
             Metric("Rated by both", f"{res.n:,}"),
         ],
         words,
@@ -939,7 +1010,7 @@ def _show_kappa(result: dict[str, Any], first: str, second: str) -> None:
     label = "Details: the standard error and the method"
     with st.expander(label if weights else label.replace(" and", ", the benchmark and")):
         text = f"Standard error {res.se:.3f} (normal approximation for the interval)."
-        if not weights:
+        if not weights and not fixed:
             low, high = landis_koch(res.ci.lower), landis_koch(res.ci.upper)
             text += " Benchmark (Landis & Koch), read on the interval: " + (
                 f"{low} agreement." if low == high else f"from {low} to {high} agreement."

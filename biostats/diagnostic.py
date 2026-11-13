@@ -243,7 +243,9 @@ def youden_cutoff(
     whatever the number of resamples. The cut-off is always an observed score: the curve's first point, above every
     score, is no cut-off. The rows are put in order (by score, then by level) before they are resampled, so that the
     same data give the same range in any order of the rows. ``caution`` says when the marker points the other way
-    (an area under the curve below 0.5) or when the cut-off found is the smallest or the largest score.
+    (an area under the curve below 0.5), when the cut-off found is the smallest score (everyone is called positive)
+    or when it is the largest and next to no one is called positive. It speaks of the marker as given: a caller
+    that reverses the marker to read it the other way writes its own words.
     """
     from sklearn.metrics import roc_curve
 
@@ -274,14 +276,20 @@ def youden_cutoff(
         if area < 0.5 - 1e-9:  # a half computed as 0.49999999999999994 is a half
             caution = (
                 f"The marker points the other way (area under the curve {area:.3f}, below 0.5): higher values go "
-                "with the other level, and no cut-off of the form 'score >= cut-off' separates the two. Take the "
-                "other level as positive, or reverse the marker."
+                "with the other level, and no cut-off of the form 'score >= cut-off' separates the two. Read the "
+                "marker the other way round: lower values go with this level."
             )
-        elif cutoff in (float(scores.min()), float(scores.max())):
-            lowest = cutoff == float(scores.min())
+        elif cutoff == float(scores.min()):
             caution = (
-                f"The cut-off found is the {'smallest' if lowest else 'largest'} observed score: nearly "
-                f"{'everyone' if lowest else 'no one'} is called positive. The marker hardly separates the two levels."
+                "The cut-off found is the smallest observed score: everyone is called positive. The marker does "
+                "not separate the two levels."
+            )
+        elif cutoff == float(scores.max()) and int((scores >= cutoff).sum()) < YOUDEN_MIN_CLASS:
+            # the largest score of a grade from 1 to 5 can hold a third of the rows: no caution then
+            called = int((scores >= cutoff).sum())
+            caution = (
+                f"The cut-off found is the largest observed score: {called} of {len(scores):,} "
+                f"{'is' if called == 1 else 'are'} called positive."
             )
     ci = None
     drawn = 0

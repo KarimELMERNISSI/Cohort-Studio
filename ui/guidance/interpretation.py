@@ -35,7 +35,8 @@ def how_to_read(result: TestResult) -> str:
     if p is not None:
         label = "adjusted p" if result.p_adjusted is not None else "p"
         parts.append(
-            f"The {label}-value ({_fmt(p, 2)}) is the probability of a result at least this extreme if the true effect were zero; "
+            f"The {label}-value ({'below 0.001' if p < 0.001 else _fmt(p, 2)}) is the probability of a result at least this "
+            "extreme if the true effect were zero; "
             "it is not the probability that there is no effect, and a value above 0.05 is not evidence of absence."
         )
     worries = [r for r in read_assumptions(result) if r.status in ("caution", "violated")]

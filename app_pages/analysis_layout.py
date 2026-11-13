@@ -101,7 +101,13 @@ def percent(value: Any, digits: int = 1) -> str:
     )
 
 
-def headline(metrics: Sequence[Metric], words: str = "", warnings: int = 0) -> None:
+def headline(
+    metrics: Sequence[Metric],
+    words: str = "",
+    warnings: int = 0,
+    *,
+    chip: tuple[str, str] | None = None,
+) -> None:
     """The result first: the estimate with its interval, the test and the counts, then one sentence saying what was
     compared and in which direction."""
     with st.container(border=True):
@@ -111,10 +117,14 @@ def headline(metrics: Sequence[Metric], words: str = "", warnings: int = 0) -> N
                 column.metric(metric.label, metric.value, help=metric.help)
                 if metric.caption:
                     column.caption(metric.caption)
-        if words or warnings:
+        if words or warnings or chip:
             with st.container(horizontal=True, vertical_alignment="center"):
                 if words:
                     st.caption(words)
+                if (
+                    chip
+                ):  # what qualifies the number above it (label, status): read with it, not after it
+                    status_chip(*chip)
                 if warnings:
                     status_chip(f"{warnings} warning{'s' if warnings > 1 else ''} below", "caution")
 

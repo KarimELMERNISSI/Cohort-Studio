@@ -98,3 +98,85 @@ def test_confounding_shows_on_the_risk_ratios() -> None:
     )
     assert res.rr_mh == pytest.approx(1.0) and res.crude_rr > 2
     assert any("risk ratios differ" in w and "may be a confounder" in w for w in res.warnings)
+
+
+# ----------------------------------------------------------------------------- strata that carry no information
+
+SITES = {
+    "A": (35, 85, 46, 74),
+    "B": (25, 71, 26, 62),
+    "C": (39, 119, 68, 94),
+    "D": (29, 60, 32, 58),
+}
+
+
+def _mh(cells: dict[str, tuple[int, int, int, int]]):
+    return mantel_haenszel(
+        _strata(cells), "exposed", "event", "stratum", exposure_level="yes", event_level="yes"
+    )
+
+
+def test_a_stratum_where_everyone_had_the_event_does_not_count_in_the_tests() -> None:
+    """It has no odds ratio of its own. Counted among the strata compared, it gave the Breslow-Day test a degree of
+    freedom too many: the same statistic read p = 0.48 where the four informative strata give 0.33."""
+    four = _mh(SITES)
+    five = _mh({**SITES, "E": (10, 0, 10, 0)})
+    assert (four.n_strata, four.n_tested, five.n_strata, five.n_tested) == (4, 4, 5, 4)
+    assert five.breslow_day_statistic == pytest.approx(four.breslow_day_statistic)
+    assert five.breslow_day_p == pytest.approx(four.breslow_day_p)
+    assert five.breslow_day_p == pytest.approx(
+        stats.chi2.sf(four.breslow_day_statistic, 3)
+    )  # 3 df, not 4
+    assert five.mh_test_p == pytest.approx(four.mh_test_p)
+    assert five.or_mh == pytest.approx(four.or_mh)
+    assert (five.or_mh_ci.lower, five.or_mh_ci.upper) == pytest.approx(
+        (four.or_mh_ci.lower, four.or_mh_ci.upper)
+    )
+    # the risk ratio reads it: both risks are 1 there, which pulls the combined ratio towards 1
+    assert abs(five.rr_mh - 1) < abs(four.rr_mh - 1)
+    assert any("1 of 5 strata holds one group only or one outcome only" in w for w in five.warnings)
+    assert not any("one group only" in w for w in four.warnings)
+
+
+@pytest.mark.parametrize(
+    "added",
+    [
+        {"E": (0, 10, 0, 10)},  # no event
+        {"E": (2, 4, 0, 0)},  # one group only
+        {"E": (1, 0, 0, 0)},  # a single row: it left both tests without a value
+        {"E": (10, 0, 10, 0), "F": (0, 3, 0, 0), "G": (0, 1, 0, 0)},
+    ],
+)
+def test_the_two_tests_read_the_strata_that_hold_both_groups_and_both_outcomes(added: dict) -> None:
+    four, more = _mh(SITES), _mh({**SITES, **added})
+    assert more.n_strata == 4 + len(added) and more.n_tested == 4
+    assert more.mh_test_statistic == pytest.approx(four.mh_test_statistic)
+    assert more.mh_test_p == pytest.approx(four.mh_test_p)
+    assert more.breslow_day_statistic == pytest.approx(four.breslow_day_statistic)
+    assert more.breslow_day_p == pytest.approx(four.breslow_day_p)
+    assert more.or_mh == pytest.approx(four.or_mh)
+    assert more.n == four.n + sum(sum(cells) for cells in added.values())
+    assert len(more.per_stratum) == more.n_strata  # every stratum is still shown
+
+
+def test_one_informative_stratum_has_no_other_to_differ_from() -> None:
+    res = _mh({"A": SITES["A"], "E": (10, 0, 10, 0)})
+    assert res.n_tested == 1 and res.breslow_day_p != res.breslow_day_p  # not a number: not tested
+    assert res.mh_test_p == pytest.approx(_mh_alone(SITES["A"]))
+    assert res.or_mh == pytest.approx((35 * 74) / (85 * 46))
+    none = _mh({"E": (10, 0, 10, 0), "F": (0, 5, 0, 5)})
+    assert none.n_tested == 0 and none.mh_test_p != none.mh_test_p and none.or_mh != none.or_mh
+
+
+def _mh_alone(cells: tuple[int, int, int, int]) -> float:
+    """The Mantel-Haenszel test of one 2x2 table, continuity-corrected."""
+    a, b, c, d = cells
+    n1, n0, m1, m0, n = a + b, c + d, a + c, b + d, a + b + c + d
+    expected, variance = n1 * m1 / n, n1 * n0 * m1 * m0 / (n**2 * (n - 1))
+    return float(stats.chi2.sf((abs(a - expected) - 0.5) ** 2 / variance, 1))
+
+
+def test_the_result_names_what_it_compares_and_the_rows_it_read() -> None:
+    res = _mh(SITES)
+    assert (res.compared, res.reference, res.event) == ("yes", "no", "yes")
+    assert res.n == sum(sum(cells) for cells in SITES.values())

@@ -181,6 +181,20 @@ class StratifiedResult:
     crude_rr: float = float("nan")  # unadjusted risk ratio from the pooled table
     references: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # the strata the two tests read: those that hold both groups and both outcomes (None: a result kept before
+    # this was counted)
+    n_tested: int | None = None
+    n: int | None = None  # the rows of the tables: those with the three values
+    compared: str = ""  # the group whose odds and risk stand above the line
+    reference: str = ""  # the group they are compared with
+    event: str = ""  # the level of the outcome counted as the event
+
+
+def _informative(table: np.ndarray) -> bool:
+    """A stratum that carries information on the odds ratio: it holds both groups and both outcomes. Any other adds
+    nothing to the Mantel-Haenszel odds ratio (its two products are 0), has no variance in the test of the
+    association, and no odds ratio of its own to compare with the others."""
+    return bool(table.sum(axis=1).min() > 0 and table.sum(axis=0).min() > 0)
 
 
 def _differ(crude: float, adjusted: float) -> bool:
@@ -246,7 +260,15 @@ def mantel_haenszel(
     event_level=None,
     alpha: float = 0.05,
 ) -> StratifiedResult:
-    """Pooled odds and risk ratios across strata (Mantel-Haenszel), Breslow-Day homogeneity test, MH test of no association."""
+    """
+    Odds and risk ratios combined over strata (Mantel-Haenszel), the Cochran-Mantel-Haenszel test of the association
+    and the Breslow-Day test that the strata's odds ratios are alike.
+
+    The two tests read the strata that hold both groups and both outcomes. With every stratum, one in which every
+    participant had the event gave the Breslow-Day test a degree of freedom too many (p = 0.48 for 0.33), and one of
+    a single row left both tests without a value. The risk ratio reads every stratum: one in which everyone had
+    the event says that the two risks are equal there.
+    """
     frame = df[[exposure_col, outcome_col, stratum_col]].dropna().astype(str)
     exp_levels = sorted(frame[exposure_col].unique())
     out_levels = sorted(frame[outcome_col].unique())
@@ -281,18 +303,35 @@ def mantel_haenszel(
                 else float("nan"),
             }
         )
-        small += min(a + b, c + d) < 5
+        # among the strata the tests read: one that holds a single group is counted with those that carry no
+        # information, not twice (the plan said "1 of 7" and the result "3 of 7")
+        small += bool(_informative(tbl) and min(a + b, c + d) < 5)
     if small:  # counted, never named: a stratum's value is the data's (a site, a clinic), copied into the dossier
         warnings.append(
             f"{small} of {len(tables)} strata {'has' if small == 1 else 'have'} fewer than 5 participants in a group"
         )
     if len(tables) < 2:
         raise ValueError("at least two strata are required")
-    st = StratifiedTable(tables)
+    tested = [table for table in tables if _informative(table)]
+    if len(tested) < len(tables):  # counted, never named, as the small strata
+        left = len(tables) - len(tested)
+        warnings.append(
+            f"{left} of {len(tables)} strata hold{'s' if left == 1 else ''} one group only or one outcome only: "
+            f"{'it adds' if left == 1 else 'they add'} nothing to the odds ratio, and the two tests read the other "
+            f"{len(tested)}"
+        )
+    st = StratifiedTable(tested or tables)
     or_ci = st.oddsratio_pooled_confint(alpha=alpha)
     rr, rr_ci = _rr_mh(tables, alpha)
-    bd = st.test_equal_odds(adjust=False)
-    mh = st.test_null_odds(correction=True)
+    nan = float("nan")
+    mh_statistic, mh_p = nan, nan
+    if tested:
+        mh = st.test_null_odds(correction=True)
+        mh_statistic, mh_p = float(mh.statistic), float(mh.pvalue)
+    bd_statistic, bd_p = nan, nan
+    if len(tested) >= 2:  # one stratum has no other to differ from
+        bd = st.test_equal_odds(adjust=False)
+        bd_statistic, bd_p = float(bd.statistic), float(bd.pvalue)
     pooled = np.sum(tables, axis=0)
     crude = (
         (pooled[0, 0] * pooled[1, 1]) / (pooled[0, 1] * pooled[1, 0])
@@ -314,10 +353,10 @@ def mantel_haenszel(
         rr_mh=rr,
         rr_mh_ci=rr_ci,
         crude_or=float(crude),
-        breslow_day_statistic=float(bd.statistic),
-        breslow_day_p=float(bd.pvalue),
-        mh_test_statistic=float(mh.statistic),
-        mh_test_p=float(mh.pvalue),
+        breslow_day_statistic=bd_statistic,
+        breslow_day_p=bd_p,
+        mh_test_statistic=mh_statistic,
+        mh_test_p=mh_p,
         per_stratum=pd.DataFrame(rows),
         crude_rr=float(crude_rr),
         references=[
@@ -326,6 +365,11 @@ def mantel_haenszel(
             REFERENCES["greenland1985"],
         ],
         warnings=warnings,
+        n_tested=len(tested),
+        n=int(np.sum(tables)),
+        compared=exposure_level,
+        reference=next((level for level in exp_levels if level != exposure_level), ""),
+        event=event_level,
     )
 
 

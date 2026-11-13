@@ -271,7 +271,8 @@ time; each keeps its choices and its result while another is open.
 - **A result stays** while its choices are unchanged, with the line saying what it was computed on, and can be added
   to the study dossier. After a change, the page says which choices the last result belongs to.
 - **With imputed data selected**, each analysis says what it reads: pooled over the imputed datasets, or which
-  observed rows.
+  observed rows. The plan of a pooled test counts the rows the imputed datasets give it and the values imputed;
+  a column left out of the imputation is named, with the rows that lack it.
 
 ### Diagnostic accuracy & agreement
 
@@ -291,7 +292,9 @@ time; each keeps its choices and its result while another is open.
   participants were taken as they came; under **More options**, type the prevalence where the test will be used to
   read them there as well.
 - **Kappa** is computed on the participants rated by both, with the same categories on both sides of the table, so
-  that the diagonal is agreement even when one rater never uses a category. Its benchmark (Landis & Koch) is read on
+  that the diagonal is agreement even when one rater never uses a category. For ordered grades the order is offered
+  when the grades themselves say it (numbers, Roman numerals); grades written in words ("low", "medium", "high")
+  are placed by you, lowest first, before Run: their alphabetical order is no scale. Its benchmark (Landis & Koch) is read on
   the interval and given for the unweighted kappa only; the ICC's (Koo & Li) is read on its interval too.
 
 ### Paired, rates & stratified
@@ -303,15 +306,20 @@ time; each keeps its choices and its result while another is open.
 | **One group against a reference**, a mean | the measurement; a reference value fixed beforehand; the summary | the mean (or typical value) with its interval, and its difference from the reference: one-sample t-test or Wilcoxon signed-rank |
 | **One group against a reference**, a share | a yes/no variable and the value counted, read from the dataset, or two numbers you type; the reference share | the share with its Wilson interval and the exact binomial test |
 | **Stratified (Mantel-Haenszel)** | a yes/no outcome and its event; what is compared and its **reference group**; one variable of 2 to 8 groups to adjust for | odds ratio (Robins-Breslow-Greenland interval) and risk ratio (Greenland-Robins) adjusted for that variable, beside the unadjusted ones; each stratum's table and ratios; whether the strata differ (Breslow-Day) |
-| **Rates (from counts)** | one rate, two rates, or observed against expected events; the numbers | events per person-time with exact Poisson intervals; the rate ratio with the exact conditional interval and test (Clopper-Pearson, as R's `poisson.test`), which agree: the interval excludes 1 exactly when p < 0.05; the standardised ratio (SMR or SIR) with its exact Poisson interval |
+| **Rates (from counts)** | one rate, two rates, or observed against expected events; the numbers | events per person-time with exact Poisson intervals; the rate ratio with the exact conditional interval (Clopper-Pearson, the interval of R's `poisson.test`) and a test that agrees with it (twice the smaller tail; R's own p-value is computed another way and can differ): the interval excludes 1 exactly when p < 0.05; the standardised ratio (SMR or SIR) with its exact Poisson interval |
 
 - **Rates is a calculator.** It reads the numbers you type, not the dataset: its fields start empty, it has no Run
   button, and its result follows the numbers and says where they came from. The analysis population and the
   imputation do not apply to it. The typed share of *One group against a reference* works the same way.
 - **The strata.** One combined ratio sums the strata up only when their ratios are alike. The result says so in three
   ways: no evidence that they differ (which is no proof that they are alike: the test has little power in small
-  strata), they differ (report the ratio of each stratum), or not tested (a stratum holds one group or one outcome
-  only). To adjust for several variables at once, use a logistic model (Survival & regression, Binary).
+  strata), they differ (said beside the combined ratio: report the ratio of each stratum), or not tested (fewer
+  than two strata hold both groups and both outcomes). A stratum that holds one group only, or one outcome only,
+  has no odds ratio of its own: it adds nothing to the combined odds ratio, and the two tests (the
+  Cochran-Mantel-Haenszel test of the association, the Breslow-Day test that the strata are alike) read the
+  others; the result says how many. The risk ratio reads every stratum. How much the variable adjusted for
+  mattered is read on the risk ratio, adjusted against unadjusted: an odds ratio can move without any distortion.
+  To adjust for several variables at once, use a logistic model (Survival & regression, Binary).
 - **A change within one group** is not the effect of a treatment: time, regression to the mean and who stayed also
   move it. To compare groups, adjust for the first measurement (Analysis tab, Multivariate).
 

@@ -48,15 +48,16 @@ POOLED = "Pooled over the {m} imputed datasets (Rubin's rules). "
 NOT_TYPED = "Uses the numbers you type: the imputation does not apply."
 
 
-def _not_pooled(analysis: str) -> None:
-    """The reason a test has no pooling rule, and what to run instead (biostats.mi.not_poolable)."""
+def _not_pooled(analysis: str, instead: str | None = None) -> None:
+    """The reason a test has no pooling rule, and what to run instead (biostats.mi.not_poolable); ``instead``
+    where the catalogue's alternative is another analysis's (it names the paired test for one group too)."""
     from biostats.mi import not_poolable
 
     entry = not_poolable(analysis)
     if entry is not None:
         st.info(
-            f"Not pooled with imputed data. {entry.reason} {entry.alternative} Choose the mean to pool it, or set "
-            "Analysis data to Observed in the sidebar to run this test.",
+            f"Not pooled with imputed data. {entry.reason} {instead or entry.alternative} Choose the mean to pool "
+            "it, or set Analysis data to Observed in the sidebar to run this test.",
             icon=":material/block:",
         )
 
@@ -125,17 +126,22 @@ def _paired_number(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     )
     if before and after:
         st.caption(f"Change = {as_code(after)} - {as_code(before)}.")
+    pooled = mi is not None
+    if pooled and kind == m.SIGNED_RANK:
+        # before any plan: a plan read "ready" over an analysis that has no Run
+        _not_pooled("wilcoxon_signed_rank")
+        return
+    # the plan of what runs: pooled, the test reads the rows of the imputed datasets, not the complete pairs
+    read = m.pooled_rows(mi, [before, after]) if pooled and before and after else None
     plan = layout.kept(
-        "pair_plan", (before, after, kind), lambda: m.plan_paired(df, before, after, kind)
+        "pair_plan",
+        (before, after, kind, mi_token(get_state()) if pooled else None),
+        lambda: m.plan_paired(df, before, after, kind, read),
     )
     if guided:
         layout.plan_box(plan)
     else:
         layout.checks(plan)
-    pooled = mi is not None
-    if pooled and kind == m.SIGNED_RANK:
-        _not_pooled("wilcoxon_signed_rank")
-        return
     if pooled:
         layout.imputed_line(
             POOLED.format(m=mi.m) + "The complete pairs are shown below the result for comparison."
@@ -203,13 +209,18 @@ def _show_change(
                 f"means of {as_code(before)} and {as_code(after)}, on the pairs",
             )
         )
-    lacking = len(df) - len(pairs)
+    # pooled, the pairs are those of an imputed dataset: fewer than the rows when a column was not imputed
+    lacking = len(df) - (result.n_total if pooled else len(pairs))
     metrics.append(
         Metric(
             "Pairs" if mean else "Pairs that differ",
             f"{result.n_total:,}",
             f"of {len(df):,} rows"
-            + (f"; {lacking:,} lack a value" if lacking and not pooled else ""),
+            + (
+                f"; {lacking:,} lack a value" + (" that was not imputed" if pooled else "")
+                if lacking > 0
+                else ""
+            ),
         )
     )
     words = ""
@@ -271,7 +282,17 @@ def _paired_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     choices = (before, after, None if counted is None else str(counted))
     plan = layout.kept("mc_plan", choices, lambda: m.plan_paired_yes_no(df, before, after, counted))
     if guided:
-        layout.plan_box(plan)
+        fields = ((before, "mc_before", "first"), (after, "mc_after", "second"))
+        clean = {
+            column: {
+                "group_key": key,
+                "groupable": offered,
+                "use": f"Use as the {which} measurement:",
+            }
+            for column, key, which in fields
+            if column
+        }
+        layout.plan_box(plan, clean=clean)
     else:
         layout.checks(plan)
     if mi is not None:
@@ -281,9 +302,17 @@ def _paired_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     if layout.run_button("mc_run", ready=bool(plan.steps), what="McNemar's test"):
         try:
             table = paired_table(df[before], df[after], counted=counted)
+            # the change is that of one value's share: without its name, the dossier's "difference in proportions
+            # (after - before) = -0.0625" read 0.0625 with the other value counted, and nothing said which
+            found = mcnemar_test(table.to_numpy()).model_copy(
+                update={
+                    "estimate_label": f"change in the share with {before} = {category(counted)} "
+                    f"(second - first, {after} against {before})"
+                }
+            )
             remember(
                 "mcnemar",
-                {"res": mcnemar_test(table.to_numpy()), "table": table},
+                {"res": found, "table": table},
                 config=choices,
                 n_analysed=int(table.to_numpy().sum()),
                 columns=[before, after],  # type: ignore[list-item]
@@ -382,17 +411,20 @@ def _one_mean(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         persist_state="page",
         help=HELP["summary"],
     )
+    pooled = mi is not None
+    if pooled and kind == m.SIGNED_RANK:
+        _not_pooled("wilcoxon_signed_rank", "Pool the mean (one-sample t-test) instead.")
+        return
+    read = m.pooled_rows(mi, [column]) if pooled and column else None
     plan = layout.kept(
-        "one_plan", (column, reference, kind), lambda: m.plan_one_mean(df, column, reference, kind)
+        "one_plan",
+        (column, reference, kind, mi_token(get_state()) if pooled else None),
+        lambda: m.plan_one_mean(df, column, reference, kind, read),
     )
     if guided:
         layout.plan_box(plan)
     else:
         layout.checks(plan)
-    pooled = mi is not None
-    if pooled and kind == m.SIGNED_RANK:
-        _not_pooled("wilcoxon_signed_rank")
-        return
     if pooled:
         layout.imputed_line(
             POOLED.format(m=mi.m) + "The observed values are shown below the result for comparison."
@@ -721,17 +753,19 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         )
     if layout.run_button("mh_run", ready=bool(plan.steps), what="the stratified analysis"):
         try:
+            found = mantel_haenszel(
+                df,
+                compare,  # type: ignore[arg-type]
+                outcome,  # type: ignore[arg-type]
+                stratum,  # type: ignore[arg-type]
+                exposure_level=exposed,
+                event_level=event,
+            )
             remember(
                 "mantel_haenszel",
-                mantel_haenszel(
-                    df,
-                    compare,  # type: ignore[arg-type]
-                    outcome,  # type: ignore[arg-type]
-                    stratum,  # type: ignore[arg-type]
-                    exposure_level=exposed,
-                    event_level=event,
-                ),
+                found,
                 config=config,
+                n_analysed=found.n,  # the rows of the tables: those with the three values
                 columns=[compare, outcome, stratum],  # type: ignore[list-item]
             )
             mark_step("analyse", "Mantel-Haenszel analysis")
@@ -739,7 +773,7 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             error_card("The stratified analysis could not be computed.", exc)
     result = layout.result_place("mantel_haenszel", config, guided=guided)
     if result is not None:
-        _show_strata(result, outcome, event, compare, exposed, reference, stratum)  # type: ignore[arg-type]
+        _show_strata(result, outcome, event, compare, exposed, reference, stratum, len(df))  # type: ignore[arg-type]
         provenance("mantel_haenszel")
 
 
@@ -753,8 +787,33 @@ def _ratio_ci(ci: Any) -> str:
 
 
 def _show_strata(
-    res: Any, outcome: str, event: str, compare: str, exposed: str, reference: str, stratum: str
+    res: Any,
+    outcome: str,
+    event: str,
+    compare: str,
+    exposed: str,
+    reference: str,
+    stratum: str,
+    total: int,
 ) -> None:
+    p = float("nan") if res.breslow_day_p is None else float(res.breslow_day_p)
+    tested = bool(np.isfinite(p))
+    informative = getattr(res, "n_tested", None)
+    # the word that qualifies the combined ratio stands with it: the headline gave one ratio, and the line under it
+    # said not to report it
+    chip = (
+        ("the strata differ: read each stratum", "caution")
+        if tested and p < 0.05
+        else None
+        if tested
+        else ("strata not compared", "neutral")
+    )
+    read = getattr(res, "n", None)
+    rows = ""
+    if read is not None:
+        rows = f"; {read:,} of {total:,} rows" + (
+            f", {total - read:,} lack a value" if total > read else ""
+        )
     layout.headline(
         [
             Metric(
@@ -770,8 +829,9 @@ def _show_strata(
             ),
         ],
         f"{as_code(outcome)} = {as_code(event)}, {as_code(exposed)} against {as_code(reference)} "
-        f"({as_code(compare)}), within {res.n_strata} strata of {as_code(stratum)}.",
+        f"({as_code(compare)}), within {res.n_strata} strata of {as_code(stratum)}{rows}.",
         len(res.warnings),
+        chip=chip,
     )
     ratios = pd.to_numeric(res.per_stratum["odds_ratio"], errors="coerce").dropna()
     ratios = ratios[np.isfinite(ratios)]
@@ -780,11 +840,14 @@ def _show_strata(
         if len(ratios)
         else ""
     )
-    p = res.breslow_day_p
-    if p is None or not np.isfinite(float(p)):
+    if not tested:
         st.markdown(
-            ":material/help: Whether the strata differ was not tested: a stratum holds one group only, or one "
-            "outcome only. Join or leave out such strata to test it."
+            ":material/help: Whether the strata differ was not tested: "
+            + (
+                "fewer than two strata hold both groups and both outcomes."
+                if informative is not None and informative < 2
+                else "the test has no value on these strata (a combined odds ratio of 0, or without a value)."
+            )
         )
     elif p >= 0.05:
         st.markdown(
@@ -796,6 +859,10 @@ def _show_strata(
             f":material/warning: {span}they differ (Breslow-Day p {layout.p_text(p)}). Report the ratio of each "
             "stratum, not one combined ratio."
         )
+    from ui.components.levels import (
+        show_level,
+    )  # a stratum written with a hidden space reads "Metz␣", as in the lists
+
     shown = res.per_stratum.rename(
         columns={
             "stratum": "Stratum",
@@ -807,13 +874,13 @@ def _show_strata(
             "risk_ratio": "Risk ratio",
         }
     )
-    st.dataframe(
-        shown.style.format(
-            {"Odds ratio": "{:.3f}", "Risk ratio": "{:.3f}"}, na_rep="not estimable"
-        ),
-        hide_index=True,
-        width="stretch",
-    )
+    shown["Stratum"] = [show_level(name) for name in shown["Stratum"]]
+    for ratio in ("Odds ratio", "Risk ratio"):  # in words: a missing ratio was drawn "None"
+        shown[ratio] = [
+            f"{value:.3f}" if pd.notna(value) and np.isfinite(value) else "not estimable"
+            for value in shown[ratio]
+        ]
+    st.dataframe(shown, hide_index=True, width="stretch")
     layout.warn(res.warnings)
     with st.expander("Details: the tests and the method"):
         st.caption(
@@ -825,10 +892,10 @@ def _show_strata(
         )
         st.caption("Method: " + " | ".join(res.references))
     help_popover(
-        "The adjusted ratios combine the ratios found within each stratum; their distance from the unadjusted ones "
-        "says how much the variable adjusted for mattered. One combined ratio sums the strata up only when their "
-        "ratios are alike. To adjust for several variables at once, use a logistic model (Survival & regression, "
-        "Binary)."
+        "The adjusted ratios combine the ratios found within each stratum. How much the variable adjusted for "
+        "mattered is read on the risk ratio, adjusted against unadjusted: an odds ratio can move without any "
+        "distortion (it is not collapsible). One combined ratio sums the strata up only when their ratios are "
+        "alike. To adjust for several variables at once, use a logistic model (Survival & regression, Binary)."
     )
 
 
@@ -969,7 +1036,7 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             (
                 f"{_ratio_ci(ratio.ci)}"
                 if bounded
-                else f"at least {_ratio(ratio.ci.lower)} (95% lower bound)"
+                else f"at least {_ratio(ratio.ci.lower)} (the lower end of the 95% interval)"
             )
             + f" · p {layout.p_text(ratio.p_value)}",
         )

@@ -620,8 +620,10 @@ def result_blocks(value: Any) -> ResultBlocks:
                     )
                 if youden.get("note"):
                     blocks.lines.append(str(youden["note"]))
-                if youden.get("caution"):
+                if "cautions" not in value and youden.get("caution"):  # a result kept before its own words
                     blocks.warnings.append(str(youden["caution"]))
+            # in the words of the direction asked on the page (the engine's are of the marker it was given)
+            blocks.warnings.extend(str(text) for text in value.get("cautions") or ())
             if acc is not None:
                 blocks.warnings.extend(acc.warnings)
             return blocks

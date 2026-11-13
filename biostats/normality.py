@@ -55,17 +55,19 @@ def normality_summary(x: Sequence[float] | np.ndarray | pd.Series, *, alpha: flo
         "anderson_p": anderson_p(arr),
     }
     p = out["shapiro_p"]
+    # a p-value below 0.001 is written so: "p = 8.74e-18" is a number no reader uses
+    said = "p < 0.001" if p < 0.001 else f"p = {p:.3g}"
     if np.isnan(p):
         verdict = "not assessable (too few values or no variance)"
     elif n > 300:
         verdict = (
             "large sample: tests flag tiny deviations; judge the Q-Q plot, skewness and kurtosis instead "
-            f"(Shapiro/D'Agostino p = {p:.3g})"
+            f"(Shapiro/D'Agostino {said})"
         )
     elif p < alpha:
-        verdict = f"evidence against normality (p = {p:.3g})"
+        verdict = f"evidence against normality ({said})"
     else:
-        verdict = f"no evidence against normality (p = {p:.3g})"
+        verdict = f"no evidence against normality ({said})"
     out["verdict"] = verdict
     return out
 

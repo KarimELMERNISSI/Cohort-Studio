@@ -63,7 +63,7 @@ with its own form and button, the first columns of the file already chosen. They
 - **McNemar's test paired two columns of different values by alphabetical order** ("Yes"/"No" against "1"/"0"). It
   now asks for two columns holding the same two values, and which value is counted.
 - **A stratified analysis whose homogeneity test could not be computed read "heterogeneous across strata".** It reads
-  "not tested", with the reason.
+  "not tested" when fewer than two strata hold both groups and both outcomes.
 - **A result's own warnings were not shown** on these tabs: the pairs a signed-rank test leaves out, fewer than 10
   pairs that changed, a difference that changes with the size of the measurement.
 - **A pooled paired or one-sample t-test stamped every row of the population as analysed**; it gives the rows its
@@ -74,6 +74,44 @@ with its own form and button, the first columns of the file already chosen. They
 - The dot on the ROC curve is the 2x2 table's own point (it was the nearest threshold of the curve, another point for
   a typed cut-off). A benchmark (Landis & Koch, Koo & Li) is read on the interval, in Details, and not given for a
   weighted kappa. "Subjects" became "participants".
+
+**Corrected on the rebuilt tabs** (statistics and sentences):
+
+- **The two tests of a stratified analysis read the strata that hold both groups and both outcomes.** A stratum in
+  which every participant had the event has no odds ratio of its own; counted among the strata compared, it gave the
+  Breslow-Day test a degree of freedom too many (p = 0.48 where the informative strata give 0.33), and a stratum of a
+  single row left both tests without a value. The result says how many strata the tests read and how many rows the
+  tables hold; the combined odds ratio is unchanged, and the risk ratio still reads every stratum. When the strata
+  differ, it is said beside the combined ratio, not under it.
+- **The caution under a cut-off found on the data could say the opposite of the result.** With *lower* chosen, the
+  functions read the reversed marker and their own words were shown as they were ("higher values go with the other
+  level... Take the other level as positive", which gives the accuracy for the absence of the condition). A grade
+  from 1 to 5 whose best cut-off is 5 read "nearly no one is called positive" with a third of the participants called
+  positive. The caution is now written from the result, in the words of the direction asked, and kept with it.
+- **With imputed data selected, the plan of the pooled paired and one-sample t-tests described the complete-case
+  analysis**: "1,023 of 1,206 rows" and "183 rows are left out" above a test that reads all 1,206, and "ready" above
+  the signed-rank summary, which is not pooled and has no Run. The plan counts what the imputed datasets give, says
+  how many values are imputed, and names a column that was not.
+- **The sentence under an AUC counted ties as wins**: "in 66 of 100 pairs the one with the condition has the higher
+  value" for 51 pairs, with 30 ties. The three shares are counted.
+- **The plan said "the direction fits" for higher and for lower on the same data** when the test separated nothing.
+  It now says so only by its silence: it speaks when the data contradict the direction, or do not show one.
+- **A weighted kappa of grades written in words no longer starts from their alphabetical order** ("high, low,
+  medium, none" under a plan that read "ready"): the order is offered when the grades say it (numbers, Roman
+  numerals, IX after V), and placed by the user otherwise, before Run.
+- **The change in a yes/no characteristic names its value** in the dossier ("-0.0625" read "0.0625" with the other
+  value counted, and nothing said which).
+- **Two values that differ by a hidden space are written apart** ("`Yes`" and "`Yes␣`") in the sentence that refuses
+  them, and the column can be cleaned from the plan, for two raters as well.
+- **Kappa and the ICC at their edges:** kappa's interval stays within -1 and 1 (19 of 20 in the same category gave up
+  to 1.09); a rater who uses one category gives "0 by construction" in place of an interval of no width; two
+  constant columns are refused in the plan (the headline read "ICC nan", benchmark "excellent"); the note on 90% of
+  participants in one category asks for the same category.
+- **Smaller:** a reference is compared with the data's own mean for the mean and with their median for the typical
+  value, and asked about ("was it read from them?"); how rough the limits of agreement are is computed for the
+  number of pairs (1.24 SD at 10 pairs, not "about 0.65"); "1" is offered as the value that means present beside 0
+  only; the stratified result says how many rows it read; p-values below 0.001 are written so in "How to read this"
+  and in the normality line as well.
 
 ### Security: the Ollama and Qdrant addresses are chosen from the server's lists, never typed
 
