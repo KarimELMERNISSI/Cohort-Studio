@@ -135,18 +135,20 @@ def empty_state(
     title: str,
     body: str,
     *,
-    links: tuple[tuple[str, str], ...] = (),
+    links: tuple[tuple[str, ...], ...] = (),
     action: Callable[[], None] | None = None,
 ) -> None:
-    """A bordered placeholder with a clear next step (never a bare warning)."""
+    """A bordered placeholder with a clear next step (never a bare warning). A link is a page and its label, and
+    may name the tab of that page it opens (``nav.PageDef.tabs``): "Create new variables" opened Enrich on its
+    first tab, Import External Data."""
     with st.container(border=True):
         st.markdown(f"**{title}**")
         st.caption(body)
         if links or action:
             cols = st.columns(max(1, len(links) + (1 if action else 0)))
-            for col, (key, label) in zip(cols, links, strict=False):
+            for col, (key, label, *tab) in zip(cols, links, strict=False):
                 with col:
-                    page_link(key, label)
+                    page_link(key, label, tab=tab[0] if tab else None)
             if action:
                 with cols[-1]:
                     action()

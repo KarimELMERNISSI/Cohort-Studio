@@ -11,6 +11,7 @@ what the user chose. A plan without a step means that nothing can be computed ye
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -68,7 +69,7 @@ DIAGNOSTIC_ENTRIES: tuple[Entry, ...] = (
         "Agreement of two raters (kappa)",
         "Two raters sorting the same participants into the same categories: Cohen's kappa, weighted when the "
         "categories are ordered grades.",
-        ("Cohen's kappa",),
+        ("Cohen's kappa", "Weighted kappa"),
     ),
 )
 PAIRED_ENTRIES: tuple[Entry, ...] = (
@@ -77,21 +78,32 @@ PAIRED_ENTRIES: tuple[Entry, ...] = (
         "Paired measurements",
         "The same participants measured twice: the change from the first measurement "
         "to the second, for a number or a yes/no characteristic.",
-        ("McNemar's test", "Effect size", "Confidence interval (CI)"),
+        ("Paired t-test", "Wilcoxon signed-rank test", "McNemar's test", "Effect size"),
     ),
     Entry(
         ONE_GROUP,
         "One group against a reference",
         "A mean or a share compared with a value fixed beforehand: one-sample t-test, Wilcoxon signed-rank, exact "
         "binomial test.",
-        ("Confidence interval (CI)", "p-value"),
+        (
+            "One-sample t-test",
+            "Wilcoxon signed-rank test",
+            "Exact binomial test",
+            "Confidence interval (CI)",
+        ),
     ),
     Entry(
         STRATA,
         "Stratified (Mantel-Haenszel)",
         "A yes/no outcome compared between two groups within the levels of a third "
         "variable: odds and risk ratios adjusted for it (Mantel-Haenszel).",
-        ("Mantel-Haenszel", "Odds ratio (OR)", "Relative risk (RR)", "Confounder"),
+        (
+            "Mantel-Haenszel",
+            "Breslow-Day test",
+            "Odds ratio (OR)",
+            "Relative risk (RR)",
+            "Confounder",
+        ),
     ),
     Entry(
         RATES,
@@ -127,12 +139,12 @@ HIGHER, LOWER = "higher", "lower"
 T_TEST, SIGNED_RANK = "Paired t-test", "Wilcoxon signed-rank"
 CHANGES = {
     T_TEST: "Mean change (paired t-test)",
-    SIGNED_RANK: "Typical change, robust to outliers (Wilcoxon signed-rank)",
+    SIGNED_RANK: "Typical change (Wilcoxon signed-rank)",
 }
 ONE_T = "One-sample t-test"
 SUMMARIES = {
     ONE_T: "Mean (one-sample t-test)",
-    SIGNED_RANK: "Typical value, robust to outliers (Wilcoxon signed-rank)",
+    SIGNED_RANK: "Typical value (Wilcoxon signed-rank)",
 }
 ABSOLUTE, CONSISTENCY = "ICC(2,1)", "ICC(3,1)"
 ICC_FORMS = {
@@ -196,15 +208,15 @@ HELP: dict[str, str] = {
     "two members of each pair, one column each.",
     "second": "The value of the same participants at the second visit or under the second condition.",
     "change": "The mean change is the usual summary. The signed-rank summary is the typical change (pseudo-median): "
-    "safer with few pairs, skewed changes or outliers.",
+    "robust to outliers, and safer with few pairs or skewed changes.",
     "counted": "The value whose share is compared between the two measurements.",
     "compared": "What is compared with the reference: the mean of a measurement, or the share of participants with a "
     "characteristic.",
     "measurement": "The variable compared with the reference value.",
     "reference_value": "A value decided before looking at these data: a published mean, a target, a limit. Not this "
     "sample's own mean or median.",
-    "summary": "The mean is the usual summary. The signed-rank summary is the typical value (pseudo-median): safer "
-    "with few or skewed values.",
+    "summary": "The mean is the usual summary. The signed-rank summary is the typical value (pseudo-median): robust "
+    "to outliers, and safer with few or skewed values.",
     "source": "Counts read from a yes/no column of the dataset, or counts you type (from a published table).",
     "share_variable": "A yes/no variable of the dataset.",
     "share_level": "The value whose share is compared with the reference.",
@@ -428,11 +440,33 @@ def _imputed(df: pd.DataFrame, columns: Sequence[str], pooled: Pooled) -> list[A
     return said
 
 
-def _num(value: float) -> str:
-    """A number of the data as a sentence writes it: no exponent, no trailing zeros."""
-    if not np.isfinite(value):
+def decimals(value: float, digits: int) -> int:
+    """The decimals that give ``value`` ``digits`` significant figures."""
+    if value == 0 or not math.isfinite(value):
+        return 0
+    return max(0, digits - 1 - math.floor(math.log10(abs(value))))
+
+
+def number(value: Any, digits: int = 3) -> str:
+    """
+    A number as a plan, a sentence or a result writes it: ``digits`` significant figures for its decimals, "n/a"
+    when it has no value. Thousands are grouped at any size, the whole part is never rounded (60,962.5 read
+    "61,000", and two means 1,200 apart read "243,700 to 244,900" beside "a change of 1,230"), and no exponent is
+    written (0.00001 read "0", 93,656 "+9.37e+04", and a plan said that a score "runs from 174 to 2.802e+04").
+    One rule for the plans and for the results: a number is not written two ways on one screen.
+    """
+    if value is None or not math.isfinite(float(value)):
         return "n/a"
-    return f"{value:,.4g}" if abs(value) < 1e6 else f"{value:,.0f}"
+    amount = float(value)
+    text = f"{amount:,.{min(12, decimals(amount, digits))}f}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return "0" if text in ("-0", "") else text
+
+
+def _num(value: float) -> str:
+    """A number of the data in a plan: four significant figures for its decimals."""
+    return number(value, 4)
 
 
 def _left_out(df: pd.DataFrame, columns: Sequence[str], used: int, more: str = "") -> list[Advice]:
@@ -1021,7 +1055,6 @@ def plan_paired(
         )
     else:
         advice += _imputed(df, [before, after], pooled)
-    advice.append(Advice("info", WITHIN_ONE_GROUP))
     return ModelPlan(rows, (PlanStep(text, used),), tuple(advice))
 
 
@@ -1401,6 +1434,25 @@ EXPECTED_AS_KNOWN = (
     "The expected number is taken as known. The ratio compares the cohort with the population that gave the "
     "reference rates, and with no other."
 )
+# "How to read this" of the calculators: what is to know whatever the numbers typed, said once under the result
+# (above every result, it was read again at each number typed)
+RATE_READING = (
+    "A rate is events over the time at risk, not over a number of participants. " + FIRST_EVENTS
+)
+RATIO_READING = (
+    RATE_READING
+    + " The ratio compares two rates; its interval and its test are exact and agree: the interval "
+    "leaves 1 out exactly when p is below 0.05."
+)
+EXPECTED_READING = (
+    "An SMR or SIR compares the events observed in the cohort with those expected if the reference population's "
+    "rates applied. " + EXPECTED_AS_KNOWN
+)
+SHARE_READING = (
+    "The interval says how large the share may be; the test asks whether the reference is compatible with it. "
+    "They are two methods (a Wilson interval, an exact binomial test): next to the reference they can part, "
+    "and the result then says so. The reference is a value fixed beforehand, from outside these data."
+)
 
 
 def check_rates(
@@ -1459,7 +1511,6 @@ def check_rates(
                 "More events than units of person-time: the right unit? Several events for one participant?",
             )
         )
-    advice.append(Advice("info", FIRST_EVENTS))
     return True, advice
 
 
@@ -1484,7 +1535,6 @@ def check_expected(observed: int | None, expected: float | None) -> tuple[bool, 
         advice.append(
             Advice("info", "No event observed: the ratio is 0, and its upper bound says something.")
         )
-    advice.append(Advice("info", EXPECTED_AS_KNOWN))
     return True, advice
 
 

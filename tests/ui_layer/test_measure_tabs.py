@@ -210,6 +210,21 @@ def test_accuracy_at_a_cut_off_fixed_beforehand_with_another_prevalence(app: App
     assert acc.lr_positive == pytest.approx(8.643014301430144, **TIGHT)
     assert acc.dor == pytest.approx(31.877777777777776, **TIGHT)
     assert result["auc"]["auc"] == pytest.approx(0.9273229015767356, **TIGHT)
+    # the table of every measure writes a share as the headline does (86.1% above, 0.861 in the table), and an
+    # estimate with the decimals of its interval
+    tables = [
+        d.value for d in app.dataframe if list(d.value.columns)[:2] == ["Measure", "Estimate"]
+    ]
+    assert len(tables) == 1 and list(tables[0].columns) == ["Measure", "Estimate", "95% CI"]
+    measures = tables[0].set_index("Measure")
+    assert measures.loc["Sensitivity", "Estimate"] == _metrics(app)["Sensitivity"] == "75.2%"
+    assert measures.loc["Sensitivity", "95% CI"] == "66.0% to 82.6%"
+    assert measures.loc["Positive predictive value, at a prevalence of 5.0%", "Estimate"] == "31.3%"
+    assert measures.loc["Positive likelihood ratio (LR+)", "Estimate"] == "8.64"
+    assert measures.loc["Positive likelihood ratio (LR+)", "95% CI"] == "6.75 to 11.07"
+    assert "Method: " in " ".join(
+        c.value for c in app.caption
+    )  # inside Details, with the other methods
 
 
 def test_a_cut_off_typed_for_one_score_does_not_follow_to_another(app: AppTest) -> None:
@@ -388,10 +403,16 @@ def test_two_measurements_give_the_limits_of_agreement_and_the_icc_in_one_run(ap
         _stored(app, "icc") is not None
     )  # it vanished at the next click: kept now, with what it was computed on
     shown = _metrics(app)
-    assert shown["Mean difference"] == "5.99"
-    assert "The difference changes with the size of the measurement" in _texts(
-        app
-    )  # the result's own warning
+    # two results follow one Run: each is named in its first figure (the second box had no title), the columns just
+    # chosen are no figure, and one "How to read this" follows the last result
+    assert shown["Bland-Altman: mean difference"] == "5.99" and shown["ICC(2,1)"] == "0.866"
+    assert "Columns" not in shown
+    text = _texts(app)
+    readings = [md.value for md in app.markdown if "**Limits of agreement.**" in md.value]
+    assert len(readings) == 1 and "**Intraclass correlation.**" in readings[0]
+    # the result's own warning, once: the line with the slope says it, in both readings
+    assert text.lower().count("the difference changes with the size of the measurement") == 1
+    assert "one is noisier than the other" in text
 
 
 def test_the_icc_of_two_readers_in_both_forms(app: AppTest) -> None:
@@ -558,6 +579,14 @@ def test_a_share_against_a_reference_from_numbers_typed(app: AppTest) -> None:
     text = _texts(app)
     assert "21.9% to 39.6%" in text and "p = 0.017" in text
     assert "From the numbers typed: 30 of 100." in text and "Not from the dataset" in text
+    assert "Reference: typed" not in text and text.count("Not from the dataset") == 1
+    assert "They are two methods" in text  # the share ended without "How to read this"
+    # 3 of 10 against 10%: the exact test does not reject, the Wilson interval leaves the reference out
+    _type(app, "prop_k", 3)
+    _type(app, "prop_n", 10)
+    _type(app, "prop_ref", 0.1)
+    assert any("part at the border" in w.value for w in app.warning), [w.value for w in app.warning]
+    _type(app, "prop_n", 100)
     _type(app, "prop_k", 130)  # more than the participants counted
     assert not app.metric
 
@@ -657,6 +686,13 @@ def test_strata_without_information_are_left_out_of_the_tests_and_cleaned_from_t
     assert "the two tests read the other 5" in text  # the result's own warning, shown
     assert "heterogeneous" not in text and "928 of 928 rows" in text
     assert app.session_state["_results"]["mantel_haenszel"].stamp.n_analysed == 928
+    from manage.report_tables import result_blocks
+
+    written = " ".join(result_blocks(res).lines)  # the dossier says it too
+    assert (
+        "7 strata, of which the two tests read the 5 that hold both groups and both outcomes"
+        in written
+    )
 
 
 def test_strata_that_differ_are_said_beside_the_combined_ratio(app: AppTest) -> None:
@@ -698,10 +734,20 @@ def test_two_rates_and_their_ratio_follow_the_numbers_typed(app: AppTest) -> Non
     assert not app.metric  # a number is still missing: no result on half the numbers
     _type(app, "rate_t0", 1000.0)
     shown = _metrics(app)
-    assert shown["Rate ratio"] == "3.12"
-    assert shown["Group compared"] == "12.50"
-    assert shown["Reference group"] == "4.00"
+    # the ratio with the decimals of its interval ("3.12" stood beside 0.996 to 12.935); the two figures are rates,
+    # and say so ("Group compared 12.50" read as a group's name)
+    assert shown["Rate ratio"] == "3.125"
+    assert shown["Rate, group compared"] == "12.50"
+    assert shown["Rate, reference group"] == "4.00"
     text = _texts(app)
+    # the sentence states the result (it named the methods, which are in Details)
+    assert "The group compared has 3.1 times the rate of the reference group." in text
+    assert (
+        "15 events /" not in text
+    )  # the numbers typed: in their fields and in the line under the result
+    assert (
+        text.count("Count each participant's first event") == 1
+    )  # in "How to read this", not above the result
     assert (
         "7.00 to 20.62" in text and "1.09 to 10.24" in text
     )  # exact Poisson intervals of the two rates
@@ -719,7 +765,12 @@ def test_one_rate(app: AppTest) -> None:
     _type(app, "rate_e1", 15)
     _type(app, "rate_t1", 1200.0)
     assert _metrics(app) == {"Rate": "12.50"}
-    assert "per 1,000 person-years · 15 events / 1,200 · 95% CI 7.00 to 20.62" in _texts(app)
+    text = _texts(app)
+    assert "per 1,000 person-years · 95% CI 7.00 to 20.62" in text
+    assert "From the numbers typed: 15 events over 1,200 person-years." in text
+    assert (
+        "A rate is events over the time at risk" in text
+    )  # a single rate ended without its reading
     assert "rate_e0" not in {
         n.key for n in app.number_input
     }  # one group: no reference to leave at 0
@@ -731,8 +782,12 @@ def test_observed_against_expected_events(app: AppTest) -> None:
     _type(app, "smr_obs", 25)
     _type(app, "smr_exp", 18.4)
     shown = _metrics(app)
-    assert shown["Standardised mortality ratio (SMR)"] == "1.36"
-    assert "95% CI 0.879 to 2.006" in _texts(app)
+    # one figure: "Observed 25" and "Expected 18.4" stood under the two fields that show them
+    assert shown == {"Standardised mortality ratio (SMR)": "1.359"}
+    text = _texts(app)
+    assert "95% CI 0.879 to 2.006" in text
+    assert "From the numbers typed: 25 observed against 18.4 expected." in text
+    assert text.count("The expected number is taken as known") == 1  # in "How to read this"
     app.radio(key="smr_kind").set_value(m.CASES).run()
     assert "Standardised incidence ratio (SIR)" in _metrics(app)
 
@@ -774,6 +829,27 @@ def test_every_result_kept_by_the_two_tabs_can_go_to_the_dossier(app: AppTest) -
         assert "subjects" not in written and "object at 0x" not in written, (key, written[:200])
     titles = [title for title, _ in result_blocks(held["diagnostic"].value).tables]
     assert any("(no cut-off)" in title for title in titles), titles
+
+    def said(key: str) -> str:
+        blocks = result_blocks(held[key].value)
+        return " ".join([*blocks.lines, *blocks.warnings])
+
+    # the dossier in the words of the page
+    limits = said("bland_altman")
+    assert "mean difference = 5.99" in limits and "Slope of the difference on the mean" in limits
+    assert (
+        "either one method reads proportionally higher, or one is noisier than the other" in limits
+    )
+    assert (
+        limits.count("changes with the size of the measurement") == 1
+    )  # the line says it: no warning beside
+    assert "Proportional bias" not in limits and "log scale" not in limits
+    strata = said("mantel_haenszel")
+    assert "Ratios of Intervention against Control (the reference group); event: Yes" in strata
+    assert "Cochran-Mantel-Haenszel test of the association" in strata and "3 strata" in strata
+    assert "near misses" in said("kappa")  # a weighted kappa beside the share of same categories
+    share = said("proportion")
+    assert "number counted = 302" in share and "successes" not in share
 
 
 # ----------------------------------------------------------------------------- links
@@ -859,9 +935,12 @@ def test_which_test_opens_the_analysis_it_recommends() -> None:
 
 def test_the_orientation_opens_what_it_names(app: AppTest) -> None:
     app.session_state["epi_tab"] = "Analysis"
+    app.session_state["epi_map"] = True  # the map, open
     app.run()
     app.button(key=f"epi_open::{PAIRED}::{m.STRATA}").click().run()
     _ok(app)
+    # the map folds: left open, the analysis its button opened landed below the screen
+    assert app.session_state["epi_map"] is False
     assert app.session_state["epi_tab"] == PAIRED
     assert app.segmented_control(key="paired_question").value == m.STRATA
     assert "mh_run" in {b.key for b in app.button}
@@ -896,4 +975,9 @@ def test_guidance_off_hides_the_plan_and_keeps_what_would_make_a_result_wrong(ap
     _ok(app)
     assert "Before you run: the plan" not in _texts(app)
     assert not app.button(key="pair_run").disabled
+    # without the plan nothing said why Run was grey: its help says what is missing
+    _pick(app, "pair_after", None)
+    waiting = app.button(key="pair_run")
+    assert waiting.disabled and "Choose the first and the second measurement" in waiting.proto.help
+    _pick(app, "pair_after", "sbp_6m")
     app.toggle(key="epi_guidance").set_value(True).run()

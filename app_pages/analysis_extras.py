@@ -45,7 +45,6 @@ from ui.state import get_state
 QUESTION_KEY = "paired_question"
 OBSERVED = "Imputed data are selected; this analysis reads the observed data: "
 POOLED = "Pooled over the {m} imputed datasets (Rubin's rules). "
-NOT_TYPED = "Uses the numbers you type: the imputation does not apply."
 
 
 def _not_pooled(analysis: str, instead: str | None = None) -> None:
@@ -94,7 +93,7 @@ def _paired_number(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         empty_state(
             "Fewer than two numeric columns",
             "A change between two measurements needs two numeric columns measured on the same participants.",
-            links=(("enrich", "Create new variables"),),
+            links=(("enrich", "Create new variables", "variables"),),
         )
         return
     c1, c2, c3 = st.columns(3)
@@ -151,7 +150,7 @@ def _paired_number(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         if pooled
         else ("paired", (before, after, kind))
     )
-    if layout.run_button("pair_run", ready=bool(plan.steps), what="the paired test"):
+    if layout.run_button("pair_run", ready=bool(plan.steps), what="the paired test", plan=plan):
         try:
             if pooled:
                 from biostats.mi import analyze_mi
@@ -176,7 +175,7 @@ def _paired_number(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             mark_step("analyse", "paired test")
         except Exception as exc:
             error_card("The paired test could not be computed.", exc)
-    result, whole = _pooled(layout.result_place(key, config, guided=guided))
+    result, whole = _pooled(layout.result_place(key, config, guided=guided, words=m.CHANGES))
     if result is not None:
         _show_change(result, df, before, after, kind, pooled=pooled)  # type: ignore[arg-type]
         if whole is not None:
@@ -184,8 +183,14 @@ def _paired_number(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
                 whole,
                 complete_case=lambda cc: _show_change(cc, df, before, after, kind, pooled=False),  # type: ignore[arg-type]
             )
-        layout.details(result)
+        layout.details(result, more=m.WITHIN_ONE_GROUP)
         provenance(key)
+
+
+def _named(name: str) -> str:
+    """A test's name inside brackets: "Paired t-test (pooled over 3 imputations)" reads "paired t-test, pooled over 3
+    imputations", without brackets within brackets."""
+    return name.replace(" (", ", ").replace(")", "")
 
 
 def _show_change(
@@ -193,11 +198,12 @@ def _show_change(
 ) -> None:
     mean = kind == m.T_TEST
     estimate = result.estimate
+    value, bounds = layout.with_interval(estimate, result.estimate_ci)
     metrics = [
         Metric(
             "Mean change" if mean else "Typical change (pseudo-median)",
-            layout.num(estimate),
-            f"{layout.interval(result.estimate_ci)} · p {layout.p_text(result.p_value)}",
+            value,
+            f"{bounds} · p {layout.p_text(result.p_value)}",
         )
     ]
     pairs = df[[before, after]].apply(pd.to_numeric, errors="coerce").dropna()
@@ -227,7 +233,7 @@ def _show_change(
     if estimate is not None and np.isfinite(estimate):
         words = (
             f"{as_code(after)} is {layout.num(abs(estimate))} {'lower' if estimate < 0 else 'higher'} than "
-            f"{as_code(before)} {'on average' if mean else 'typically'} ({result.name})."
+            f"{as_code(before)} {'on average' if mean else 'typically'} ({_named(result.name)})."
         )
     layout.headline(metrics, words, len(result.warnings))
     layout.warn(result.warnings)
@@ -243,7 +249,7 @@ def _paired_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             "Fewer than two yes/no columns",
             "A change in a yes/no characteristic needs two columns that hold the same two values. A column whose "
             "values are written several ways can be cleaned in Data > Clean.",
-            links=(("clean", "Clean categories"), ("enrich", "Create new variables")),
+            links=(("clean", "Clean categories"), ("enrich", "Create new variables", "variables")),
         )
         return
     c1, c2, c3 = st.columns(3)
@@ -299,7 +305,7 @@ def _paired_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         layout.imputed_line(
             OBSERVED + "the rows where both measurements are recorded. Not pooled in this version."
         )
-    if layout.run_button("mc_run", ready=bool(plan.steps), what="McNemar's test"):
+    if layout.run_button("mc_run", ready=bool(plan.steps), what="McNemar's test", plan=plan):
         try:
             table = paired_table(df[before], df[after], counted=counted)
             # the change is that of one value's share: without its name, the dossier's "difference in proportions
@@ -348,14 +354,18 @@ def _show_yes_no(result: TestResult, table: pd.DataFrame, before: str, after: st
             ),
             Metric("Pairs", f"{n:,}", f"{gained + lost:,} changed"),
         ],
-        f"{lost:,} participant{'s' if lost != 1 else ''} changed from {as_code(counted)} to {as_code(other)}, "
+        f"From {as_code(before)} to {as_code(after)}: {lost:,} participant{'s' if lost != 1 else ''} changed from "
+        f"{as_code(counted)} to {as_code(other)}, "
         f"{gained:,} from {as_code(other)} to {as_code(counted)} (McNemar's exact test on the {gained + lost:,} that "
         "changed).",
         len(result.warnings),
     )
+    # the headers are the two values, the caption names the axes; with its totals, as the other tables
     shown = table.copy()
-    shown.index = [f"{before} = {name}" for name in table.index]
-    shown.columns = [f"{after} = {name}" for name in table.columns]
+    shown.index = [str(name) for name in table.index]
+    shown.columns = [str(name) for name in table.columns]
+    shown["Total"] = shown.sum(axis=1)
+    shown.loc["Total"] = shown.sum(axis=0)
     st.caption(
         f"Rows: {as_code(before)} (first measurement). Columns: {as_code(after)} (second). The two cells off the "
         "diagonal hold the participants who changed."
@@ -373,7 +383,7 @@ def _one_mean(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         empty_state(
             "No numeric column",
             "A mean against a reference needs one numeric column.",
-            links=(("enrich", "Create new variables"),),
+            links=(("enrich", "Create new variables", "variables"),),
         )
         return
     c1, c2, c3 = st.columns(3)
@@ -434,7 +444,7 @@ def _one_mean(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         if pooled
         else ("one_sample", (column, reference, kind))
     )
-    if layout.run_button("one_run", ready=bool(plan.steps), what="the one-sample test"):
+    if layout.run_button("one_run", ready=bool(plan.steps), what="the one-sample test", plan=plan):
         try:
             if pooled:
                 from biostats.mi import analyze_mi
@@ -455,19 +465,34 @@ def _one_mean(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             mark_step("analyse", "one-sample test")
         except Exception as exc:
             error_card("The one-sample test could not be computed.", exc)
-    result, whole = _pooled(layout.result_place(key, config, guided=guided))
+    result, whole = _pooled(layout.result_place(key, config, guided=guided, words=m.SUMMARIES))
     if result is not None and reference is not None:
-        _show_mean(result, column, float(reference), kind, len(df))  # type: ignore[arg-type]
+        # the rows without a value: those of the data, or (pooled) those a column left out of the imputation lacks
+        lacking = (
+            len(df) - result.n_total
+            if pooled
+            else int(pd.to_numeric(df[column], errors="coerce").isna().sum())  # type: ignore[index]
+        )
+        _show_mean(result, column, float(reference), kind, len(df), lacking)  # type: ignore[arg-type]
         if whole is not None:
             show_mi_notes(
                 whole,
-                complete_case=lambda cc: _show_mean(cc, column, float(reference), kind, len(df)),  # type: ignore[arg-type]
+                complete_case=lambda cc: _show_mean(  # type: ignore[arg-type]
+                    cc,
+                    column,
+                    float(reference),
+                    kind,
+                    len(df),
+                    int(pd.to_numeric(df[column], errors="coerce").isna().sum()),  # type: ignore[index]
+                ),
             )
         layout.details(result)
         provenance(key)
 
 
-def _show_mean(result: TestResult, column: str, reference: float, kind: str, rows: int) -> None:
+def _show_mean(
+    result: TestResult, column: str, reference: float, kind: str, rows: int, lacking: int
+) -> None:
     mean = kind == m.ONE_T
     estimate, ci = result.estimate, result.estimate_ci
     metrics = []
@@ -479,49 +504,61 @@ def _show_mean(result: TestResult, column: str, reference: float, kind: str, row
                 f"95% CI {layout.span(ci.lower + reference, ci.upper + reference, 4)}",
             )
         )
+    difference, bounds = layout.with_interval(estimate, ci)
     metrics += [
         Metric(
-            f"Difference from {reference:g}",
-            f"{estimate:+.3g}" if estimate is not None else "n/a",
-            f"{layout.interval(ci)} · p {layout.p_text(result.p_value)}",
+            f"Difference from {layout.num(reference, 6)}",
+            ("+" if estimate is not None and estimate > 0 else "") + difference,
+            f"{bounds} · p {layout.p_text(result.p_value)}",
         ),
         Metric(
-            "Values" if mean else "Values that differ", f"{result.n_total:,}", f"of {rows:,} rows"
+            "Participants" if mean else "Participants who differ",
+            f"{result.n_total:,}",
+            f"of {rows:,} rows" + (f"; {lacking:,} lack a value" if lacking > 0 else ""),
         ),
     ]
     words = ""
     if estimate is not None and np.isfinite(estimate):
         words = (
             f"The {'mean' if mean else 'typical value'} of {as_code(column)} is {layout.num(abs(estimate))} "
-            f"{'below' if estimate < 0 else 'above'} the reference of {reference:g} ({result.name}). Reference: "
-            "typed."
+            f"{'below' if estimate < 0 else 'above'} the reference of {layout.num(reference, 6)} "
+            f"({_named(result.name)})."
         )
     layout.headline(metrics, words, len(result.warnings))
     layout.warn(result.warnings)
 
 
 def _share_metrics(
-    result: TestResult, with_it: int, counted: int, reference: float, what: str, where: str
+    result: TestResult, with_it: int, counted: int, reference: float, what: str, where: str = ""
 ) -> None:
     ci = result.estimate_ci
     share = float("nan") if result.estimate is None else float(result.estimate)
+    metrics = [
+        Metric(
+            f"Share with {what}",
+            layout.percent(share),
+            f"{with_it:,} of {counted:,} · {layout.interval(ci, scale=100, unit='%')} (Wilson)",
+        ),
+        Metric(
+            "Against a reference of",
+            layout.percent(reference),
+            f"p {layout.p_text(result.p_value)} (exact binomial test)",
+        ),
+    ]
+    if where:  # counted in the dataset: of a number typed, the field and "3 of 10" have said it
+        metrics.append(Metric("Participants", f"{counted:,}", where))
+    gap = 100 * (share - reference)
     layout.headline(
-        [
-            Metric(
-                f"Share with {what}",
-                layout.percent(share),
-                f"{with_it:,} of {counted:,} · {layout.interval(ci, scale=100, unit='%')} (Wilson)",
-            ),
-            Metric(
-                "Against a reference of",
-                layout.percent(reference),
-                f"p {layout.p_text(result.p_value)} (exact binomial test)",
-            ),
-            Metric("Participants", f"{counted:,}", where),
-        ],
-        f"The share is {100 * abs(share - reference):.1f} points "
-        f"{'below' if share < reference else 'above'} the reference. Reference: typed.",
+        metrics,
+        "The share equals the reference."
+        if abs(gap) < 0.05
+        else f"The share is {abs(gap):.1f} points {'below' if gap < 0 else 'above'} the reference.",
+        len(result.warnings),
     )
+    layout.warn(result.warnings)
+    with st.expander("Details: the method"):
+        st.caption("Method: " + " | ".join(result.references))
+    help_popover(m.SHARE_READING)
 
 
 def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
@@ -561,8 +598,6 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             persist_state="page",
             help=HELP["reference_share"],
         )
-        if mi is not None:
-            layout.imputed_line(NOT_TYPED)
         ready, advice = m.check_share(with_it, counted, reference)
         layout.advice_lines(advice)
         if not ready:
@@ -573,11 +608,8 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
                 )
             return
         result = one_sample_proportion(int(with_it), int(counted), float(reference))  # type: ignore[arg-type]
-        _share_metrics(
-            result, int(with_it), int(counted), float(reference), "the characteristic", "typed"
-        )  # type: ignore[arg-type]
+        _share_metrics(result, int(with_it), int(counted), float(reference), "the characteristic")  # type: ignore[arg-type]
         layout.typed_line(f"From the numbers typed: {int(with_it):,} of {int(counted):,}.")  # type: ignore[arg-type]
-        st.caption("Method: " + " | ".join(result.references))
         return
     offered = m.two_valued(df)
     if not offered:
@@ -611,6 +643,7 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         persist_state="page",
         help=HELP["share_level"],
     )
+    layout.depends("prop_ref", column, None)  # a reference share is that of one characteristic
     reference = c3.number_input(
         "Reference share (fixed beforehand)",
         min_value=0.0,
@@ -630,7 +663,9 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         layout.checks(plan)
     if mi is not None:
         layout.imputed_line(OBSERVED + "the rows with a value. Not pooled in this version.")
-    if layout.run_button("prop_run", ready=bool(plan.steps), what="the exact binomial test"):
+    if layout.run_button(
+        "prop_run", ready=bool(plan.steps), what="the exact binomial test", plan=plan
+    ):
         try:
             with_it, counted = m.share_counts(df, column, level)  # type: ignore[arg-type]
             remember(
@@ -652,9 +687,8 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             counted,
             float(reference),
             f"{column} = {category(level)}",
-            as_code(column),
+            f"with a value of {as_code(column)}",
         )
-        st.caption("Method: " + " | ".join(result.references))
         provenance("proportion")
 
 
@@ -673,7 +707,7 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             "Not enough columns for a stratified analysis",
             "It needs a yes/no outcome, an exposure in two values and a variable of 2 to 8 groups to adjust for. A "
             "column whose values are written several ways can be cleaned in Data > Clean.",
-            links=(("clean", "Clean categories"), ("enrich", "Create new variables")),
+            links=(("clean", "Clean categories"), ("enrich", "Create new variables", "variables")),
         )
         return
     c1, c2 = st.columns(2)
@@ -722,7 +756,9 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         help=HELP["reference_group"],
     )
     candidates = [c for c in groups if c not in (outcome, compare)]
-    stratum = st.selectbox(
+    # in the left half, under what is compared: it spanned the width under two half rows
+    c5, _ = st.columns(2)
+    stratum = c5.selectbox(
         "Adjust for (one variable, 2 to 8 groups)",
         candidates,
         index=None,
@@ -751,7 +787,9 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             + "the rows with the three values. Not pooled in this version. For a pooled, adjusted odds "
             "ratio use a logistic model (Survival & regression, Binary)."
         )
-    if layout.run_button("mh_run", ready=bool(plan.steps), what="the stratified analysis"):
+    if layout.run_button(
+        "mh_run", ready=bool(plan.steps), what="the stratified analysis", plan=plan
+    ):
         try:
             found = mantel_haenszel(
                 df,
@@ -836,7 +874,7 @@ def _show_strata(
     ratios = pd.to_numeric(res.per_stratum["odds_ratio"], errors="coerce").dropna()
     ratios = ratios[np.isfinite(ratios)]
     span = (
-        f"The odds ratios of the strata run from {ratios.min():.2f} to {ratios.max():.2f}: "
+        f"The odds ratios of the strata run from {layout.span(ratios.min(), ratios.max())}: "
         if len(ratios)
         else ""
     )
@@ -859,9 +897,8 @@ def _show_strata(
             f":material/warning: {span}they differ (Breslow-Day p {layout.p_text(p)}). Report the ratio of each "
             "stratum, not one combined ratio."
         )
-    from ui.components.levels import (
-        show_level,
-    )  # a stratum written with a hidden space reads "Metz␣", as in the lists
+    # a stratum written with a hidden space reads "Metz␣", as in the lists
+    from ui.components.levels import show_level
 
     shown = res.per_stratum.rename(
         columns={
@@ -902,9 +939,12 @@ def _show_strata(
 # ----------------------------------------------------------------------------- rates, from counts
 
 
-def _count(label: str, key: str, column: Any, example: str) -> int | None:
+def _count(label: str, key: str, column: Any, example: str, *, shown: bool = True) -> int | None:
+    """``shown``: the label is drawn (the second row of a table of fields keeps it for screen readers only: its row
+    names the group and the first row's labels head the columns)."""
     return column.number_input(
         label,
+        label_visibility="visible" if shown else "collapsed",
         min_value=0,
         value=None,
         step=1,
@@ -915,9 +955,10 @@ def _count(label: str, key: str, column: Any, example: str) -> int | None:
     )
 
 
-def _time(label: str, key: str, column: Any, example: str) -> float | None:
+def _time(label: str, key: str, column: Any, example: str, *, shown: bool = True) -> float | None:
     return column.number_input(
         label,
+        label_visibility="visible" if shown else "collapsed",
         min_value=0.0,
         value=None,
         format="%g",
@@ -929,11 +970,11 @@ def _time(label: str, key: str, column: Any, example: str) -> float | None:
 
 
 def _rate_metric(label: str, rate: Any, per: int, unit: str) -> Metric:
+    """A rate with its exact interval; the numbers typed stand in the fields and in the line under the result."""
     return Metric(
         label,
         f"{rate.rate * per:.2f}",
-        f"per {per:,} {unit} · {rate.events:,} events / {rate.person_time:,.6g} · 95% CI "
-        f"{rate.ci.lower * per:.2f} to {rate.ci.upper * per:.2f}",
+        f"per {per:,} {unit} · 95% CI {rate.ci.lower * per:.2f} to {rate.ci.upper * per:.2f}",
     )
 
 
@@ -954,8 +995,6 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         default=m.TWO_RATES,
         depth=2,
     )
-    if mi is not None:
-        layout.imputed_line(NOT_TYPED)
     if calculation == m.EXPECTED:
         _expected()
         return
@@ -968,9 +1007,15 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     if two:
         label, e_col, t_col = st.columns([1.2, 2, 2], vertical_alignment="bottom")
         label.markdown("**Reference group**")
-        reference_events = _count("Events (reference group)", "rate_e0", e_col, "for example 4")
+        reference_events = _count(
+            "Events (reference group)", "rate_e0", e_col, "for example 4", shown=False
+        )
         reference_time = _time(
-            "Person-time at risk (reference group)", "rate_t0", t_col, "for example 1000"
+            "Person-time at risk (reference group)",
+            "rate_t0",
+            t_col,
+            "for example 1000",
+            shown=False,
         )
     u1, u2 = st.columns(2)
     unit = u1.selectbox(
@@ -1003,62 +1048,72 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         return
     try:
         first = incidence_rate(int(events), float(person_time), per=per)  # type: ignore[arg-type]
-        typed = (
-            f"From the numbers typed: {first.events:,} events over {first.person_time:,.6g} {unit}"
+        second = (
+            incidence_rate(int(reference_events), float(reference_time), per=per)  # type: ignore[arg-type]
+            if two
+            else None
         )
-        if not two:
-            layout.headline([_rate_metric("Rate", first, per, unit)])
-            layout.typed_line(typed + ".")
-            st.caption("Method: " + " | ".join(first.references))
-            return
-        second = incidence_rate(int(reference_events), float(reference_time), per=per)  # type: ignore[arg-type]
-        typed += f" against {second.events:,} over {second.person_time:,.6g}."
-        metrics = [
-            _rate_metric("Group compared", first, per, unit),
-            _rate_metric("Reference group", second, per, unit),
-        ]
-        if not first.events and not second.events:
-            layout.headline(metrics, "No event in either group: no ratio.")
-            layout.typed_line(typed)
-            st.caption("Method: " + " | ".join(first.references))
-            return
-        ratio = rate_ratio(
-            int(events),  # type: ignore[arg-type]
-            float(person_time),  # type: ignore[arg-type]
-            int(reference_events),  # type: ignore[arg-type]
-            float(reference_time),  # type: ignore[arg-type]
-            per=per,
+        # no event in either group: two rates of 0, and no ratio of them
+        ratio = (
+            rate_ratio(first.events, first.person_time, second.events, second.person_time, per=per)
+            if second is not None and (first.events or second.events)
+            else None
         )
-        bounded = np.isfinite(ratio.ratio) and np.isfinite(ratio.ci.upper)
-        head = Metric(
-            "Rate ratio",
-            _ratio(ratio.ratio) if bounded else "no upper bound",
-            (
-                f"{_ratio_ci(ratio.ci)}"
-                if bounded
-                else f"at least {_ratio(ratio.ci.lower)} (the lower end of the 95% interval)"
-            )
-            + f" · p {layout.p_text(ratio.p_value)}",
-        )
-        layout.headline(
-            [head, *metrics],
-            f"Group compared against the reference group ({ratio.test} test and interval for the ratio; exact "
-            "Poisson intervals for the rates).",
-        )
-        layout.typed_line(typed)
-        with st.expander("Details: the rate difference and the method"):
-            st.caption(
-                f"Rate difference: {ratio.rate_difference * per:.2f} per {per:,} {unit} (no interval is given for "
-                "it)."
-            )
-            st.caption("Method: " + " | ".join(ratio.references))
     except Exception as exc:
         error_card("The rates could not be computed.", exc)
         return
-    help_popover(
-        "A rate is events over the time at risk, not over a number of participants. The ratio compares two rates; "
-        "its interval and its test are exact and agree: the interval leaves 1 out exactly when p is below 0.05."
+    typed = f"From the numbers typed: {first.events:,} events over {layout.num(first.person_time, 6)} {unit}"
+    if second is None:
+        layout.headline([_rate_metric("Rate", first, per, unit)])
+    else:
+        typed += f" against {second.events:,} over {layout.num(second.person_time, 6)}"
+        rates = [
+            _rate_metric("Rate, group compared", first, per, unit),
+            _rate_metric("Rate, reference group", second, per, unit),
+        ]
+        if ratio is None:
+            layout.headline(rates)  # the line above the result has said why there is no ratio
+        else:
+            layout.headline([_ratio_metric(ratio), *rates], _ratio_words(ratio))
+    # the methods are folded, as a test's; the reading and where the numbers came from close the result
+    with st.expander(
+        "Details: the method" if ratio is None else "Details: the rate difference and the method"
+    ):
+        if ratio is not None:
+            st.caption(
+                f"Rate difference: {ratio.rate_difference * per:.2f} per {per:,} {unit} (no interval is given for "
+                f"it). The ratio's test and interval: {ratio.test}; the rates' intervals: exact Poisson."
+            )
+        st.caption("Method: " + " | ".join((ratio or first).references))
+    help_popover(m.RATE_READING if ratio is None else m.RATIO_READING)
+    layout.typed_line(typed + ".")
+
+
+def _ratio_metric(ratio: Any) -> Metric:
+    """The rate ratio with its exact interval and test; without an event in the reference group it has no upper
+    bound, and its lower end is what the data say."""
+    bounded = bool(np.isfinite(ratio.ratio) and np.isfinite(ratio.ci.upper))
+    value, bounds = layout.with_interval(ratio.ratio, ratio.ci)
+    return Metric(
+        "Rate ratio",
+        value if bounded else "no upper bound",
+        (
+            bounds
+            if bounded
+            else f"at least {_ratio(ratio.ci.lower)} (the lower end of the 95% interval)"
+        )
+        + f" · p {layout.p_text(ratio.p_value)}",
     )
+
+
+def _ratio_words(ratio: Any) -> str:
+    """The rate ratio in a sentence, as the standardised ratio's: which group has the higher rate, and by how
+    much."""
+    if not np.isfinite(ratio.ratio):
+        return ""  # no event in the reference group: the line above the result has said it
+    if ratio.ratio == 0:
+        return "No event in the group compared: the ratio is 0, and its interval says how large it may be."
+    return f"The group compared has {layout.num(ratio.ratio, 2)} times the rate of the reference group."
 
 
 def _expected() -> None:
@@ -1105,27 +1160,23 @@ def _expected() -> None:
     except Exception as exc:
         error_card("The ratio could not be computed.", exc)
         return
+    value, bounds = layout.with_interval(found.ratio, found.ci)
     layout.headline(
         [
             Metric(
                 m.RATIO_NAMES[kind],
-                _ratio(found.ratio),
-                f"{_ratio_ci(found.ci)} · p {layout.p_text(found.p_value)} (exact Poisson)",
-            ),
-            Metric("Observed", f"{found.observed:,}"),
-            Metric("Expected", f"{found.expected:,.6g}"),
+                value,
+                f"{bounds} · p {layout.p_text(found.p_value)} (exact Poisson)",
+            )
         ],
         f"{_more_or_fewer(found.ratio).capitalize()} events than expected; the interval runs from "
         f"{_more_or_fewer(found.ci.lower)} to {_more_or_fewer(found.ci.upper)}.",
     )
+    with st.expander("Details: the method"):
+        st.caption("Method: " + " | ".join(found.references))
+    help_popover(m.EXPECTED_READING)
     layout.typed_line(
-        f"From the numbers typed: {found.observed:,} observed against {found.expected:,.6g} expected."
-    )
-    st.caption("Method: " + " | ".join(found.references))
-    help_popover(
-        "An SMR or SIR compares the events observed in the cohort with those expected if the reference "
-        "population's rates applied. It speaks for that reference population only, and takes the expected number "
-        "as known."
+        f"From the numbers typed: {found.observed:,} observed against {layout.num(found.expected, 6)} expected."
     )
 
 

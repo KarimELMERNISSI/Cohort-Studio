@@ -24,10 +24,11 @@ from app_pages.clean_dialog import clean_actions
 from biostats._types import TestResult
 from biostats.assumptions import read_assumptions
 from ui import nav
-from ui.components import glossary_popover, help_popover, page_link, status_chip
+from ui.components import glossary_popover, help_popover, status_chip
 from ui.components.text import plain
 from ui.guidance.interpretation import how_to_read
-from ui.guidance.measures import HELP, Entry
+from ui.guidance.measures import HELP, Entry, number
+from ui.guidance.measures import decimals as _decimals
 from ui.guidance.outcomes import ModelPlan
 from ui.results import MISSING, STALE_CONFIG, recall, status, stored_settings
 from ui.state import get_state
@@ -57,25 +58,20 @@ class Metric:
 
 
 def p_text(p: Any) -> str:
-    """A p-value as a sentence writes it after "p": "< 0.001", "= 0.017"; "n/a" when it was not computed."""
+    """A p-value as a sentence writes it after "p": "< 0.001", "= 0.017"; "n/a" when it was not computed. Next to
+    0.05 a fourth decimal tells 0.0499 from 0.0501, which both read "= 0.050"."""
     if p is None or not math.isfinite(float(p)):
         return "n/a"
-    return "< 0.001" if p < 0.001 else f"= {p:.3f}"
+    if p < 0.001:
+        return "< 0.001"
+    return f"= {p:.4f}" if 0.0495 <= p < 0.0505 else f"= {p:.3f}"
 
 
 def num(value: Any, digits: int = 3) -> str:
-    """A number of a result: ``digits`` significant figures, no exponent, "n/a" when it has no value."""
-    if value is None or not math.isfinite(float(value)):
-        return "n/a"
-    text = f"{float(value):.{digits}g}"
-    return f"{float(text):,.0f}" if "e" in text else text
-
-
-def _decimals(value: float, digits: int) -> int:
-    """The decimals that give ``value`` ``digits`` significant figures."""
-    if value == 0 or not math.isfinite(value):
-        return 0
-    return max(0, digits - 1 - math.floor(math.log10(abs(value))))
+    """A number of a result, by the rule the plans write theirs with (ui.guidance.measures.number): ``digits``
+    significant figures for its decimals, thousands grouped, the whole part kept, no exponent; "n/a" without a
+    value."""
+    return number(value, digits)
 
 
 def span(lower: Any, upper: Any, digits: int = 3, *, unit: str = "") -> str:
@@ -89,10 +85,38 @@ def span(lower: Any, upper: Any, digits: int = 3, *, unit: str = "") -> str:
 
 
 def interval(ci: Any, digits: int = 3, *, scale: float = 1.0, unit: str = "") -> str:
-    """ "95% CI 0.902 to 0.953" from an interval object; "" without one."""
-    if ci is None:
+    """ "95% CI 0.902 to 0.953" from an interval object; "" without one, or without bounds ("95% CI n/a% to n/a%"
+    stood beside a predictive value that has no value)."""
+    if ci is None or not all(
+        bound is not None and math.isfinite(float(bound)) for bound in (ci.lower, ci.upper)
+    ):
         return ""
     return f"95% CI {span(ci.lower * scale, ci.upper * scale, digits, unit=unit)}"
+
+
+def with_interval(estimate: Any, ci: Any, digits: int = 3) -> tuple[str, str]:
+    """An estimate and its interval written with the same decimals ("3.125" and "95% CI 0.996 to 12.935"): rounded
+    each on its own, a typical change read "-5.5, 95% CI -6.00 to -4.50" and a rate ratio "3.12, 0.996 to 12.935"."""
+    values = [estimate, getattr(ci, "lower", None), getattr(ci, "upper", None)]
+    if any(v is None or not math.isfinite(float(v)) for v in values):
+        return num(estimate, digits), interval(ci, digits)
+    decimals = min(6, max(_decimals(float(v), digits) for v in values))
+    return (
+        f"{float(estimate):,.{decimals}f}",
+        f"95% CI {float(ci.lower):,.{decimals}f} to {float(ci.upper):,.{decimals}f}",
+    )
+
+
+def alike(*values: Any, digits: int = 3) -> list[str]:
+    """Numbers that are read together, written with the same decimals: those the one nearest 0 needs for ``digits``
+    significant figures (two limits of agreement read "-8.19 to 20.17" over "95% CI 19.4 to 21.0", and "20.2" in the
+    figure's legend). A number without a value reads "n/a"."""
+    known = [float(v) for v in values if v is not None and math.isfinite(float(v))]
+    decimals = min(6, max((_decimals(v, digits) for v in known), default=0))
+    return [
+        f"{float(v):,.{decimals}f}" if v is not None and math.isfinite(float(v)) else num(v, digits)
+        for v in values
+    ]
 
 
 def percent(value: Any, digits: int = 1) -> str:
@@ -121,9 +145,8 @@ def headline(
             with st.container(horizontal=True, vertical_alignment="center"):
                 if words:
                     st.caption(words)
-                if (
-                    chip
-                ):  # what qualifies the number above it (label, status): read with it, not after it
+                # what qualifies the number above it (label, status): read with it, not after it
+                if chip:
                     status_chip(*chip)
                 if warnings:
                     status_chip(f"{warnings} warning{'s' if warnings > 1 else ''} below", "caution")
@@ -148,8 +171,9 @@ def _start(key: str, value: str) -> dict[str, str]:
 
 
 def choose_entry(entries: Sequence[Entry], *, key: str, guided: bool) -> Entry:
-    """The Question selector of a tab: one entry is open at a time. Under it, what the entry answers, its terms, and
-    (Guidance on) the way to the test chooser."""
+    """The Question selector of a tab: one entry is open at a time. Under it, what the entry answers and its terms.
+    (The way to the test chooser is in the map above the tabs: said again under every entry, 250 px lower, it was a
+    row of its own that named nothing new.)"""
     labels = {entry.id: entry.label for entry in entries}
     chosen = st.segmented_control(
         "Question",
@@ -166,8 +190,6 @@ def choose_entry(entries: Sequence[Entry], *, key: str, guided: bool) -> Entry:
     with st.container(horizontal=True, vertical_alignment="center", gap="small"):
         st.caption(entry.gives, width="stretch")  # wraps beside Terms
         glossary_popover(*entry.terms, label="Terms")
-    if guided:
-        page_link("which_test", "Not sure which analysis fits?", icon=":material/help_center:")
     return entry
 
 
@@ -237,8 +259,12 @@ def plan_box(plan: ModelPlan, *, clean: Mapping[str, Mapping[str, Any]] | None =
         with st.container(horizontal=True, vertical_alignment="center"):
             st.markdown("**Before you run: the plan**")
             status_chip(*_STATUS[plan.status])
-        for step in plan.steps:
-            st.markdown(f"- {step.text} ({step.used:,} of {plan.rows:,} rows)")
+        # the rows once, on the first step, when every step reads the same: after each they doubled the brackets
+        # ("(101 with the condition, 827 without) (928 of 928 rows)")
+        alike = len({step.used for step in plan.steps}) == 1
+        for position, step in enumerate(plan.steps):
+            rows = "" if alike and position else f": {step.used:,} of {plan.rows:,} rows"
+            st.markdown(f"- {step.text}{rows}")
         acted: set[str] = set()
         for item in plan.advice:
             st.markdown(f"{_ICON.get(item.level, '')} {item.text}")
@@ -258,24 +284,38 @@ def checks(plan: ModelPlan) -> None:
             st.warning(item.text, icon=":material/error:")
 
 
-def run_button(key: str, *, ready: bool, what: str) -> bool:
+def run_button(key: str, *, ready: bool, what: str, plan: ModelPlan | None = None) -> bool:
     """The one Run of an analysis of the dataset. Disabled only while nothing can be computed: advice never blocks.
-    Its help shows while it is disabled (what is missing): on a button just clicked, a help stays open as long as the
-    button keeps the focus, and lay over the last lines of the plan."""
+    Its help shows while it is disabled, and says what the plan says is missing (with Guidance off the plan is not
+    drawn, and nothing on the screen said why Run was greyed). On a button just clicked a help stays open as long
+    as the button keeps the focus, and lay over the last lines of the plan: an enabled Run has none."""
+    missing = (
+        next((item.text for item in plan.advice), "") if plan is not None and not ready else ""
+    )
     return st.button(
         "Run analysis",
         type="primary",
         key=key,
         disabled=not ready,
-        help=None if ready else f"Nothing to run yet: complete the choices above to run {what}.",
+        help=None
+        if ready
+        else missing or f"Nothing to run yet: complete the choices above to run {what}.",
     )
 
 
-def result_place(key: str, config: Any, *, guided: bool, silent: bool = False) -> Any | None:
+def result_place(
+    key: str,
+    config: Any,
+    *,
+    guided: bool,
+    silent: bool = False,
+    words: Mapping[str, str] | None = None,
+) -> Any | None:
     """
     The stored result of these choices, or None with a word on why none is shown: nothing was run yet (Guidance on),
     or the last result belongs to other choices (it did not vanish). A change of the data or of the population is
-    announced by ``recall``. ``silent``: the second result of one Run, whose first has said it.
+    announced by ``recall``. ``silent``: the second result of one Run, whose first has said it. ``words``: the
+    page's labels for the option values among the settings ("names" is "Names without an order" on the screen).
     """
     value = recall(key, config=config)
     if value is not None or silent:
@@ -284,8 +324,9 @@ def result_place(key: str, config: Any, *, guided: bool, silent: bool = False) -
     if state == STALE_CONFIG:
         found = stored_settings(key)
         if found is not None:
+            said = ", ".join((words or {}).get(part, part) for part in found[0].split(", "))
             st.caption(
-                f":material/history: Last result here: {plain(found[0], limit=200)} ({found[1]}). Run analysis to "
+                f":material/history: Last result here: {plain(said, limit=200)} ({found[1]}). Run analysis to "
                 "compute it for the choices above."
             )
     elif state == MISSING and guided:
@@ -322,14 +363,18 @@ def warn(warnings: Sequence[str]) -> None:
 
 
 def details(
-    result: TestResult, *, label: str = "Details: the test, its checks and the method"
+    result: TestResult,
+    *,
+    label: str = "Details: the test, its checks and the method",
+    more: str = "",
 ) -> None:
     """Folded under a test's headline: the statistic, the effect sizes, the assumption checks (diagnostics, not
-    gates) and the method."""
+    gates) and the method. ``more``: what is to know of this analysis whatever the data, said once where the result
+    is read (in the plan it was said again at every run)."""
     with st.expander(label):
         statistic = f"{result.statistic_label or 'statistic'} = {num(result.statistic)}"
         if result.df:
-            statistic += ", df = " + ", ".join(f"{d:.4g}" for d in result.df)
+            statistic += ", df = " + ", ".join(num(d, 4) for d in result.df)
         st.caption(f"{plain(result.name)}: {statistic}, p {p_text(result.p_value)}.")
         if result.estimate_ci is not None and result.estimate_ci.method:
             st.caption(f"Interval of the estimate: {result.estimate_ci.method}.")
@@ -344,7 +389,7 @@ def details(
         if result.mi is not None:
             info = result.mi
             st.caption(
-                f":material/stacks: Pooled over {info.m} imputed datasets with Rubin's rules: df = {info.df:.4g}, "
+                f":material/stacks: Pooled over {info.m} imputed datasets with Rubin's rules: df = {num(info.df, 4)}, "
                 f"FMI = {info.fmi:.3f}, RIV = {info.riv:.3f}."
             )
         if result.assumptions:
@@ -358,7 +403,7 @@ def details(
                 text.caption(reading.sentence)
         if result.references:
             st.caption("Method: " + " | ".join(result.references))
-    help_popover(how_to_read(result))
+    help_popover(how_to_read(result) + (f"\n\n{more}" if more else ""))
 
 
 __all__ = [
@@ -366,6 +411,7 @@ __all__ = [
     "TYPED",
     "Metric",
     "advice_lines",
+    "alike",
     "checks",
     "choose",
     "choose_entry",
@@ -385,4 +431,5 @@ __all__ = [
     "span",
     "typed_line",
     "warn",
+    "with_interval",
 ]

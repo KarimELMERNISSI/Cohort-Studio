@@ -16,6 +16,7 @@ from ui.components import page_link, status_chip
 from ui.guidance.analysis import HELP, TAB_GUIDE, TEST_NOTES, AnalysisPlan, AncovaCheck
 
 GUIDANCE_KEY = "epi_guidance"
+MAP_KEY = "epi_map"  # the map "Which tab do I need?": open or folded
 _ICON = {"ok": ":material/check_circle:", "info": ":material/info:", "caution": ":material/warning:",
          "violated": ":material/error:"}
 
@@ -37,7 +38,9 @@ def render_orientation(
     on it where the tab holds several (``selectors``: a tab's label, the key of its Question selector and the
     entries, id to label). ``open_analysis`` is the page's callback: a tab or a selector is set before it is drawn.
     """
-    with st.expander("Which tab do I need?", icon=":material/explore:"):
+    # keyed, so that a button of the map can fold it: left open (about 650 px), the analysis its button opened
+    # landed below the screen and the click seemed to do nothing
+    with st.expander("Which tab do I need?", icon=":material/explore:", key=MAP_KEY, on_change="rerun"):
         for guide in TAB_GUIDE:
             question, buttons = st.columns([3, 4], vertical_alignment="center")
             question.markdown(f"**{guide.question}**")
@@ -138,6 +141,7 @@ def render_test_note(test: str) -> None:
 
 __all__ = [
     "GUIDANCE_KEY",
+    "MAP_KEY",
     "guidance_on",
     "guidance_toggle",
     "render_ancova_check",

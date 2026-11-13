@@ -18,6 +18,7 @@ from app_pages.analysis_diagnostic import run_diagnostic_accuracy
 from app_pages.analysis_extras import QUESTION_KEY as PAIRED_QUESTION
 from app_pages.analysis_extras import run_paired_and_rates
 from app_pages.analysis_guidance_ui import (
+    MAP_KEY,
     guidance_on,
     guidance_toggle,
     render_ancova_check,
@@ -173,7 +174,7 @@ def _render_twobytwo_panel(epi):
         )
 
     if epi.get("guidance"):
-        st.markdown("##### Clinical Epidemiological Guidance")
+        st.markdown("##### Reading these measures")
         for note in epi["guidance"]:
             st.info(note)
     st.button(
@@ -194,6 +195,7 @@ def open_analysis(tab: str, choices: dict[str, str]) -> None:
     st.session_state[TAB_KEY] = tab
     for key, value in choices.items():
         st.session_state[key] = value
+    st.session_state[MAP_KEY] = False  # the map folds: what it opened is then under it, in view
 
 
 # The tabs of Hypothesis tests & epidemiology; only the open one runs (M5b). Their labels are part of the tabs'

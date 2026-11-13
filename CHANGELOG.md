@@ -59,7 +59,8 @@ with its own form and button, the first columns of the file already chosen. They
   result.
 - **Kappa was 0 when one rater's codes were whole numbers and the other's decimals** (2 against 2.0): the categories
   are now compared by value. The cross-table holds the same categories on both sides, so that its diagonal is
-  agreement when one rater never uses a category.
+  agreement when one rater never uses a category. With a missing rating the table was not square and kappa
+  stopped: it reads the participants rated by both.
 - **McNemar's test paired two columns of different values by alphabetical order** ("Yes"/"No" against "1"/"0"). It
   now asks for two columns holding the same two values, and which value is counted.
 - **A stratified analysis whose homogeneity test could not be computed read "heterogeneous across strata".** It reads
@@ -112,6 +113,49 @@ with its own form and button, the first columns of the file already chosen. They
   number of pairs (1.24 SD at 10 pairs, not "about 0.65"); "1" is offered as the value that means present beside 0
   only; the stratified result says how many rows it read; p-values below 0.001 are written so in "How to read this"
   and in the normality line as well.
+
+**Lighter, and written one way** (the same two tabs):
+
+- **The map folds when it opens an analysis.** A button of "Which tab do I need?" opened its analysis below the
+  open map, off the screen.
+- **A disabled Run says what is missing** in its help, with Guidance off as well: the plan is not drawn then, and
+  nothing said why Run was grey.
+- **One "How to read this" per Run.** *Agreement of two measurements* gives two results from one Run: each is
+  named in its first figure ("Bland-Altman: mean difference", "ICC(2,1)"), and one reading follows the last. The
+  share against a reference, a single rate and two rates without an event have their reading too.
+- **Said once.** What is true of an analysis whatever the data (a change within one group is no treatment effect,
+  count first events, the expected number is taken as known) left the plan and the top of each result for "How to
+  read this". The numbers typed in a calculator stand in its fields and in the line under its result, no longer
+  in the figures between them. A plan gives its rows once when every step reads the same rows.
+- **The method is inside Details everywhere**: it stood in full under the accuracy result, the share and the
+  calculators.
+- **Numbers.** An estimate and its interval are written with the same decimals ("3.125, 95% CI 0.996 to 12.935",
+  where the estimate read "3.12"); thousands are grouped at any size and the whole part is no longer rounded (a
+  statistic of 60,962.5 read "61,000"); no exponent is left ("+9.37e+04", "3.65e+06"); a p-value next to 0.05
+  gets a fourth decimal (0.0499 and 0.0501 both read "0.050"); the table of every accuracy measure is in
+  percentages, as the headline; the limits of agreement and their intervals share their decimals ("20.17" stood
+  over "95% CI 19.4 to 21.0"); the plans write a number by the same rule as the results (a plan said that a score
+  "runs from 174 to 2.802e+04").
+- **Tables.** The cross-tables of kappa and of McNemar's test are headed by the categories, the caption naming
+  the two axes; McNemar's has its totals.
+- **Rates.** The sentence states the result ("The group compared has 3.1 times the rate of the reference
+  group"), where it named its methods; the figures are labelled "Rate, group compared" and "Rate, reference
+  group"; the second row of fields no longer repeats "(reference group)".
+- **Words on the screen.** "Last result here" names the options as the page labels them ("Names without an
+  order", not "names"). "Which test?" names the summary to choose when it recommends a signed-rank test (the
+  page opens on the mean). The Terms of each analysis hold the tests it runs. "Create new variables" in an empty
+  state opens Enrich on that tab.
+- **The dossier writes what the page writes:** "mean difference" and the slope with its two readings for
+  Bland-Altman (it read "Proportional bias", and its warning "consider ratios or log scale"); the
+  Cochran-Mantel-Haenszel test by its name, which group is compared with which, and how many strata the tests
+  read; "number counted" for a share (it read "successes"); the sentence on near misses beside a weighted kappa.
+- **A share whose test and interval part** says so under the result: the exact binomial test and the Wilson
+  interval are two methods (3 of 10 against 10% gives p = 0.070 beside 10.8% to 60.3%).
+- **Known limits** of the two tabs are listed in the handbook (chapter 5).
+- Smaller: the cut-off field says "at least" or "at most" only once a direction is chosen; the options of the
+  ICC and of the limits of agreement show with their analysis only; the intervals of the limits of agreement
+  are visible on the dark theme; the reference share is cleared when its variable changes; "Adjust for" stands
+  in the left half, under what is compared.
 
 ### Security: the Ollama and Qdrant addresses are chosen from the server's lists, never typed
 

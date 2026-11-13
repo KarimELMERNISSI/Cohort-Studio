@@ -6,6 +6,8 @@ how a number, an interval and a p-value are written; a field that depends on the
 
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -174,10 +176,16 @@ def test_two_raters_need_the_same_categories_and_a_stated_order(df: pd.DataFrame
 # ----------------------------------------------------------------------------- paired, one group
 
 
-def test_the_paired_plans_say_who_is_left_out_and_what_a_change_is_not(df: pd.DataFrame) -> None:
+def test_the_paired_plan_says_who_is_left_out_and_leaves_what_never_changes_to_the_reading(
+    df: pd.DataFrame,
+) -> None:
     plan = m.plan_paired(df, "sbp_first", "sbp_second", m.T_TEST)
     assert plan.status == "ok" and plan.steps[0].used == N - 30
-    assert "30 lack `sbp_second`" in _text(plan) and "not the effect of a treatment" in _text(plan)
+    assert "30 lack `sbp_second`" in _text(plan)
+    # what is true of every change within one group is no check of these data: it closed every plan, and is said
+    # once where the result is read
+    assert "not the effect of a treatment" not in _text(plan)
+    assert "not the effect of a treatment" in m.WITHIN_ONE_GROUP
     assert m.plan_paired(df, "sbp_first", None, m.T_TEST).status == "idle"
 
 
@@ -261,7 +269,10 @@ def test_the_calculators_check_the_numbers_typed() -> None:
         [],
     )  # a number is missing
     ready, advice = m.check_rates(m.TWO_RATES, 15, 1200.0, 4, 1000.0)
-    assert ready and [item.level for item in advice] == ["info"]  # first events only
+    # nothing to say of these numbers: "count first events" stood above every result, and is in its reading
+    assert ready and not advice
+    assert "first event" in m.RATE_READING and m.RATE_READING in m.RATIO_READING
+    assert "taken as known" in m.EXPECTED_READING
     ready, advice = m.check_rates(m.TWO_RATES, 15, 1200.0, 0, 1000.0)
     assert (
         ready and "no upper bound" in advice[0].text
@@ -467,11 +478,17 @@ def test_numbers_intervals_and_p_values_are_written_for_reading() -> None:
         and layout.p_text(None) == "n/a"
         and layout.p_text(float("nan")) == "n/a"
     )
-    assert (
-        layout.num(5.98707) == "5.99"
-        and layout.num(1234.5) == "1,230"
-        and layout.num(None) == "n/a"
-    )
+    assert layout.num(5.98707) == "5.99" and layout.num(None) == "n/a"
+    # the whole part is kept and grouped at any size (60,962.5 read "61,000", and two means 1,200 apart read
+    # "243,700 to 244,900" beside a change of "1,230"); no exponent ("+9.37e+04", "3.65e+06", "0" for 0.00001)
+    assert layout.num(1234.5) == "1,234" and layout.num(60962.5) == "60,962"
+    assert layout.num(93656) == "93,656" and layout.num(3650000) == "3,650,000"
+    assert layout.num(1234.5, 6) == "1,234.5"
+    assert layout.num(0.00001) == "0.00001" and layout.num(0.0004) == "0.0004"
+    assert layout.num(-0.0) == "0"  # a range of cut-offs read "between -0 and 0"
+    # next to 0.05, a fourth decimal: 0.0499 and 0.0501 both read "= 0.050"
+    assert layout.p_text(0.0499) == "= 0.0499" and layout.p_text(0.0501) == "= 0.0501"
+    assert layout.p_text(0.051) == "= 0.051" and layout.p_text(0.2) == "= 0.200"
     assert layout.percent(0.8614) == "86.1%" and layout.percent(None) == "n/a"
     # two bounds with the same decimals: each rounded on its own read "-9 to -7.38" and "66% to 82.6%"
     assert layout.span(-8.998, -7.384) == "-9.00 to -7.38"
@@ -482,6 +499,96 @@ def test_numbers_intervals_and_p_values_are_written_for_reading() -> None:
     ci = CI(lower=0.9019, upper=0.9527, level=0.95, method="DeLong")
     assert layout.interval(ci) == "95% CI 0.902 to 0.953" and layout.interval(None) == ""
     assert layout.interval(ci, scale=100, unit="%") == "95% CI 90.2% to 95.3%"
+    # without bounds, no interval: "95% CI n/a% to n/a%" stood beside a predictive value that has no value
+    nothing = CI(lower=float("nan"), upper=float("nan"), level=0.95, method="")
+    assert layout.interval(nothing) == "" and layout.interval(nothing, scale=100, unit="%") == ""
+
+
+def test_a_plan_writes_a_number_as_a_result_does(df: pd.DataFrame) -> None:
+    """One rule for the two: a plan said that a score "runs from 174 to 2.802e+04", where the page beside it wrote
+    28,020."""
+    assert m.number(28017.0, 4) == "28,017" == layout.num(28017.0, 4)
+    assert m._num(123456.7) == "123,457" and m._num(1589.0) == "1,589" and m._num(67.6) == "67.6"
+    assert m._num(0.0000123) == "0.0000123" and m._num(float("nan")) == "n/a"
+    large = df.assign(marker=df["marker"] * 1000)
+    plan = m.plan_accuracy(large, "ill", "Yes", "marker", m.HIGHER, m.FIXED, 5.0, None)
+    text = _text(plan)
+    assert "everyone is called positive" in text and "e+0" not in text
+    assert re.search(r"runs from [\d,]+ to [\d,]+\)", text), text
+
+
+def test_an_estimate_and_its_interval_are_written_with_the_same_decimals() -> None:
+    """Each rounded on its own, a rate ratio read "3.12, 95% CI 0.996 to 12.935" and a typical change "-5.5, 95% CI
+    -6.00 to -4.50": the three numbers take the decimals the one nearest 0 needs."""
+
+    def ci(lower: float, upper: float) -> CI:
+        return CI(lower=lower, upper=upper, level=0.95, method="")
+
+    assert layout.with_interval(3.125, ci(0.996, 12.935)) == ("3.125", "95% CI 0.996 to 12.935")
+    assert layout.with_interval(-5.5, ci(-6.0, -4.5)) == ("-5.50", "95% CI -6.00 to -4.50")
+    assert layout.with_interval(1.359, ci(0.879, 2.006)) == ("1.359", "95% CI 0.879 to 2.006")
+    assert layout.with_interval(5.98707, ci(5.52, 6.45)) == ("5.99", "95% CI 5.52 to 6.45")
+    # an estimate without a value, or without an upper end: each said for itself
+    assert layout.with_interval(None, ci(0.1, 0.2)) == ("n/a", "95% CI 0.100 to 0.200")
+    assert layout.with_interval(float("inf"), ci(2.99, float("inf"))) == ("n/a", "")
+    # two limits of agreement and the bounds of their intervals: "20.17" stood over "95% CI 19.4 to 21.0"
+    assert layout.alike(-8.1912, 20.1653, -8.998, -7.384, 19.358, 20.973) == [
+        "-8.19",
+        "20.17",
+        "-9.00",
+        "-7.38",
+        "19.36",
+        "20.97",
+    ]
+    assert layout.alike(None, 1.5) == ["n/a", "1.50"]
+
+
+def _runs() -> None:
+    from app_pages import analysis_layout as layout
+    from ui.guidance.outcomes import Advice, ModelPlan
+
+    idle = ModelPlan(0, (), (Advice("info", "Choose the first and the second measurement."),))
+    layout.run_button("waiting", ready=False, what="the paired test", plan=idle)
+    layout.run_button("bare", ready=False, what="the paired test")
+    layout.run_button("ready", ready=True, what="the paired test", plan=idle)
+
+
+def test_a_disabled_run_says_what_is_missing() -> None:
+    """With Guidance off the plan is not drawn: Run was grey and nothing on the screen said why. Its help says what
+    the plan says; a Run that can be clicked has no help (it stayed open over the plan after the click)."""
+    at = AppTest.from_function(_runs)
+    at.run()
+    assert not at.exception
+    waiting, bare, ready = (at.button(key=key) for key in ("waiting", "bare", "ready"))
+    assert waiting.disabled and waiting.proto.help == "Choose the first and the second measurement."
+    assert bare.disabled and "complete the choices above to run the paired test" in bare.proto.help
+    assert not ready.disabled and not ready.proto.help
+
+
+def test_a_plan_that_runs_nothing_says_what_to_choose(df: pd.DataFrame) -> None:
+    """What a disabled Run reads: the first line of a plan without a step names the choice to make."""
+    for plan in (
+        m.plan_paired(df, "sbp_first", None, m.T_TEST),
+        m.plan_one_mean(df, "hba1c", None, m.ONE_T),
+        m.plan_share(df, None, None, None),
+        m.plan_strata(df, None, None, None, None, None),
+    ):
+        assert not plan.steps and plan.advice and plan.advice[0].text[:6] in ("Choose", "Type t")
+
+
+def test_a_share_whose_test_and_interval_part_says_so() -> None:
+    """An exact binomial test beside a Wilson interval: 3 of 10 against 10% gives p = 0.070 and an interval from
+    10.8% to 60.3%, which leaves the reference out. Two methods; the result says so, on the page and in the dossier
+    (it is one of the result's warnings)."""
+    from biostats.paired import one_sample_proportion
+
+    parted = one_sample_proportion(3, 10, 0.10)
+    assert parted.p_value == pytest.approx(0.0702, abs=5e-5) and parted.estimate_ci.lower > 0.10
+    assert len(parted.warnings) == 1 and "does not reject the reference" in parted.warnings[0]
+    assert "report both" in parted.warnings[0]
+    for with_it, counted, reference in ((30, 100, 0.20), (302, 928, 0.30), (9, 10, 0.5)):
+        assert not one_sample_proportion(with_it, counted, reference).warnings
+    assert parted.statistic_label == "number counted"  # the dossier read "successes = 3"
 
 
 def _dependent_fields() -> None:
@@ -578,6 +685,34 @@ def test_an_analysis_the_table_cannot_feed_says_what_it_needs(
     assert not [button for button in at.button if button.label == "Run analysis"]
 
 
+def test_a_link_of_an_empty_state_opens_the_tab_it_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ "Create new variables" opened Enrich on its first tab, Import External Data: a link may name the tab of its
+    page, and the two tabs name it."""
+    import ui.components as components
+    from app_pages import analysis_diagnostic, analysis_extras
+    from ui import nav
+
+    opened: list[tuple] = []
+    monkeypatch.setattr(
+        components,
+        "page_link",
+        lambda key, label=None, *, tab=None, **_: opened.append((key, label, tab)),
+    )
+    components.empty_state(
+        "Nothing to read",
+        "What is missing.",
+        links=(("clean", "Clean categories"), ("enrich", "Create new variables", "variables")),
+    )
+    assert opened == [
+        ("clean", "Clean categories", None),
+        ("enrich", "Create new variables", "variables"),
+    ]
+    assert nav.tab_query("enrich", "variables")  # a tab the page declares
+    for module in (analysis_diagnostic, analysis_extras):
+        source = __import__("inspect").getsource(module)
+        assert '("enrich", "Create new variables")' not in source, module.__name__
+
+
 def test_the_calculators_need_no_table() -> None:
     at = AppTest.from_function(_tabs_on_a_poor_table, default_timeout=60)
     at.session_state["tab"] = "paired"
@@ -589,4 +724,5 @@ def test_the_calculators_need_no_table() -> None:
     at.number_input(key="rate_e0").set_value(4).run()
     at.number_input(key="rate_t0").set_value(1000.0).run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
-    assert {metric.label: metric.value for metric in at.metric}["Rate ratio"] == "3.12"
+    # with the decimals of its interval (0.996 to 12.935): "3.12" beside them read as another precision
+    assert {metric.label: metric.value for metric in at.metric}["Rate ratio"] == "3.125"

@@ -429,11 +429,11 @@ def _pooled_comparison_blocks(value: dict) -> ResultBlocks:
 def result_blocks(value: Any) -> ResultBlocks:
     """The report blocks of one stored result (unknown types give a short text)."""
     from biostats._types import TestResult
-    from biostats.agreement import BlandAltman
+    from biostats.agreement import SLOPE_READING, BlandAltman
     from biostats.linear import AncovaResult, LinearModelResult
     from biostats.rates import StratifiedResult
     from biostats.regression import APPARENT_AUC, APPARENT_AUC_NOTE, RegressionResult
-    from biostats.reliability import ICCResult, KappaResult
+    from biostats.reliability import NEAR_MISSES, ICCResult, KappaResult
     from biostats.survival import CoxResult, SurvivalComparison
 
     if hasattr(value, "m_total") and hasattr(value, "tests"):
@@ -520,28 +520,54 @@ def result_blocks(value: Any) -> ResultBlocks:
         return _survival_blocks(value)
     if isinstance(value, StratifiedResult):
         blocks = ResultBlocks(references=list(value.references))
+        # which group stands above the line: an odds ratio of 0.63 is 1.59 read the other way round
+        compared, reference = getattr(value, "compared", ""), getattr(value, "reference", "")
+        if compared and reference:
+            event = getattr(value, "event", "")
+            blocks.lines.append(
+                f"Ratios of {compared} against {reference} (the reference group)"
+                + (f"; event: {event}" if event else "")
+            )
+        strata = f"{value.n_strata} strata"
+        tested = getattr(value, "n_tested", None)
+        if tested is not None and tested < value.n_strata:
+            strata += f", of which the two tests read the {tested} that hold both groups and both outcomes"
         blocks.lines.extend(
             [
                 f"Mantel-Haenszel odds ratio = {_num(value.or_mh)} (95% CI {_ci(value.or_mh_ci)}); crude OR = {_num(value.crude_or)}",
                 f"Mantel-Haenszel risk ratio = {_num(value.rr_mh)} (95% CI {_ci(value.rr_mh_ci)}); crude RR = {_num(value.crude_rr)}",
-                f"Mantel-Haenszel test: chi2 = {_num(value.mh_test_statistic)}, {_peq(value.mh_test_p)}; "
-                f"Breslow-Day homogeneity: chi2 = {_num(value.breslow_day_statistic)}, {_peq(value.breslow_day_p)}; "
-                f"{value.n_strata} strata",
+                f"Cochran-Mantel-Haenszel test of the association: chi2 = {_num(value.mh_test_statistic)}, "
+                f"{_peq(value.mh_test_p)}; Breslow-Day test that the odds ratios of the strata are alike: chi2 = "
+                f"{_num(value.breslow_day_statistic)}, {_peq(value.breslow_day_p)}; {strata}",
             ]
         )
         blocks.warnings.extend(value.warnings)
         return blocks
     if isinstance(value, BlandAltman):
         blocks = ResultBlocks(references=list(value.references))
+        # the slope with its two readings, as the page: "Proportional bias" named one of them
+        slope = (
+            f"Slope of the difference on the mean: {_num(value.proportional_bias_slope)} per unit, "
+            f"{_peq(value.proportional_bias_p)}"
+        )
+        if value.proportional_bias_p < 0.05:
+            slope += f". The difference changes with the size of the measurement: {SLOPE_READING}"
         blocks.lines.extend(
             [
-                f"n = {value.n:,}; bias = {_num(value.bias)} (95% CI {_ci(value.bias_ci)}), SD = {_num(value.sd)}",
+                f"n = {value.n:,}; mean difference = {_num(value.bias)} (95% CI {_ci(value.bias_ci)}), SD of the "
+                f"differences = {_num(value.sd)}",
                 f"Limits of agreement: {_num(value.loa_lower)} (95% CI {_ci(value.loa_lower_ci)}) to "
-                f"{_num(value.loa_upper)} (95% CI {_ci(value.loa_upper_ci)}); {_num(value.within_loa_pct)}% within",
-                f"Proportional bias: slope = {_num(value.proportional_bias_slope)}, {_peq(value.proportional_bias_p)}",
+                f"{_num(value.loa_upper)} (95% CI {_ci(value.loa_upper_ci)}); {_num(value.within_loa_pct)}% of the "
+                "differences within",
+                slope,
             ]
         )
-        blocks.warnings.extend(value.warnings)
+        # the line above says it with its numbers; a result kept before holds the warning's first words
+        blocks.warnings.extend(
+            text
+            for text in value.warnings
+            if not text.startswith(("the difference changes with the size", "proportional bias"))
+        )
         return blocks
     if isinstance(value, ICCResult):
         return ResultBlocks(
@@ -563,6 +589,9 @@ def result_blocks(value: Any) -> ResultBlocks:
                 f"Same category for {_num(100 * kappa.observed_agreement)}% of them "
                 f"({_num(100 * kappa.expected_agreement)}% expected by chance)",
             ]
+            if weights:
+                # the two shares give the unweighted kappa (0.706 beside a weighted 0.824): said with them
+                lines.append(NEAR_MISSES)
             if weights and order:
                 lines.append("Order of the grades, lowest first: " + ", ".join(order))
             return ResultBlocks(

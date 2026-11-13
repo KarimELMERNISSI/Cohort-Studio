@@ -23,7 +23,7 @@ from app_pages import analysis_layout as layout
 from app_pages.analysis_guidance_ui import guidance_on
 from app_pages.analysis_layout import Metric
 from biostats._types import CI, YOUDEN_BOOTSTRAP
-from biostats.agreement import bland_altman
+from biostats.agreement import SLOPE_READING, SLOPE_WARNING, bland_altman
 from biostats.diagnostic import (
     YOUDEN_MIN_CLASS,
     confusion_at,
@@ -31,7 +31,14 @@ from biostats.diagnostic import (
     diagnostic_accuracy,
     youden_cutoff,
 )
-from biostats.reliability import cohens_kappa, icc, koo_li, landis_koch, rater_table
+from biostats.reliability import (
+    NEAR_MISSES,
+    cohens_kappa,
+    icc,
+    koo_li,
+    landis_koch,
+    rater_table,
+)
 from core.registry import as_code
 from ui.components import empty_state, error_card, help_popover
 from ui.guidance import measures as m
@@ -42,7 +49,7 @@ from ui.theme import OKABE_ITO
 
 QUESTION_KEY = "diag_question"
 MUTED = "#6B7C86"  # the line of chance: readable on the light and on the dark surface alike
-BAND_ALPHA = 0.12
+BAND_ALPHA = 0.25  # at 0.12 the intervals of the limits were lost on the dark surface
 OBSERVED = "Imputed data are selected; this analysis reads the observed data: "
 
 
@@ -257,7 +264,7 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             "The accuracy of a test needs a reference standard in two values (the condition present or absent) and "
             "a numeric score or marker. A column whose two values are written several ways can be cleaned in Data "
             "> Clean.",
-            links=(("clean", "Clean categories"), ("enrich", "Create new variables")),
+            links=(("clean", "Clean categories"), ("enrich", "Create new variables", "variables")),
         )
         return
     c1, c2, c3 = st.columns(3)
@@ -326,7 +333,9 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     cutoff = None
     if mode == m.FIXED:
         cutoff = d2.number_input(
-            f"Positive when {score or 'the test'} is {_bound(lower)}",
+            f"Positive when {score or 'the test'} is {_bound(lower)}"
+            if direction
+            else f"Cut-off fixed beforehand, in the unit of {score or 'the test'}",
             value=None,
             placeholder="a value fixed beforehand",
             format="%g",
@@ -393,7 +402,7 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         prevalence,
         *((YOUDEN_BOOTSTRAP.setting,) if drawn else ()),
     )
-    if layout.run_button("diag_run", ready=ready, what="the accuracy of the test"):
+    if layout.run_button("diag_run", ready=ready, what="the accuracy of the test", plan=plan):
         try:
             result = accuracy_of(df, outcome, present, score, direction, mode, cutoff, prevalence)  # type: ignore[arg-type]
             remember(
@@ -406,10 +415,34 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             mark_step("analyse", "diagnostic accuracy")
         except Exception as exc:
             error_card("The accuracy of the test could not be computed.", exc)
-    result = layout.result_place("diagnostic", config, guided=guided)
+    result = layout.result_place("diagnostic", config, guided=guided, words=m.CUTOFFS)
     if result is not None:
         _show_accuracy(result)
         provenance("diagnostic")
+
+
+def _share(value: Any, ci: Any) -> str:
+    """A share with its interval, as a sentence writes it: "40.8% (95% CI 34.5% to 47.6%)", or the share alone when
+    it has no interval ("n/a (95% CI n/a% to n/a%)" stood for a predictive value without a value)."""
+    bounds = layout.interval(ci, scale=100, unit="%")
+    return layout.percent(value) + (f" ({bounds})" if bounds else "")
+
+
+def _measure(name: str, value: Any, ci: Any, *, share: bool) -> tuple[str, str, str]:
+    """A row of the table of every measure: a share as a percentage, as the headline writes it (the headline read
+    86.1% and the table 0.861), a ratio to three significant figures; its interval with the same decimals."""
+    known = value is not None and bool(np.isfinite(float(value)))
+    bounded = ci is not None and all(np.isfinite(float(b)) for b in (ci.lower, ci.upper))
+    if share:
+        return (
+            name,
+            layout.percent(value) if known else "n/a",
+            layout.span(100 * ci.lower, 100 * ci.upper, unit="%") if bounded else "",
+        )
+    if known and bounded:
+        estimate, bounds = layout.with_interval(value, ci)
+        return name, estimate, bounds.removeprefix("95% CI ")
+    return name, layout.num(value) if known else "n/a", ""
 
 
 def _show_accuracy(res: dict[str, Any]) -> None:
@@ -443,6 +476,9 @@ def _show_accuracy(res: dict[str, Any]) -> None:
         )
         # the AUC counts a tie for a half: said apart as soon as ties are a pair in 100
         words += f"; in {_in_100(same)} the two have the same value." if same >= 0.01 else "."
+        words += (
+            " No cut-off: choose one above to read sensitivity, specificity and predictive values."
+        )
     else:
         found = res["mode"] == m.YOUDEN
         origin = "found on these data: optimistic" if found else "fixed beforehand"
@@ -471,12 +507,7 @@ def _show_accuracy(res: dict[str, Any]) -> None:
     left, right = st.columns(2)
     left.plotly_chart(res["fig"], width="stretch")
     with right:
-        if acc is None:
-            st.caption(
-                "No cut-off: the curve shows every one. Choose a cut-off fixed beforehand, or the one found on these "
-                "data, to read sensitivity, specificity and predictive values."
-            )
-        else:
+        if acc is not None:
             positive = f"Test positive ({_bound(lower)} {layout.num(res['cutoff'])})"
             table = pd.DataFrame(
                 {
@@ -491,8 +522,7 @@ def _show_accuracy(res: dict[str, Any]) -> None:
             share = layout.percent(acc.prevalence_observed)
             st.caption(
                 f"Predictive values at the share with the condition in these data ({share}): positive "
-                f"{layout.percent(acc.ppv)} ({layout.interval(acc.ppv_ci, scale=100, unit='%')}), negative "
-                f"{layout.percent(acc.npv)} ({layout.interval(acc.npv_ci, scale=100, unit='%')})."
+                f"{_share(acc.ppv, acc.ppv_ci)}, negative {_share(acc.npv, acc.npv_ci)}."
             )
     layout.warn(cautions)
     if acc is not None:
@@ -533,18 +563,15 @@ def _show_accuracy(res: dict[str, Any]) -> None:
                 ("Youden's J", acc.youden, None),
                 ("Share classified correctly", acc.accuracy, None),
             ]
+            shares = {"Sensitivity", "Specificity", "Share classified correctly"}
             table = pd.DataFrame(
                 [
-                    (name, value, "" if ci is None else f"{ci.lower:.3f} to {ci.upper:.3f}")
+                    _measure(name, value, ci, share=name in shares or "predictive value" in name)
                     for name, value, ci in rows
                 ],
-                columns=["measure", "estimate", "95% CI"],
+                columns=["Measure", "Estimate", "95% CI"],
             )
-            st.dataframe(
-                table.style.format({"estimate": "{:.3f}"}, na_rep="n/a"),
-                hide_index=True,
-                width="stretch",
-            )
+            st.dataframe(table, hide_index=True, width="stretch")
             if res["mode"] == m.YOUDEN and youden:
                 ci = youden.get("ci")
                 if ci is not None:
@@ -554,8 +581,10 @@ def _show_accuracy(res: dict[str, Any]) -> None:
                         "interval)."
                     )
                 st.caption(youden["note"])
-    references = [*([] if acc is None else acc.references), *auc["references"]]
-    st.caption("Method: " + " | ".join(references))
+            st.caption("Method: " + " | ".join([*acc.references, *auc["references"]]))
+    else:
+        with st.expander("Details: the method"):
+            st.caption("Method: " + " | ".join(auc["references"]))
     help_popover(
         "Sensitivity and specificity describe the test; predictive values describe what a result means for the "
         "person tested, and change with how common the condition is. Likelihood ratios turn the odds before the test "
@@ -571,9 +600,24 @@ def _swap_measurements() -> None:
     st.session_state["agree_cols"] = list(reversed(st.session_state.get("agree_cols") or []))
 
 
+def _limits(ba: Any) -> list[str]:
+    """The two limits of agreement, then the bounds of the lower limit's interval and of the upper limit's, written
+    with the same decimals: the headline, its caption, its sentence and the figure's legend give a number one way
+    (the upper limit read "20.17" over "95% CI 19.4 to 21.0", and "20.2" in the legend)."""
+    return layout.alike(
+        ba.loa_lower,
+        ba.loa_upper,
+        ba.loa_lower_ci.lower,
+        ba.loa_lower_ci.upper,
+        ba.loa_upper_ci.lower,
+        ba.loa_upper_ci.upper,
+    )
+
+
 def _bland_altman_figure(ba: Any, first: str, second: str) -> go.Figure:
     fig = go.Figure()
     x0, x1 = float(np.min(ba.means)), float(np.max(ba.means))
+    limits = _limits(ba)  # as the headline: "20.17", not "20.2"
     for ci in (ba.bias_ci, ba.loa_upper_ci, ba.loa_lower_ci):  # under the points
         fig.add_trace(
             go.Scatter(
@@ -596,9 +640,14 @@ def _bland_altman_figure(ba: Any, first: str, second: str) -> go.Figure:
         )
     )
     for y, name, dash, colour in (
-        (ba.bias, f"mean difference {layout.num(ba.bias)}", "dash", OKABE_ITO[1]),
-        (ba.loa_upper, f"upper limit {layout.num(ba.loa_upper)}", "dot", OKABE_ITO[2]),
-        (ba.loa_lower, f"lower limit {layout.num(ba.loa_lower)}", "dot", OKABE_ITO[2]),
+        (
+            ba.bias,
+            f"mean difference {layout.with_interval(ba.bias, ba.bias_ci)[0]}",
+            "dash",
+            OKABE_ITO[1],
+        ),
+        (ba.loa_upper, f"upper limit {limits[1]}", "dot", OKABE_ITO[2]),
+        (ba.loa_lower, f"lower limit {limits[0]}", "dot", OKABE_ITO[2]),
     ):
         fig.add_trace(
             go.Scatter(
@@ -622,7 +671,7 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             "Fewer than two numeric columns",
             "The agreement of two measurements needs two numeric columns that measure the same quantity on the same "
             "participants.",
-            links=(("enrich", "Create new variables"),),
+            links=(("enrich", "Create new variables", "variables"),),
         )
         return
     kept = [c for c in st.session_state.get("agree_cols") or [] if c in offered]
@@ -639,7 +688,9 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     )
     if len(columns) == 2:
         with st.container(horizontal=True, vertical_alignment="center", gap="small"):
-            st.caption(f"Differences are {as_code(columns[0])} - {as_code(columns[1])}.")
+            st.caption(
+                f"Differences are {as_code(columns[0])} - {as_code(columns[1])}.", width="content"
+            )
             st.button(
                 "Swap",
                 key="agree_swap",
@@ -659,26 +710,31 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         persist_state="page",
         help=HELP["analyses"],
     )
-    model = a2.radio(
-        "What counts as agreement (ICC)",
-        list(m.ICC_FORMS),
-        format_func=lambda value: m.ICC_FORMS[value],
-        key="icc_model",
-        persist_state="page",
-        help=HELP["icc_form"],
-    )
-    layout.depends("agree_delta", tuple(columns), None)  # in the unit of these measurements
-    with st.expander("More options"):
-        delta = st.number_input(
-            "Largest difference that would not matter (optional)",
-            min_value=0.0,
-            value=None,
-            placeholder="in the unit of the measurements",
-            format="%g",
-            key="agree_delta",
+    # each option is drawn with the analysis that reads it (both stayed on the screen with their analysis unticked)
+    model = st.session_state.get("icc_model") or m.ABSOLUTE
+    if m.ICC in analyses:
+        model = a2.radio(
+            "What counts as agreement (ICC)",
+            list(m.ICC_FORMS),
+            format_func=lambda value: m.ICC_FORMS[value],
+            key="icc_model",
             persist_state="page",
-            help=HELP["delta"],
+            help=HELP["icc_form"],
         )
+    layout.depends("agree_delta", tuple(columns), None)  # in the unit of these measurements
+    delta = None
+    if m.BLAND_ALTMAN in analyses and len(columns) == 2:
+        with st.expander("More options"):
+            delta = st.number_input(
+                "Largest difference that would not matter (optional)",
+                min_value=0.0,
+                value=None,
+                placeholder="in the unit of the measurements",
+                format="%g",
+                key="agree_delta",
+                persist_state="page",
+                help=HELP["delta"],
+            )
     plan = layout.kept(
         "agree_plan",
         (tuple(columns), tuple(analyses), model),
@@ -700,7 +756,7 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     ba_config = tuple(columns) if pair else ()
     icc_config = (tuple(columns), model)
     if layout.run_button(
-        "agree_run", ready=bool(plan.steps), what="the agreement of the measurements"
+        "agree_run", ready=bool(plan.steps), what="the agreement of the measurements", plan=plan
     ):
         try:
             if with_ba:
@@ -724,37 +780,45 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             mark_step("analyse", "agreement of two measurements")
         except Exception as exc:
             error_card("The agreement could not be computed.", exc)
+    # one "How to read this" for the two results of one Run, after the last
+    readings: list[str] = []
     ba = layout.result_place("bland_altman", ba_config, guided=guided) if with_ba else None
     if ba is not None:
-        _show_bland_altman(ba, columns[0], columns[1], delta)
+        readings.append(_show_bland_altman(ba, columns[0], columns[1], delta))
         provenance("bland_altman")
     reliability = (
         # after the limits of agreement, their place has said why no result is shown
-        layout.result_place("icc", icc_config, guided=guided, silent=with_ba and ba is None)
+        layout.result_place(
+            "icc", icc_config, guided=guided, silent=with_ba and ba is None, words=m.ICC_FORMS
+        )
         if with_icc
         else None
     )
     if reliability is not None:
-        _show_icc(reliability, len(df))
+        readings.append(_show_icc(reliability, len(df)))
         provenance("icc")
+    if readings:
+        help_popover("\n\n".join(readings))
 
 
-def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) -> None:
+def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) -> str:
+    """The limits of agreement; gives back how to read them (said once, after the last result of the Run)."""
     a, b = as_code(first), as_code(second)
     reads = "higher" if ba.bias >= 0 else "lower"
+    bias, bounds = layout.with_interval(ba.bias, ba.bias_ci)
+    low, high, low_from, low_to, high_from, high_to = _limits(ba)
     layout.headline(
         [
-            Metric("Mean difference", layout.num(ba.bias), layout.interval(ba.bias_ci)),
+            Metric("Bland-Altman: mean difference", bias, bounds),
             Metric(
                 "Limits of agreement",
-                layout.span(ba.loa_lower, ba.loa_upper),
-                f"95% CI {layout.span(ba.loa_lower_ci.lower, ba.loa_lower_ci.upper)} and "
-                f"{layout.span(ba.loa_upper_ci.lower, ba.loa_upper_ci.upper)}",
+                f"{low} to {high}",
+                f"95% CI {low_from} to {low_to} and {high_from} to {high_to}",
             ),
             Metric("Pairs", f"{ba.n:,}"),
         ],
-        f"{a} reads {layout.num(abs(ba.bias))} {reads} than {b} on average. For about 95 of 100 participants the "
-        f"two differ by between {layout.span(ba.loa_lower, ba.loa_upper).replace(' to ', ' and ')}.",
+        f"{a} reads {bias.removeprefix('-')} {reads} than {b} on average. For about 95 of 100 participants the "
+        f"two differ by between {low} and {high}.",
         len(ba.warnings),
     )
     st.plotly_chart(_bland_altman_figure(ba, first, second), width="stretch")
@@ -762,7 +826,7 @@ def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) ->
         st.markdown(
             f":material/warning: The difference changes with the size of the measurement "
             f"({layout.num(ba.proportional_bias_slope, 2)} per unit, p {layout.p_text(ba.proportional_bias_p)}). "
-            "Either one method reads proportionally higher, or one is noisier than the other: look at the plot."
+            f"{SLOPE_READING.capitalize()}: look at the plot."
         )
     if delta is not None and delta > 0:
         within = float(np.mean(np.abs(ba.differences) <= delta))
@@ -773,7 +837,7 @@ def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) ->
             f"{'lie within it too' if inside else 'reach beyond it'}."
         )
     # the line above says the result's own word on a difference that changes with the measurement: not said twice
-    layout.warn([text for text in ba.warnings if not text.startswith("proportional bias")])
+    layout.warn([text for text in ba.warnings if text != SLOPE_WARNING])
     with st.expander("Details: the differences and the method"):
         st.caption(
             f"SD of the differences {layout.num(ba.sd)} (ddof = 1); {layout.percent(ba.within_loa_pct / 100)} of "
@@ -782,27 +846,33 @@ def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) ->
             f"{layout.p_text(ba.proportional_bias_p)}: it shows that the two spreads differ, not why."
         )
         st.caption("Method: " + " | ".join(ba.references))
-    help_popover(
-        "The limits of agreement are the range within which 95% of the differences between the two measurements are "
+    return (
+        "**Limits of agreement.** The range within which 95% of the differences between the two measurements are "
         "expected. Whether that range is acceptable is a judgement for the field of use, not a statistical one: "
         "decide the largest difference that would not matter before looking. The intervals around the limits show "
         "how precisely they are known."
     )
 
 
-def _show_icc(res: Any, rows: int) -> None:
-    form = next(
-        (words for key, words in m.ICC_FORMS.items() if res.model.startswith(key)), res.model
-    )
+def _show_icc(res: Any, rows: int) -> str:
+    """The intraclass correlation; gives back how to read it (said once, after the last result of the Run)."""
+    absolute = res.model.startswith(m.ABSOLUTE)
     left_out = rows - res.n_subjects
     known = bool(np.isfinite(res.icc))
     # at 1, absolute agreement is the same value; consistency is the same ranking and spacing (two columns 10 apart
     # everywhere give 1)
-    top = "they agree fully" if res.model.startswith(m.ABSOLUTE) else "the same ranking and spacing"
+    top = "they agree fully" if absolute else "the same ranking and spacing"
+    counted = (
+        "the same value (absolute agreement)"
+        if absolute
+        else "the same ranking and spacing, a constant shift between columns not counting (consistency)"
+    )
     layout.headline(
         [
             Metric(
-                "ICC",
+                m.ABSOLUTE
+                if absolute
+                else m.CONSISTENCY,  # the result's name: two results follow one Run
                 f"{res.icc:.3f}" if known else "n/a",
                 f"{layout.interval(res.ci)} (Shrout-Fleiss)"
                 if known
@@ -811,11 +881,12 @@ def _show_icc(res: Any, rows: int) -> None:
             Metric(
                 "Participants",
                 f"{res.n_subjects:,}",
-                f"of {rows:,} rows" + (f"; {left_out:,} lack a value" if left_out else ""),
+                f"of {rows:,} rows, on {res.n_raters} columns"
+                + (f"; {left_out:,} lack a value" if left_out else ""),
             ),
-            Metric("Columns", f"{res.n_raters}"),
         ],
-        f"{form}, one measurement each. 0 = the measurements do not tell participants apart, 1 = {top}.",
+        f"Counted as agreement: {counted}, one measurement each. 0 = the measurements do not tell participants "
+        f"apart, 1 = {top}.",
     )
     with st.expander("Details: the test, the benchmark and the method"):
         low, high = koo_li(res.ci.lower), koo_li(res.ci.upper)
@@ -826,10 +897,10 @@ def _show_icc(res: Any, rows: int) -> None:
             )
         st.caption(text)
         st.caption("Method: " + " | ".join(res.references))
-    help_popover(
-        "The ICC is the share of the differences between measurements that comes from the participants themselves "
-        "rather than from the raters or occasions. It depends on how much the participants differ: the same raters "
-        "score lower in a group that is alike. Read its interval, not the estimate alone."
+    return (
+        "**Intraclass correlation.** The share of the differences between measurements that comes from the "
+        "participants themselves rather than from the raters or occasions. It depends on how much the participants "
+        "differ: the same raters score lower in a group that is alike. Read its interval, not the estimate alone."
     )
 
 
@@ -937,7 +1008,7 @@ def _raters(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         layout.imputed_line(OBSERVED + "the rows rated by both. Not pooled in this version.")
     config = (first, second, scale if graded else m.NAMES, *used)
     if layout.run_button(
-        "kappa_run", ready=bool(plan.steps), what="the agreement of the two raters"
+        "kappa_run", ready=bool(plan.steps), what="the agreement of the two raters", plan=plan
     ):
         try:
             result = kappa_of(
@@ -957,7 +1028,9 @@ def _raters(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             mark_step("analyse", "agreement (kappa)")
         except Exception as exc:
             error_card("Kappa could not be computed.", exc)
-    result = layout.result_place("kappa", config, guided=guided)
+    result = layout.result_place(
+        "kappa", config, guided=guided, words={**m.SCALES, **m.NEAR_MISSES}
+    )
     if result is not None:
         _show_kappa(result, first, second)  # type: ignore[arg-type]
         provenance("kappa")
@@ -977,14 +1050,16 @@ def _show_kappa(result: dict[str, Any], first: str, second: str) -> None:
         f"{layout.percent(res.expected_agreement)} would fall in the same category."
     )
     if weights:
-        words += " A weighted kappa also counts near misses, which the share of same categories does not."
+        words += f" {NEAR_MISSES}"
     counts = table.to_numpy()
     # one rater puts everyone in one category: kappa is 0 whatever the other says, and its interval has no width
     fixed = int((counts.sum(axis=1) > 0).sum()) == 1 or int((counts.sum(axis=0) > 0).sum()) == 1
     layout.headline(
         [
             Metric(
-                "Same category", layout.percent(res.observed_agreement), f"{same:,} of {res.n:,}"
+                "Same category",
+                layout.percent(res.observed_agreement),
+                f"{same:,} of {res.n:,} rated by both",
             ),
             Metric(
                 name,
@@ -993,15 +1068,15 @@ def _show_kappa(result: dict[str, Any], first: str, second: str) -> None:
                 if fixed
                 else f"{layout.interval(res.ci)} · {scale}",
             ),
-            Metric("Rated by both", f"{res.n:,}"),
         ],
         words,
     )
     shown = table.copy()
     shown["Total"] = shown.sum(axis=1)
     shown.loc["Total"] = shown.sum(axis=0)
-    shown.index = [f"{first} = {name}" if name != "Total" else "Total" for name in shown.index]
-    shown.columns = [f"{second} = {name}" if name != "Total" else "Total" for name in shown.columns]
+    # the headers are the categories: the caption names the two axes ("nyha_class_central = " stood in every one)
+    shown.index = [str(name) for name in shown.index]
+    shown.columns = [str(name) for name in shown.columns]
     st.caption(
         f"Rows: {as_code(first)} (first rater). Columns: {as_code(second)} (second rater). The diagonal holds the "
         "participants both put in the same category."

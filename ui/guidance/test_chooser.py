@@ -44,16 +44,18 @@ OTHER_QUESTIONS: tuple[tuple[str, str], ...] = (
     ("How well does a test identify a condition?", "accuracy"),
     ("Can two methods replace each other? How reliable is a measurement?", "measurements"),
     ("Do two raters agree?", "raters"),
-    ("Is an association the same within the groups of a third variable?", "strata"),
+    ("What is an association once a third variable is taken into account?", "strata"),
     ("How many events per person-time, in one group or two?", "rates"),
     ("More events than expected from reference rates?", "expected"),
 )
 
 
-def _on(tab: str) -> dict[str, str]:
+def _on(tab: str, then: str = "") -> dict[str, str]:
     """A route to an analysis of Hypothesis tests & epidemiology: its page, the tab its link opens, and that place in
-    the words of the navigation (renamed with it, never left behind)."""
-    return {"page": "analyze", "tab": tab, "where": nav.where("analyze", tab)}
+    the words of the navigation (renamed with it, never left behind). ``then``: the choice to make there, when the
+    page opens on another (the summary of a rank test: the page opens on the mean)."""
+    where = nav.where("analyze", tab) + (f", then {then}" if then else "")
+    return {"page": "analyze", "tab": tab, "where": where}
 
 
 def recommend(outcome: str, groups: str, design: str, distribution: str) -> Recommendation:
@@ -85,11 +87,16 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
     if outcome in ("Continuous (measurement)", "Ordinal (ranked levels)"):
         rank_only = outcome == "Ordinal (ranked levels)"
         if one:
+            ranks = rank_only or not symmetric
             return Recommendation(
-                test="Wilcoxon signed-rank test (or one-sample t-test for symmetric measurements)",
+                test="Wilcoxon signed-rank test" if ranks else "One-sample t-test",
                 why="A single group is compared with a fixed reference value.",
                 effect_size="difference from the reference with 95% CI",
-                **_on("one_mean"),
+                alternatives=()
+                if ranks
+                else ("Wilcoxon signed-rank test when the values are skewed or few",),
+                # the page opens on the mean: the summary to choose there is named
+                **_on("one_mean", "Summary: Typical value (Wilcoxon signed-rank)" if ranks else ""),
             )
         if paired:
             return Recommendation(
@@ -98,7 +105,12 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 else "Paired t-test",
                 why="Each participant contributes two measurements; the pairing must be respected.",
                 effect_size="mean (or pseudo-median) within-pair difference with 95% CI; Cohen's d_z",
-                **_on("paired_number"),
+                **_on(
+                    "paired_number",
+                    "Summary of the change: Typical change (Wilcoxon signed-rank)"
+                    if (rank_only or not symmetric)
+                    else "",
+                ),
             )
         if two:
             if rank_only or not symmetric:

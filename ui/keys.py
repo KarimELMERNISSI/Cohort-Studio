@@ -187,6 +187,13 @@ KEYS: tuple[Key, ...] = (
         "by setting it (the orientation, the 2x2 panel's way to the stratified analysis)",
     ),
     Key(
+        "epi_map",
+        "app_pages.analysis_guidance_ui",
+        "page",
+        note="the map 'Which tab do I need?' of Hypothesis tests & epidemiology, open or folded: one of its "
+        "buttons folds it as it opens an analysis, which then stands in view",
+    ),
+    Key(
         "agree_cols",
         "app_pages.analysis_diagnostic",
         "page",

@@ -27,6 +27,13 @@ REFERENCES.setdefault(
 )
 
 
+# beside a weighted kappa, the share of same categories and the share expected by chance give the unweighted
+# kappa: said wherever the three are written together
+NEAR_MISSES = (
+    "A weighted kappa also counts near misses, which the share of same categories does not."
+)
+
+
 @dataclass
 class KappaResult:
     kappa: float
@@ -253,6 +260,7 @@ def icc(
 
 
 __all__ = [
+    "NEAR_MISSES",
     "ICCResult",
     "KappaResult",
     "category",

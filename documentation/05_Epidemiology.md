@@ -264,10 +264,13 @@ time; each keeps its choices and its result while another is open.
   reference value) is cleared when the column changes.
 - **Before you run: the plan** (Guidance on) says what Run will do and on how many rows, then what to check first:
   rows left out for a missing value, a direction the data contradict, two columns that do not hold the same values, a
-  reference equal to the data's own mean. It advises; **Run analysis** is disabled only while nothing can be computed.
+  reference equal to the data's own mean. It advises; **Run analysis** is disabled only while nothing can be computed,
+  and its help then says what is missing (with Guidance off as well).
 - **The result** reads the estimate with its 95% interval first, then the test (p written `< 0.001`, never
   `1.5e-43`), then the counts, and one sentence saying what was compared and in which direction. The statistic, the
-  effect sizes, the assumption checks and the method are folded under **Details**.
+  effect sizes, the assumption checks and the method are folded under **Details**. **How to read this** closes
+  each result with what is to know of the analysis whatever the data; one Run that gives two results (*Agreement
+  of two measurements*) names each in its first figure and has one reading, after the last.
 - **A result stays** while its choices are unchanged, with the line saying what it was computed on, and can be added
   to the study dossier. After a change, the page says which choices the last result belongs to.
 - **With imputed data selected**, each analysis says what it reads: pooled over the imputed datasets, or which
@@ -322,6 +325,23 @@ time; each keeps its choices and its result while another is open.
   To adjust for several variables at once, use a logistic model (Survival & regression, Binary).
 - **A change within one group** is not the effect of a treatment: time, regression to the mean and who stayed also
   move it. To compare groups, adjust for the first measurement (Analysis tab, Multivariate).
+
+**Known limits of these two tabs**
+
+- **A share against a reference:** the exact binomial test and the Wilson interval are two methods. Next to the
+  reference they can part (3 of 10 against 10%: p = 0.070 beside an interval from 10.8% to 60.3%); the result then
+  says so. McNemar's exact test and the interval of the change (Wald, with 0.5 added to each of the two cells of
+  the pairs that changed) can part the same way.
+- **The matched-pairs rank-biserial r** of a signed-rank test is given as a size, without a sign: read the
+  direction on the typical change.
+- **The AUC's interval** (DeLong) is cut at 0 and at 1: next to 1 its upper end reads 1.000.
+- **The test or score of *Accuracy of a test*** is a number of three values or more. A test of two values
+  (positive or negative) against a reference standard is not offered in this version.
+- **The stratified analysis gives the risk ratio whatever the study design.** In a case-control study, read the
+  odds ratio only.
+- **Rates are typed.** Rates read from the dataset are those of a count model (Survival & regression, Count or
+  rate). A calculator's result follows the numbers typed: it is not kept, and cannot be added to the study
+  dossier.
 
 ## Analyses with multiply imputed data
 

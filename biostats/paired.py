@@ -336,15 +336,30 @@ def one_sample_proportion(
     """Exact binomial test with a Wilson interval for the observed proportion."""
     res = stats.binomtest(int(successes), int(n), reference_proportion)
     lo, hi = proportion_confint(successes, n, alpha=alpha, method="wilson")
+    # the exact test and the Wilson interval are two methods: next to the reference one can reject it while the
+    # other holds it (3 of 10 against 0.10: p = 0.070 beside an interval from 0.108 to 0.603)
+    notes: list[str] = []
+    rejects, inside = float(res.pvalue) < alpha, lo <= reference_proportion <= hi
+    if rejects == inside:
+        said = (
+            "the test rejects the reference and the interval holds it"
+            if rejects
+            else "the test does not reject the reference and the interval leaves it out"
+        )
+        notes.append(
+            f"The p-value and the interval part at the border: {said}. They are two methods (an exact binomial "
+            "test, a Wilson interval): report both."
+        )
     return TestResult(
         name="Exact binomial test",
         family="exact",
         statistic=float(successes),
-        statistic_label="successes",
+        statistic_label="number counted",
         p_value=float(res.pvalue),
         estimate=float(successes / n),
         estimate_label=f"observed proportion (reference {reference_proportion:g})",
         estimate_ci=CI(lower=float(lo), upper=float(hi), level=1 - alpha, method="Wilson"),
+        warnings=notes,
         references=cite("wilson1927"),
         groups=["sample"],
         n_per_group=[int(n)],

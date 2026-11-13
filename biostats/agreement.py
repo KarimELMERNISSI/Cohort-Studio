@@ -13,6 +13,13 @@ from scipy import stats
 from biostats._types import CI
 from biostats.references import cite
 
+# a slope of the difference on the mean has two readings, which the slope alone does not tell apart: said
+# with it wherever it is written (the warning named one, "proportional bias ... consider ratios or log scale")
+SLOPE_READING = "either one method reads proportionally higher, or one is noisier than the other"
+SLOPE_WARNING = (
+    f"the difference changes with the size of the measurement (slope p < 0.05): {SLOPE_READING}"
+)
+
 
 @dataclass
 class BlandAltman:
@@ -58,9 +65,7 @@ def bland_altman(
     )
     warnings = []
     if p_slope < 0.05:
-        warnings.append(
-            "proportional bias: the difference changes with the magnitude (slope p < 0.05); consider ratios or log scale"
-        )
+        warnings.append(SLOPE_WARNING)
     return BlandAltman(
         n=n,
         bias=bias,
@@ -90,4 +95,4 @@ def bland_altman(
     )
 
 
-__all__ = ["BlandAltman", "bland_altman"]
+__all__ = ["SLOPE_READING", "SLOPE_WARNING", "BlandAltman", "bland_altman"]
