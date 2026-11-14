@@ -26,6 +26,7 @@ from app_pages.analysis_guidance_ui import (
     render_plan,
     render_test_note,
 )
+from app_pages.analysis_layout import p_text
 from app_pages.clean_dialog import group_warning
 from biostats.multiplicity import adjust as adjust_pvalues
 from biostats.power import (
@@ -169,9 +170,11 @@ def _render_twobytwo_panel(epi, carried=None):
                 st.caption(f"95% CI {nnt_ci['lower']:.1f} to {nnt_ci['upper']:.1f}")
             elif nnt_val is not None:
                 st.caption("95% CI not bounded (the risk-difference interval includes 0)")
+        # p as the page's other results write it: with ":.4g" a small one read "1.5e-43"
         st.caption(
-            f"Primary test: {epi['primary_test']}, p = {epi['primary_pvalue']:.4g} "
-            f"(Pearson chi-square p = {epi['chi2_pvalue']:.4g}; Fisher exact p = {epi['fisher_exact_pvalue']:.4g})."
+            f"Primary test: {epi['primary_test']}, p {p_text(epi['primary_pvalue'])} "
+            f"(Pearson chi-square p {p_text(epi['chi2_pvalue'])}; "
+            f"Fisher exact p {p_text(epi['fisher_exact_pvalue'])})."
         )
 
     if epi.get("guidance"):

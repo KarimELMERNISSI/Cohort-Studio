@@ -415,6 +415,26 @@ def test_two_measurements_give_the_limits_of_agreement_and_the_icc_in_one_run(ap
     assert "one is noisier than the other" in text
 
 
+def test_swap_turns_the_differences_round_and_keeps_the_icc(app: AppTest) -> None:
+    """The ICC does not read the order of its columns: after Swap its result went with the limits of agreement,
+    without a word. And the one reading of the two results stands before the last line "Computed on"."""
+    _measurements(app, ["sbp_baseline", "sbp_ambulatory"])
+    before = _stored(app, "icc").icc
+    app.button(key="agree_swap").click().run()
+    _ok(app)
+    assert app.session_state["agree_cols"] == ["sbp_ambulatory", "sbp_baseline"]
+    shown = _metrics(app)
+    assert shown["ICC(2,1)"] == f"{before:.3f}"  # still shown: its settings are unchanged
+    assert (
+        "Bland-Altman: mean difference" not in shown
+    )  # the differences are the other way round: to run
+    assert "Last result here" in _texts(app)
+    # with the ICC alone on the screen, its reading is still there, once
+    assert sum("**Intraclass correlation.**" in md.value for md in app.markdown) == 1
+    app.button(key="agree_swap").click().run()  # back, for the tests that follow
+    _ok(app)
+
+
 def test_the_icc_of_two_readers_in_both_forms(app: AppTest) -> None:
     _measurements(app, ["lvef_pct", "lvef_reader2_pct"], m.ABSOLUTE)
     absolute = _stored(app, "icc")
@@ -528,7 +548,8 @@ def test_a_change_in_a_yes_or_no_characteristic(app: AppTest) -> None:
         (-0.07820017696367572, -0.04679982303632428), **TIGHT
     )
     shown = _metrics(app)
-    assert shown["Change in the share with Yes"] == "-6.2 points" and shown["Pairs"] == "928"
+    # -6.25 points: a half is rounded away from zero, as every number of the page ("-6.2" by the even digit)
+    assert shown["Change in the share with Yes"] == "-6.3 points" and shown["Pairs"] == "928"
     assert "58 participants changed from `Yes` to `No`" in _texts(app)
 
 
@@ -573,7 +594,7 @@ def test_a_share_against_a_reference_from_numbers_typed(app: AppTest) -> None:
     assert not app.metric  # no example numbers: nothing is shown before something is typed
     _type(app, "prop_k", 30)
     _type(app, "prop_n", 100)
-    _type(app, "prop_ref", 0.2)
+    _type(app, "prop_ref_typed", 0.2)
     shown = _metrics(app)  # no button: the result follows the numbers
     assert shown["Share with the characteristic"] == "30.0%"
     text = _texts(app)
@@ -584,11 +605,30 @@ def test_a_share_against_a_reference_from_numbers_typed(app: AppTest) -> None:
     # 3 of 10 against 10%: the exact test does not reject, the Wilson interval leaves the reference out
     _type(app, "prop_k", 3)
     _type(app, "prop_n", 10)
-    _type(app, "prop_ref", 0.1)
-    assert any("part at the border" in w.value for w in app.warning), [w.value for w in app.warning]
+    _type(app, "prop_ref_typed", 0.1)
+    assert any("The test and the interval disagree" in w.value for w in app.warning), [
+        w.value for w in app.warning
+    ]
     _type(app, "prop_n", 100)
     _type(app, "prop_k", 130)  # more than the participants counted
     assert not app.metric
+
+
+def test_the_reference_of_typed_counts_is_not_that_of_a_variable(app: AppTest) -> None:
+    """One field for two sources: 0.30 typed for a variable of the dataset became the reference of the typed
+    counts, whose result turned from "against 10.0%" to "against 30.0%" without a word."""
+    _open(app, PAIRED, m.ONE_GROUP, one_compare=m.SHARE, prop_source=m.TYPED)
+    _type(app, "prop_k", 30)
+    _type(app, "prop_n", 100)
+    _type(app, "prop_ref_typed", 0.1)
+    assert _metrics(app)["Against a reference of"] == "10.0%"
+    app.segmented_control(key="prop_source").set_value(m.DATASET).run()
+    _pick(app, "prop_col", "hf_hospitalisation")
+    _type(app, "prop_ref", 0.3)
+    app.segmented_control(key="prop_source").set_value(m.TYPED).run()
+    _ok(app)
+    assert app.number_input(key="prop_ref_typed").value == pytest.approx(0.1)
+    assert _metrics(app)["Against a reference of"] == "10.0%"
 
 
 def _share(app: AppTest) -> Any:
@@ -702,7 +742,7 @@ def test_strata_that_differ_are_said_beside_the_combined_ratio(app: AppTest) -> 
     assert any("the strata differ: read each stratum" in badge for badge in badges), badges
     _strata(app, "nyha_class")
     badges = [md.value for md in app.markdown if "badge" in md.value]
-    assert not any("the strata differ" in badge or "not compared" in badge for badge in badges)
+    assert not any("the strata differ" in badge or "not tested" in badge for badge in badges)
 
 
 def test_the_reference_group_decides_which_way_the_ratios_read(app: AppTest) -> None:
@@ -740,8 +780,9 @@ def test_two_rates_and_their_ratio_follow_the_numbers_typed(app: AppTest) -> Non
     assert shown["Rate, group compared"] == "12.50"
     assert shown["Rate, reference group"] == "4.00"
     text = _texts(app)
-    # the sentence states the result (it named the methods, which are in Details)
-    assert "The group compared has 3.1 times the rate of the reference group." in text
+    # the sentence states the result (it named the methods, which are in Details), with the headline's figure
+    # ("3.1 times" stood under "3.125")
+    assert "The group compared has 3.125 times the rate of the reference group." in text
     assert (
         "15 events /" not in text
     )  # the numbers typed: in their fields and in the line under the result
@@ -895,6 +936,27 @@ def test_a_link_opens_the_page_on_the_summary_of_a_rank_test(app: AppTest) -> No
         app.run()
         _ok(app)
         assert app.radio(key=radio).value == mean
+        del app.query_params[nav.TAB_PARAM]
+        app.run()
+        _ok(app)
+
+
+def test_a_rank_link_opens_its_summary_at_every_arrival(app: AppTest) -> None:
+    """A link is followed more than once: after the mean was chosen on the page, the same link of "Which test?"
+    opens the page on the signed-rank summary again, and Run then gives the test it recommended."""
+    for _ in range(2):
+        app.switch_page(nav.page_path("which_test")).run()
+        app.switch_page(nav.page_path("analyze")).run()
+        app.query_params[nav.TAB_PARAM] = "paired_rank"
+        app.run()
+        _ok(app)
+        assert app.segmented_control(key="pair_measure").value == m.NUMBER
+        assert app.radio(key="pair_kind").value == m.SIGNED_RANK
+        app.radio(key="pair_kind").set_value(m.T_TEST).run()
+        app.run()
+        _ok(app)
+        # a choice made on the page stays while it is open: the link says where the page starts
+        assert app.radio(key="pair_kind").value == m.T_TEST
         del app.query_params[nav.TAB_PARAM]
         app.run()
         _ok(app)

@@ -75,7 +75,7 @@ says what Run will do, one click runs it, and the result reads the estimate firs
 function of its own here (``accuracy_of``, ``kappa_of``), so that the numbers are checked without the page._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
 
 ### def `_rgba` (analysis_diagnostic.py)
 
@@ -218,6 +218,16 @@ No description available.
 
 No description available.
 
+### def `_agreement_words` (analysis_diagnostic.py)
+
+- **Arguments**: `a: str, b: str, bias: str, reads: str, low: str, high: str`
+
+- **Returns**: `str`
+
+The sentence under the limits of agreement, from the figures of the headline. Without a difference on
+average, or with the same difference in every pair, it says so ("reads 0 higher than ... the two differ by
+between 0 and 0" stood for two columns that hold the same values).
+
 ### def `_show_bland_altman` (analysis_diagnostic.py)
 
 - **Arguments**: `ba: Any, first: str, second: str, delta: ComplexType`
@@ -284,7 +294,7 @@ what it was computed on. The calculators read the numbers typed: their fields st
 their result says where its numbers came from._
 
 **Imports**:
-`__future__.annotations`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.standardised_ratio`, `biostats.reliability.category`, `biostats.reliability.category_order`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `types.SimpleNamespace`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.standardised_ratio`, `biostats.reliability.category`, `biostats.reliability.category_order`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_not_pooled` (analysis_extras.py)
 
@@ -336,7 +346,8 @@ No description available.
 - **Returns**: `str`
 
 A test's name inside brackets: "Paired t-test (pooled over 3 imputations)" reads "paired t-test, pooled over 3
-imputations", without brackets within brackets.
+imputations", without brackets within brackets, and in lower case unless it starts with a person's name
+("Wilcoxon signed-rank").
 
 ### def `_show_change` (analysis_extras.py)
 
@@ -353,6 +364,14 @@ No description available.
 - **Returns**: `None`
 
 No description available.
+
+### def `_signed` (analysis_extras.py)
+
+- **Arguments**: `value: float, places: int`
+
+- **Returns**: `str`
+
+A change with its sign, by the one rule for a number: "+3.5", "-12.5", and "0.0" without a sign.
 
 ### def `_show_yes_no` (analysis_extras.py)
 
@@ -425,6 +444,15 @@ variable to adjust for kept from an earlier use, let go when it is now the outco
 
 No description available.
 
+### def `_as` (analysis_extras.py)
+
+- **Arguments**: `value: Any, like: str`
+
+- **Returns**: `str`
+
+``value`` with the decimals of ``like``, a number already written: an unadjusted ratio beside the adjusted
+one it is read against ("Unadjusted 0.7 and 0.804").
+
 ### def `_ratio` (analysis_extras.py)
 
 - **Arguments**: `value: Any`
@@ -432,14 +460,6 @@ No description available.
 - **Returns**: `str`
 
 A ratio to three significant figures: at two decimals, a lower bound of 0.996 read "1.00" beside p = 0.051.
-
-### def `_ratio_ci` (analysis_extras.py)
-
-- **Arguments**: `ci: Any`
-
-- **Returns**: `str`
-
-No description available.
 
 ### def `_show_strata` (analysis_extras.py)
 
@@ -476,11 +496,21 @@ A rate with its exact interval; the numbers typed stand in the fields and in the
 
 ### def `_more_or_fewer` (analysis_extras.py)
 
-- **Arguments**: `ratio: float`
+- **Arguments**: `ratio: float, times: ComplexType`
 
 - **Returns**: `str`
 
-No description available.
+A ratio of counts in words; ``times``: the ratio as its headline writes it, repeated from 2 upwards ("7.5
+times as many" stood under "7.50").
+
+### def `_against_expected` (analysis_extras.py)
+
+- **Arguments**: `ratio: float, times: ComplexType`
+
+- **Returns**: `str`
+
+"36% more events than expected", "7.50 times as many events as expected" (it read "as many events
+than").
 
 ### def `_rates` (analysis_extras.py)
 
@@ -501,7 +531,7 @@ bound, and its lower end is what the data say.
 
 ### def `_ratio_words` (analysis_extras.py)
 
-- **Arguments**: `ratio: Any`
+- **Arguments**: `ratio: Any, written: str`
 
 - **Returns**: `str`
 
@@ -626,73 +656,9 @@ another is open. A link can open an entry: the page declares its tabs and entrie
 selectors read the link's labels as their default._
 
 **Imports**:
-`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `streamlit`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats._types.TestResult`, `biostats.assumptions.read_assumptions`, `ui.nav`, `ui.components.glossary_popover`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.text.plain`, `ui.guidance.interpretation.how_to_read`, `ui.guidance.measures.HELP`, `ui.guidance.measures.Entry`, `ui.guidance.measures.number`, `ui.guidance.measures.decimals`, `ui.guidance.outcomes.ModelPlan`, `ui.results.MISSING`, `ui.results.STALE_CONFIG`, `ui.results.recall`, `ui.results.status`, `ui.results.stored_settings`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `streamlit`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats._types.TestResult`, `biostats.assumptions.read_assumptions`, `ui.nav`, `ui.components.glossary_popover`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.text.plain`, `ui.guidance.interpretation.how_to_read`, `ui.guidance.measures.HELP`, `ui.guidance.measures.Entry`, `ui.guidance.numbers.alike`, `ui.guidance.numbers.fixed`, `ui.guidance.numbers.interval`, `ui.guidance.numbers.known`, `ui.guidance.numbers.number`, `ui.guidance.numbers.p_text`, `ui.guidance.numbers.percent`, `ui.guidance.numbers.span`, `ui.guidance.numbers.with_interval`, `ui.guidance.outcomes.ModelPlan`, `ui.results.MISSING`, `ui.results.STALE_CONFIG`, `ui.results.recall`, `ui.results.status`, `ui.results.stored_settings`, `ui.state.get_state`
 
 ### class `Metric` (analysis_layout.py)
-
-No description available.
-
-### def `p_text` (analysis_layout.py)
-
-- **Arguments**: `p: Any`
-
-- **Returns**: `str`
-
-A p-value as a sentence writes it after "p": "< 0.001", "= 0.017"; "n/a" when it was not computed. Next to
-0.05 a fourth decimal tells 0.0499 from 0.0501, which both read "= 0.050".
-
-### def `num` (analysis_layout.py)
-
-- **Arguments**: `value: Any, digits: int`
-
-- **Returns**: `str`
-
-A number of a result, by the rule the plans write theirs with (ui.guidance.measures.number): ``digits``
-significant figures for its decimals, thousands grouped, the whole part kept, no exponent; "n/a" without a
-value.
-
-### def `span` (analysis_layout.py)
-
-- **Arguments**: `lower: Any, upper: Any, digits: int`
-
-- **Returns**: `str`
-
-"0.902 to 0.953": two bounds written with the same decimals, those the bound nearer 0 needs for ``digits``
-significant figures (each rounded on its own, an interval read "-9 to -7.38"); a percentage with one decimal.
-
-### def `interval` (analysis_layout.py)
-
-- **Arguments**: `ci: Any, digits: int`
-
-- **Returns**: `str`
-
-"95% CI 0.902 to 0.953" from an interval object; "" without one, or without bounds ("95% CI n/a% to n/a%"
-stood beside a predictive value that has no value).
-
-### def `with_interval` (analysis_layout.py)
-
-- **Arguments**: `estimate: Any, ci: Any, digits: int`
-
-- **Returns**: `tuple[ComplexType]`
-
-An estimate and its interval written with the same decimals ("3.125" and "95% CI 0.996 to 12.935"): rounded
-each on its own, a typical change read "-5.5, 95% CI -6.00 to -4.50" and a rate ratio "3.12, 0.996 to 12.935".
-
-### def `alike` (analysis_layout.py)
-
-- **Arguments**: ``
-
-- **Returns**: `list[str]`
-
-Numbers that are read together, written with the same decimals: those the one nearest 0 needs for ``digits``
-significant figures (two limits of agreement read "-8.19 to 20.17" over "95% CI 19.4 to 21.0", and "20.2" in the
-figure's legend). A number without a value reads "n/a".
-
-### def `percent` (analysis_layout.py)
-
-- **Arguments**: `value: Any, digits: int`
-
-- **Returns**: `str`
 
 No description available.
 
@@ -861,14 +827,23 @@ Under a calculator's result, in place of the line "computed on": where its numbe
 
 The checks of the numbers typed in a calculator.
 
+### def `_sentence` (analysis_layout.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `str`
+
+A warning as a sentence, with its capital and its full stop: some are written as clauses ("a likelihood ratio
+is undefined (...)").
+
 ### def `warn` (analysis_layout.py)
 
 - **Arguments**: `warnings: Sequence[str]`
 
 - **Returns**: `None`
 
-A result's own warnings, each once (the result card never showed them: 34 pairs left out by a rank test, fewer
-than 10 pairs that changed).
+A result's own warnings, each once, in one box (the result card never showed them: 34 pairs left out by a rank
+test, fewer than 10 pairs that changed). A box each, four stood under an accuracy at an extreme cut-off.
 
 ### def `details` (analysis_layout.py)
 
@@ -3509,7 +3484,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.QUESTION_KEY`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.QUESTION_KEY`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.strata_choices`, `app_pages.analysis_guidance_ui.MAP_KEY`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.QUESTION_KEY`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.QUESTION_KEY`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.strata_choices`, `app_pages.analysis_guidance_ui.MAP_KEY`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.analysis_layout.p_text`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 

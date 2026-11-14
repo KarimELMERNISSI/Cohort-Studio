@@ -12,6 +12,7 @@ their result says where its numbers came from.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -55,8 +56,8 @@ def _not_pooled(analysis: str, instead: str | None = None) -> None:
     entry = not_poolable(analysis)
     if entry is not None:
         st.info(
-            f"Not pooled with imputed data. {entry.reason} {instead or entry.alternative} Choose the mean to pool "
-            "it, or set Analysis data to Observed in the sidebar to run this test.",
+            f"Not pooled with imputed data. {entry.reason} {instead or entry.alternative} To run this test, set "
+            "Analysis data to Observed in the sidebar.",
             icon=":material/block:",
         )
 
@@ -190,8 +191,11 @@ def _paired_number(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
 
 def _named(name: str) -> str:
     """A test's name inside brackets: "Paired t-test (pooled over 3 imputations)" reads "paired t-test, pooled over 3
-    imputations", without brackets within brackets."""
-    return name.replace(" (", ", ").replace(")", "")
+    imputations", without brackets within brackets, and in lower case unless it starts with a person's name
+    ("Wilcoxon signed-rank")."""
+    said = name.replace(" (", ", ").replace(")", "")
+    common = said.replace("-", " ").split()[:1] in (["Paired"], ["One"], ["Exact"])
+    return said[0].lower() + said[1:] if common else said
 
 
 def _show_change(
@@ -212,7 +216,7 @@ def _show_change(
         metrics.append(
             Metric(
                 "Before and after",
-                f"{layout.num(float(pairs[before].mean()), 4)} to {layout.num(float(pairs[after].mean()), 4)}",
+                layout.span(float(pairs[before].mean()), float(pairs[after].mean()), 4),
                 f"means of {as_code(before)} and {as_code(after)}, on the pairs",
             )
         )
@@ -232,10 +236,14 @@ def _show_change(
     )
     words = ""
     if estimate is not None and np.isfinite(estimate):
+        # the sentence repeats the headline's own figure ("5.5 lower" stood under "-5.50")
+        how = "on average" if mean else "typically"
         words = (
-            f"{as_code(after)} is {layout.num(abs(estimate))} {'lower' if estimate < 0 else 'higher'} than "
-            f"{as_code(before)} {'on average' if mean else 'typically'} ({_named(result.name)})."
-        )
+            f"{as_code(after)} is the same as {as_code(before)} {how}"
+            if float(estimate) == 0
+            else f"{as_code(after)} is {value.lstrip('-')} {'lower' if estimate < 0 else 'higher'} than "
+            f"{as_code(before)} {how}"
+        ) + f" ({_named(result.name)})."
     layout.headline(metrics, words, len(result.warnings))
     layout.warn(result.warnings)
 
@@ -334,6 +342,12 @@ def _paired_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         provenance("mcnemar")
 
 
+def _signed(value: float, places: int = 1) -> str:
+    """A change with its sign, by the one rule for a number: "+3.5", "-12.5", and "0.0" without a sign."""
+    text = layout.fixed(value, places)
+    return f"+{text}" if layout.known(value) and float(value) > 0 and text.strip("0.,") else text
+
+
 def _show_yes_no(result: TestResult, table: pd.DataFrame, before: str, after: str) -> None:
     counts = table.to_numpy()
     other, counted = (str(name) for name in table.index)
@@ -345,8 +359,9 @@ def _show_yes_no(result: TestResult, table: pd.DataFrame, before: str, after: st
         [
             Metric(
                 f"Change in the share with {counted}",
-                f"{100 * result.estimate:+.1f} points",
-                f"95% CI {100 * ci.lower:+.1f} to {100 * ci.upper:+.1f} · p {layout.p_text(result.p_value)}",
+                f"{_signed(100 * result.estimate)} points",
+                f"95% CI {_signed(100 * ci.lower)} to {_signed(100 * ci.upper)} · p "
+                f"{layout.p_text(result.p_value)}",
             ),
             Metric(
                 "Before and after",
@@ -357,8 +372,7 @@ def _show_yes_no(result: TestResult, table: pd.DataFrame, before: str, after: st
         ],
         f"From {as_code(before)} to {as_code(after)}: {lost:,} participant{'s' if lost != 1 else ''} changed from "
         f"{as_code(counted)} to {as_code(other)}, "
-        f"{gained:,} from {as_code(other)} to {as_code(counted)} (McNemar's exact test on the {gained + lost:,} that "
-        "changed).",
+        f"{gained:,} from {as_code(other)} to {as_code(counted)} (McNemar's exact test).",
         len(result.warnings),
     )
     # the headers are the two values, the caption names the axes; with its totals, as the other tables
@@ -475,7 +489,7 @@ def _one_mean(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             if pooled
             else int(pd.to_numeric(df[column], errors="coerce").isna().sum())  # type: ignore[index]
         )
-        _show_mean(result, column, float(reference), kind, len(df), lacking)  # type: ignore[arg-type]
+        _show_mean(result, column, float(reference), kind, len(df), lacking, pooled=pooled)  # type: ignore[arg-type]
         if whole is not None:
             show_mi_notes(
                 whole,
@@ -493,17 +507,25 @@ def _one_mean(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
 
 
 def _show_mean(
-    result: TestResult, column: str, reference: float, kind: str, rows: int, lacking: int
+    result: TestResult,
+    column: str,
+    reference: float,
+    kind: str,
+    rows: int,
+    lacking: int,
+    *,
+    pooled: bool = False,
 ) -> None:
     mean = kind == m.ONE_T
     estimate, ci = result.estimate, result.estimate_ci
     metrics = []
     if estimate is not None and ci is not None:
+        # the value and its interval with the same decimals ("6.45, 95% CI 6.350 to 6.550")
+        around = SimpleNamespace(lower=ci.lower + reference, upper=ci.upper + reference)
         metrics.append(
             Metric(
                 "Mean" if mean else "Typical value (pseudo-median)",
-                layout.num(estimate + reference, 4),
-                f"95% CI {layout.span(ci.lower + reference, ci.upper + reference, 4)}",
+                *layout.with_interval(estimate + reference, around, 4),
             )
         )
     difference, bounds = layout.with_interval(estimate, ci)
@@ -516,16 +538,24 @@ def _show_mean(
         Metric(
             "Participants" if mean else "Participants who differ",
             f"{result.n_total:,}",
-            f"of {rows:,} rows" + (f"; {lacking:,} lack a value" if lacking > 0 else ""),
+            f"of {rows:,} rows"
+            + (
+                f"; {lacking:,} lack a value" + (" that was not imputed" if pooled else "")
+                if lacking > 0
+                else ""
+            ),
         ),
     ]
     words = ""
     if estimate is not None and np.isfinite(estimate):
+        # the sentence repeats the headline's own figure
+        what = f"The {'mean' if mean else 'typical value'} of {as_code(column)}"
+        against = f"the reference of {layout.num(reference, 6)}"
         words = (
-            f"The {'mean' if mean else 'typical value'} of {as_code(column)} is {layout.num(abs(estimate))} "
-            f"{'below' if estimate < 0 else 'above'} the reference of {layout.num(reference, 6)} "
-            f"({_named(result.name)})."
-        )
+            f"{what} equals {against}"
+            if float(estimate) == 0
+            else f"{what} is {difference.lstrip('-')} {'below' if estimate < 0 else 'above'} {against}"
+        ) + f" ({_named(result.name)})."
     layout.headline(metrics, words, len(result.warnings))
     layout.warn(result.warnings)
 
@@ -554,7 +584,8 @@ def _share_metrics(
         metrics,
         "The share equals the reference."
         if abs(gap) < 0.05
-        else f"The share is {abs(gap):.1f} points {'below' if gap < 0 else 'above'} the reference.",
+        else f"The share is {layout.fixed(abs(gap), 1)} points {'below' if gap < 0 else 'above'} the "
+        "reference.",
         len(result.warnings),
     )
     layout.warn(result.warnings)
@@ -596,7 +627,8 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             value=None,
             step=0.01,
             placeholder="0.20 for 20%",
-            key="prop_ref",
+            # its own key: the reference typed for a variable of the dataset became the calculator's
+            key="prop_ref_typed",
             persist_state="page",
             help=HELP["reference_share"],
         )
@@ -689,7 +721,9 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             counted,
             float(reference),
             f"{column} = {category(level)}",
-            f"with a value of {as_code(column)}",
+            # as the mean and the pairs say it: of how many rows, and how many lack a value
+            f"of {len(df):,} rows"
+            + (f"; {len(df) - counted:,} lack a value" if len(df) > counted else ""),
         )
         provenance("proportion")
 
@@ -853,13 +887,15 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         provenance("mantel_haenszel")
 
 
+def _as(value: Any, like: str) -> str:
+    """``value`` with the decimals of ``like``, a number already written: an unadjusted ratio beside the adjusted
+    one it is read against ("Unadjusted 0.7 and 0.804")."""
+    return layout.num(value) if "n/a" in like else layout.fixed(value, len(like.partition(".")[2]))
+
+
 def _ratio(value: Any) -> str:
     """A ratio to three significant figures: at two decimals, a lower bound of 0.996 read "1.00" beside p = 0.051."""
     return layout.num(value)
-
-
-def _ratio_ci(ci: Any) -> str:
-    return layout.interval(ci)
 
 
 def _show_strata(
@@ -882,7 +918,7 @@ def _show_strata(
         if tested and p < 0.05
         else None
         if tested
-        else ("strata not compared", "neutral")
+        else ("strata not tested", "neutral")
     )
     read = getattr(res, "n", None)
     rows = ""
@@ -890,17 +926,23 @@ def _show_strata(
         rows = f"; {read:,} of {total:,} rows" + (
             f", {total - read:,} lack a value" if total > read else ""
         )
+    # each ratio with the decimals of its interval ("1.12, 95% CI 0.845 to 1.489"), and the unadjusted ones with
+    # those of the adjusted ratios they are read against
+    odds, odds_bounds = layout.with_interval(res.or_mh, res.or_mh_ci)
+    risk, risk_bounds = layout.with_interval(res.rr_mh, res.rr_mh_ci)
     layout.headline(
         [
             Metric(
                 f"Odds ratio, adjusted for {stratum}",
-                _ratio(res.or_mh),
-                f"{_ratio_ci(res.or_mh_ci)} · p {layout.p_text(res.mh_test_p)}",
+                odds,
+                " · ".join(
+                    part for part in (odds_bounds, f"p {layout.p_text(res.mh_test_p)}") if part
+                ),
             ),
-            Metric("Risk ratio, adjusted", _ratio(res.rr_mh), _ratio_ci(res.rr_mh_ci)),
+            Metric("Risk ratio, adjusted", risk, risk_bounds),
             Metric(
                 "Unadjusted",
-                f"{_ratio(res.crude_or)} and {_ratio(res.crude_rr)}",
+                f"{_as(res.crude_or, odds)} and {_as(res.crude_rr, risk)}",
                 "odds ratio and risk ratio",
             ),
         ],
@@ -909,13 +951,22 @@ def _show_strata(
         len(res.warnings),
         chip=chip,
     )
-    ratios = pd.to_numeric(res.per_stratum["odds_ratio"], errors="coerce").dropna()
-    ratios = ratios[np.isfinite(ratios)]
-    span = (
-        f"The odds ratios of the strata run from {layout.span(ratios.min(), ratios.max())}: "
-        if len(ratios)
-        else ""
-    )
+    # as the table writes them; a stratum whose ratio has no upper bound is one the test read: named, not left
+    # out ("run from 0.458 to 0.861: they differ" stood over a fifth stratum, the one that differed)
+    every = pd.to_numeric(res.per_stratum["odds_ratio"], errors="coerce").dropna()
+    ratios, unbounded = every[np.isfinite(every)], int(np.isinf(every).sum())
+    span = ""
+    if len(ratios):
+        span = (
+            f"The odds ratios of the strata run from {layout.fixed(ratios.min(), 3)} to "
+            f"{layout.fixed(ratios.max(), 3)}"
+        )
+        if unbounded:
+            span += (
+                f" in {len(ratios)} of the {len(ratios) + unbounded} strata tested; in the other"
+                f"{'s' if unbounded > 1 else ''} the ratio has no upper bound (a cell of the table is empty)"
+            )
+        span += ": "
     if not tested:
         st.markdown(
             ":material/help: Whether the strata differ was not tested: "
@@ -952,18 +1003,29 @@ def _show_strata(
     shown["Stratum"] = [show_level(name) for name in shown["Stratum"]]
     for ratio in ("Odds ratio", "Risk ratio"):  # in words: a missing ratio was drawn "None"
         shown[ratio] = [
-            f"{value:.3f}" if pd.notna(value) and np.isfinite(value) else "not estimable"
+            layout.fixed(value, 3)
+            if pd.notna(value) and np.isfinite(value)
+            else ("no upper bound" if pd.notna(value) and value > 0 else "not estimable")
             for value in shown[ratio]
         ]
-    st.dataframe(shown, hide_index=True, width="stretch")
+    # written as text for "not estimable", the ratios stood flush left beside counts aligned right
+    right = {
+        name: st.column_config.TextColumn(alignment="right")
+        for name in ("Odds ratio", "Risk ratio")
+    }
+    st.dataframe(shown, hide_index=True, width="stretch", column_config=right)
     layout.warn(res.warnings)
     with st.expander("Details: the tests and the method"):
         st.caption(
             f"Test of the association over the strata (Cochran-Mantel-Haenszel, continuity-corrected): chi2 = "
-            f"{layout.num(res.mh_test_statistic)}, p {layout.p_text(res.mh_test_p)}. Test that the odds ratios "
-            f"of the strata are alike (Breslow-Day): chi2 = {layout.num(res.breslow_day_statistic)}, p "
-            f"{layout.p_text(res.breslow_day_p)}. Intervals: Robins-Breslow-Greenland for the odds ratio, "
-            "Greenland-Robins for the risk ratio."
+            f"{layout.num(res.mh_test_statistic)}, p {layout.p_text(res.mh_test_p)}. "
+            + (
+                "Test that the odds ratios of the strata are alike (Breslow-Day): chi2 = "
+                f"{layout.num(res.breslow_day_statistic)}, p {layout.p_text(res.breslow_day_p)}. "
+                if tested
+                else "The test that the odds ratios of the strata are alike (Breslow-Day) was not run. "
+            )
+            + "Intervals: Robins-Breslow-Greenland for the odds ratio, Greenland-Robins for the risk ratio."
         )
         st.caption("Method: " + " | ".join(res.references))
     help_popover(
@@ -1009,19 +1071,28 @@ def _time(label: str, key: str, column: Any, example: str, *, shown: bool = True
 
 def _rate_metric(label: str, rate: Any, per: int, unit: str) -> Metric:
     """A rate with its exact interval; the numbers typed stand in the fields and in the line under the result."""
-    return Metric(
-        label,
-        f"{rate.rate * per:.2f}",
-        f"per {per:,} {unit} · 95% CI {rate.ci.lower * per:.2f} to {rate.ci.upper * per:.2f}",
-    )
+    # by the rule of every estimate with its interval: at two decimals, 3 events over 2,500,000 read "0.00, 95%
+    # CI 0.00 to 0.00" per 1,000, and a rate of 12,500 "12500.00"
+    scaled = SimpleNamespace(lower=rate.ci.lower * per, upper=rate.ci.upper * per)
+    value, bounds = layout.with_interval(rate.rate * per, scaled)
+    return Metric(label, value, f"per {per:,} {unit} · {bounds}")
 
 
-def _more_or_fewer(ratio: float) -> str:
+def _more_or_fewer(ratio: float, times: str | None = None) -> str:
+    """A ratio of counts in words; ``times``: the ratio as its headline writes it, repeated from 2 upwards ("7.5
+    times as many" stood under "7.50")."""
     if ratio < 1:
         return f"{1 - ratio:.0%} fewer"
     if ratio >= 2:
-        return f"{ratio:.1f} times as many"
+        return f"{times or layout.num(ratio)} times as many"
     return f"{ratio - 1:.0%} more"
+
+
+def _against_expected(ratio: float, times: str | None = None) -> str:
+    """ "36% more events than expected", "7.50 times as many events as expected" (it read "as many events
+    than")."""
+    said = _more_or_fewer(ratio, times)
+    return f"{said[:1].upper()}{said[1:]} events {'as' if ratio >= 2 else 'than'} expected"
 
 
 def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
@@ -1037,8 +1108,11 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         _expected()
         return
     two = calculation == m.TWO_RATES
-    label, e_col, t_col = st.columns([1.2, 2, 2], vertical_alignment="bottom")
-    label.markdown("**Group compared**" if two else "**The group**")
+    if two:
+        label, e_col, t_col = st.columns([1.2, 2, 2], vertical_alignment="bottom")
+        label.markdown("**Group compared**")
+    else:  # one group: no row to name, its two fields in the two halves
+        e_col, t_col = st.columns(2)
     events = _count("Events", "rate_e1", e_col, "for example 15")
     person_time = _time("Person-time at risk", "rate_t1", t_col, "for example 1200")
     reference_events = reference_time = None
@@ -1100,7 +1174,10 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     except Exception as exc:
         error_card("The rates could not be computed.", exc)
         return
-    typed = f"From the numbers typed: {first.events:,} events over {layout.num(first.person_time, 6)} {unit}"
+    typed = (
+        f"From the numbers typed: {first.events:,} event{'s' if first.events != 1 else ''} over "
+        f"{layout.num(first.person_time, 6)} {unit}"
+    )
     if second is None:
         layout.headline([_rate_metric("Rate", first, per, unit)])
     else:
@@ -1112,14 +1189,15 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         if ratio is None:
             layout.headline(rates)  # the line above the result has said why there is no ratio
         else:
-            layout.headline([_ratio_metric(ratio), *rates], _ratio_words(ratio))
+            head = _ratio_metric(ratio)
+            layout.headline([head, *rates], _ratio_words(ratio, head.value))
     # the methods are folded, as a test's; the reading and where the numbers came from close the result
     with st.expander(
         "Details: the method" if ratio is None else "Details: the rate difference and the method"
     ):
         if ratio is not None:
             st.caption(
-                f"Rate difference: {ratio.rate_difference * per:.2f} per {per:,} {unit} (no interval is given for "
+                f"Rate difference: {layout.num(ratio.rate_difference * per)} per {per:,} {unit} (no interval is given for "
                 f"it). The ratio's test and interval: {ratio.test}; the rates' intervals: exact Poisson."
             )
         st.caption("Method: " + " | ".join((ratio or first).references))
@@ -1144,14 +1222,15 @@ def _ratio_metric(ratio: Any) -> Metric:
     )
 
 
-def _ratio_words(ratio: Any) -> str:
+def _ratio_words(ratio: Any, written: str) -> str:
     """The rate ratio in a sentence, as the standardised ratio's: which group has the higher rate, and by how
     much."""
     if not np.isfinite(ratio.ratio):
         return ""  # no event in the reference group: the line above the result has said it
     if ratio.ratio == 0:
         return "No event in the group compared: the ratio is 0, and its interval says how large it may be."
-    return f"The group compared has {layout.num(ratio.ratio, 2)} times the rate of the reference group."
+    # the headline's own figure: "3.1 times the rate" stood under "3.125"
+    return f"The group compared has {written} times the rate of the reference group."
 
 
 def _expected() -> None:
@@ -1207,8 +1286,8 @@ def _expected() -> None:
                 f"{bounds} · p {layout.p_text(found.p_value)} (exact Poisson)",
             )
         ],
-        f"{_more_or_fewer(found.ratio).capitalize()} events than expected; the interval runs from "
-        f"{_more_or_fewer(found.ci.lower)} to {_more_or_fewer(found.ci.upper)}.",
+        f"{_against_expected(found.ratio, value)}; the interval runs from {_more_or_fewer(found.ci.lower)} to "
+        f"{_more_or_fewer(found.ci.upper)}.",
     )
     with st.expander("Details: the method"):
         st.caption("Method: " + " | ".join(found.references))

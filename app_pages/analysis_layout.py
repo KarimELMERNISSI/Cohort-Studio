@@ -12,7 +12,6 @@ selectors read the link's labels as their default.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -27,8 +26,18 @@ from ui import nav
 from ui.components import glossary_popover, help_popover, status_chip
 from ui.components.text import plain
 from ui.guidance.interpretation import how_to_read
-from ui.guidance.measures import HELP, Entry, number
-from ui.guidance.measures import decimals as _decimals
+from ui.guidance.measures import HELP, Entry
+from ui.guidance.numbers import (
+    alike,
+    fixed,
+    interval,
+    known,
+    number,
+    p_text,
+    percent,
+    span,
+    with_interval,
+)
 from ui.guidance.outcomes import ModelPlan
 from ui.results import MISSING, STALE_CONFIG, recall, status, stored_settings
 from ui.state import get_state
@@ -57,72 +66,9 @@ class Metric:
     help: str | None = None
 
 
-def p_text(p: Any) -> str:
-    """A p-value as a sentence writes it after "p": "< 0.001", "= 0.017"; "n/a" when it was not computed. Next to
-    0.05 a fourth decimal tells 0.0499 from 0.0501, which both read "= 0.050"."""
-    if p is None or not math.isfinite(float(p)):
-        return "n/a"
-    if p < 0.001:
-        return "< 0.001"
-    return f"= {p:.4f}" if 0.0495 <= p < 0.0505 else f"= {p:.3f}"
-
-
-def num(value: Any, digits: int = 3) -> str:
-    """A number of a result, by the rule the plans write theirs with (ui.guidance.measures.number): ``digits``
-    significant figures for its decimals, thousands grouped, the whole part kept, no exponent; "n/a" without a
-    value."""
-    return number(value, digits)
-
-
-def span(lower: Any, upper: Any, digits: int = 3, *, unit: str = "") -> str:
-    """ "0.902 to 0.953": two bounds written with the same decimals, those the bound nearer 0 needs for ``digits``
-    significant figures (each rounded on its own, an interval read "-9 to -7.38"); a percentage with one decimal."""
-    if any(v is None or not math.isfinite(float(v)) for v in (lower, upper)):
-        return f"{num(lower, digits)}{unit} to {num(upper, digits)}{unit}"
-    low, high = float(lower), float(upper)
-    decimals = 1 if unit == "%" else min(6, max(_decimals(low, digits), _decimals(high, digits)))
-    return f"{low:,.{decimals}f}{unit} to {high:,.{decimals}f}{unit}"
-
-
-def interval(ci: Any, digits: int = 3, *, scale: float = 1.0, unit: str = "") -> str:
-    """ "95% CI 0.902 to 0.953" from an interval object; "" without one, or without bounds ("95% CI n/a% to n/a%"
-    stood beside a predictive value that has no value)."""
-    if ci is None or not all(
-        bound is not None and math.isfinite(float(bound)) for bound in (ci.lower, ci.upper)
-    ):
-        return ""
-    return f"95% CI {span(ci.lower * scale, ci.upper * scale, digits, unit=unit)}"
-
-
-def with_interval(estimate: Any, ci: Any, digits: int = 3) -> tuple[str, str]:
-    """An estimate and its interval written with the same decimals ("3.125" and "95% CI 0.996 to 12.935"): rounded
-    each on its own, a typical change read "-5.5, 95% CI -6.00 to -4.50" and a rate ratio "3.12, 0.996 to 12.935"."""
-    values = [estimate, getattr(ci, "lower", None), getattr(ci, "upper", None)]
-    if any(v is None or not math.isfinite(float(v)) for v in values):
-        return num(estimate, digits), interval(ci, digits)
-    decimals = min(6, max(_decimals(float(v), digits) for v in values))
-    return (
-        f"{float(estimate):,.{decimals}f}",
-        f"95% CI {float(ci.lower):,.{decimals}f} to {float(ci.upper):,.{decimals}f}",
-    )
-
-
-def alike(*values: Any, digits: int = 3) -> list[str]:
-    """Numbers that are read together, written with the same decimals: those the one nearest 0 needs for ``digits``
-    significant figures (two limits of agreement read "-8.19 to 20.17" over "95% CI 19.4 to 21.0", and "20.2" in the
-    figure's legend). A number without a value reads "n/a"."""
-    known = [float(v) for v in values if v is not None and math.isfinite(float(v))]
-    decimals = min(6, max((_decimals(v, digits) for v in known), default=0))
-    return [
-        f"{float(v):,.{decimals}f}" if v is not None and math.isfinite(float(v)) else num(v, digits)
-        for v in values
-    ]
-
-
-def percent(value: Any, digits: int = 1) -> str:
-    return (
-        "n/a" if value is None or not math.isfinite(float(value)) else f"{100 * value:.{digits}f}%"
-    )
+# How a number is written is one rule for the plans, the readings and the screens (ui.guidance.numbers): the pages
+# call it by these names.
+num = number
 
 
 def headline(
@@ -382,11 +328,22 @@ def advice_lines(advice: Sequence[Any]) -> None:
 # ----------------------------------------------------------------------------- a test's result
 
 
+def _sentence(text: str) -> str:
+    """A warning as a sentence, with its capital and its full stop: some are written as clauses ("a likelihood ratio
+    is undefined (...)")."""
+    said = plain(text).strip()
+    if not said:
+        return said
+    said = said[0].upper() + said[1:]
+    return said if said[-1] in ".!?:" else said + "."
+
+
 def warn(warnings: Sequence[str]) -> None:
-    """A result's own warnings, each once (the result card never showed them: 34 pairs left out by a rank test, fewer
-    than 10 pairs that changed)."""
-    for text in dict.fromkeys(warnings):
-        st.warning(plain(text))
+    """A result's own warnings, each once, in one box (the result card never showed them: 34 pairs left out by a rank
+    test, fewer than 10 pairs that changed). A box each, four stood under an accuracy at an extreme cut-off."""
+    items = [said for said in dict.fromkeys(_sentence(text) for text in warnings) if said]
+    if items:
+        st.warning(items[0] if len(items) == 1 else "\n".join(f"- {item}" for item in items))
 
 
 def details(
@@ -408,10 +365,9 @@ def details(
         if result.effect_sizes:
             parts = []
             for effect in result.effect_sizes:
-                text = f"{effect.name} = {num(effect.estimate)}"
-                if effect.ci is not None:
-                    text += f" (95% CI {effect.ci.as_text(2)})"
-                parts.append(text)
+                # by the rule of every estimate with its interval ("-0.529 (95% CI -0.60 to -0.45)")
+                size, limits = with_interval(effect.estimate, effect.ci)
+                parts.append(f"{effect.name} = {size}" + (f" ({limits})" if limits else ""))
             st.caption("Effect sizes: " + "; ".join(parts) + ".")
         if result.mi is not None:
             info = result.mi
@@ -444,6 +400,8 @@ __all__ = [
     "choose_entry",
     "depends",
     "details",
+    "fixed",
+    "known",
     "given",
     "headline",
     "imputed_line",

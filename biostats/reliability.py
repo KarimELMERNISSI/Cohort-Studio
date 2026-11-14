@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -78,24 +79,29 @@ def category(value: object) -> str:
         return str(bool(value))
     if isinstance(value, int | float | np.integer | np.floating):
         number = float(value)
+        if not np.isfinite(number):
+            return str(value)
     else:
         text = str(value)
-        try:
-            number = float(text)
-        except ValueError:
+        # "nan", "inf", "1e3" and "1_000" are names; spaces around a number are not part of it
+        if not _NUMBER.fullmatch(text.strip()):
             return text
-        if not np.isfinite(number):
-            return text
-    return str(int(number)) if number.is_integer() else repr(number)
+        number = float(text)
+    # written without an exponent, so that it reads back as the number it is
+    return str(int(number)) if number.is_integer() else np.format_float_positional(number, trim="-")
+
+
+# a number, as a rating is written: digits with one optional sign and one optional point
+_NUMBER = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)")
 
 
 def number_of(text: str) -> float:
-    """The number a category's text reads as; ValueError for a text that is no finite number. "nan" and "inf" parse
-    as floats: sorted by them, a category "nan" stood between 2 and 1."""
-    number = float(text)
-    if not np.isfinite(number):
+    """The number a category's text reads as; ValueError for a text that is no number as a rating is written.
+    "nan", "inf", "1e3" and "1_000" all parse as floats: they are names (sorted as a number, a category "nan"
+    stood between 2 and 1)."""
+    if not _NUMBER.fullmatch(text.strip()):
         raise ValueError(text)
-    return number
+    return float(text)
 
 
 def category_order(categories: Sequence[str]) -> list[str]:
@@ -177,7 +183,17 @@ def cohens_kappa(
     wt = {None: None, "linear": "linear", "quadratic": "quadratic"}[weights]
     res = _cohens_kappa(arr, weights=None, wt=wt, return_results=True)
     z = stats.norm.ppf(1 - alpha / 2)
-    kappa, se = float(res.kappa), float(res.var_kappa**0.5)
+    kappa, variance = float(res.kappa), float(res.var_kappa)
+    se = float(np.sqrt(variance)) if variance >= 0 else float("nan")
+    # one rater uses one category only: the agreement seen is the agreement expected whatever the other rater
+    # does, kappa is 0 by construction and its standard error has no value. The formula's own came out as 0 for
+    # one table and as no number for another (a rounding), and "95% CI 0 to 0" was written for the first
+    if int((arr.sum(axis=1) > 0).sum()) == 1 or int((arr.sum(axis=0) > 0).sum()) == 1:
+        se = float("nan")
+        if np.isfinite(
+            kappa
+        ):  # without a value when both raters use one category: nothing to compare
+            kappa = 0.0
     n = int(arr.sum())
     po = float(np.trace(arr) / n) if n else float("nan")
     marg_r, marg_c = arr.sum(axis=1) / n, arr.sum(axis=0) / n
@@ -186,8 +202,9 @@ def cohens_kappa(
         kappa=kappa,
         ci=CI(
             # kappa lies between -1 and 1: 19 of 20 in the same category gave an interval up to 1.09
-            lower=max(-1.0, kappa - z * se),
-            upper=min(1.0, kappa + z * se),
+            # a standard error without a value gives no interval: max(-1.0, nan) is -1.0, and "-1 to 1" was written
+            lower=float(np.clip(kappa - z * se, -1.0, 1.0)),
+            upper=float(np.clip(kappa + z * se, -1.0, 1.0)),
             level=1 - alpha,
             method="normal approximation",
         ),

@@ -530,8 +530,15 @@ def result_blocks(value: Any) -> ResultBlocks:
             )
         strata = f"{value.n_strata} strata"
         tested = getattr(value, "n_tested", None)
-        if tested is not None and tested < value.n_strata:
-            strata += f", of which the two tests read the {tested} that hold both groups and both outcomes"
+        if tested is not None and tested < value.n_strata:  # by their number: one is no two to compare
+            strata += (
+                f", of which the two tests read the {tested} that hold both groups and both outcomes"
+                if tested >= 2
+                else ", of which one holds both groups and both outcomes: the test of the association reads "
+                "it, and whether the strata differ needs two"
+                if tested == 1
+                else ", none of which holds both groups and both outcomes"
+            )
         blocks.lines.extend(
             [
                 f"Mantel-Haenszel odds ratio = {_num(value.or_mh)} (95% CI {_ci(value.or_mh_ci)}); crude OR = {_num(value.crude_or)}",
@@ -584,8 +591,20 @@ def result_blocks(value: Any) -> ResultBlocks:
             kappa, order = value["kappa"], [str(name) for name in value.get("order") or ()]
             weights = value.get("weights")
             name = f"Weighted kappa ({weights} weights)" if weights else "Cohen's kappa"
+            counts = value["table"].to_numpy()
+            one_category = 1 in (int((counts.sum(axis=1) > 0).sum()), int((counts.sum(axis=0) > 0).sum()))
             lines = [
-                f"{name} = {_num(kappa.kappa)} (95% CI {_ci(kappa.ci)}); {kappa.n:,} participants rated by both",
+                # without a standard error there is no interval ("95% CI -1 to 1" was written for a kappa of 0);
+                # read on the table, so that a result kept before says it too
+                f"{name} = {_num(kappa.kappa)} "
+                + (
+                    "(no interval: one rater uses one category only)"
+                    if one_category
+                    else f"(95% CI {_ci(kappa.ci)})"
+                    if math.isfinite(kappa.ci.lower) and math.isfinite(kappa.ci.upper)
+                    else "(no interval on this table)"
+                )
+                + f"; {kappa.n:,} participants rated by both",
                 f"Same category for {_num(100 * kappa.observed_agreement)}% of them "
                 f"({_num(100 * kappa.expected_agreement)}% expected by chance)",
             ]
@@ -594,6 +613,8 @@ def result_blocks(value: Any) -> ResultBlocks:
                 lines.append(NEAR_MISSES)
             if weights and order:
                 lines.append("Order of the grades, lowest first: " + ", ".join(order))
+            # how the ratings were read as categories (texts as numbers, or codes kept apart), as the page says
+            lines.extend(str(note).replace("`", "") for note in value.get("notes") or ())
             return ResultBlocks(
                 lines=lines,
                 tables=[("Ratings (rows: first rater; columns: second rater)", value["table"].reset_index())],

@@ -269,7 +269,9 @@ time; each keeps its choices and its result while another is open.
   and its help then says what is missing (with Guidance off as well).
 - **The result** reads the estimate with its 95% interval first, then the test (p written `< 0.001`, never
   `1.5e-43`), then the counts, and one sentence saying what was compared and in which direction. The statistic, the
-  effect sizes, the assumption checks and the method are folded under **Details**. **How to read this** closes
+  effect sizes, the assumption checks and the method are folded under **Details**. An estimate and its interval
+  are written with the same decimals, those the interval needs; a half is rounded away from zero, in a
+  p-value too. **How to read this** closes
   each result with what is to know of the analysis whatever the data; one Run that gives two results (*Agreement
   of two measurements*) names each in its first figure and has one reading, after the last.
 - **A result stays** while its choices are unchanged, with the line saying what it was computed on, and can be added
@@ -324,7 +326,10 @@ time; each keeps its choices and its result while another is open.
 - **The strata.** One combined ratio sums the strata up only when their ratios are alike. The result says so in three
   ways: no evidence that they differ (which is no proof that they are alike: the test has little power in small
   strata), they differ (said beside the combined ratio: report the ratio of each stratum), or not tested (fewer
-  than two strata hold both groups and both outcomes). A stratum that holds one group only, or one outcome only,
+  than two strata hold both groups and both outcomes, or the combined odds ratio is 0 or has no value). When no
+  stratum holds both groups and both outcomes, the plan refuses the analysis: nothing can be compared. A stratum
+  with an empty cell can have an odds ratio without an upper bound: the table says so, and the sentence on the
+  strata names it. A stratum that holds one group only, or one outcome only,
   has no odds ratio of its own: it adds nothing to the combined odds ratio, and the two tests (the
   Cochran-Mantel-Haenszel test of the association, the Breslow-Day test that the strata are alike) read the
   others; the result says how many. The risk ratio reads every stratum. How much the variable adjusted for
@@ -337,8 +342,9 @@ time; each keeps its choices and its result while another is open.
 
 - **A share against a reference:** the exact binomial test and the Wilson interval are two methods. Next to the
   reference they can part (3 of 10 against 10%: p = 0.070 beside an interval from 10.8% to 60.3%); the result then
-  says so. McNemar's exact test and the interval of the change (Wald, with 0.5 added to each of the two cells of
-  the pairs that changed) can part the same way.
+  says so, with the end of the interval that stands next to the reference. McNemar's exact test and the interval
+  of the change (Wald, with 0.5 added to each of the two cells of the pairs that changed) can disagree the same
+  way, more often, and the result says so too.
 - **The matched-pairs rank-biserial r** of a signed-rank test is given as a size, without a sign: read the
   direction on the typical change.
 - **The AUC's interval** (DeLong) is cut at 0 and at 1: next to 1 its upper end reads 1.000.

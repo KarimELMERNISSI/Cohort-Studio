@@ -268,10 +268,9 @@ def test_paired_and_one_sample_t_tests_are_pooled(app: AppTest) -> None:
     app.selectbox(key="pair_after").select("sbp_6m").run()  # 183 imputed values
     # the plan is that of what runs: it counted the complete pairs and said the others were left out
     plan = " ".join(md.value for md in app.markdown)
-    assert (
-        "pooled over the 3 imputed datasets" in plan
-        and "183 values of `sbp_6m` are imputed" in plan
-    )
+    # the line under the plan says "Pooled over the 3 imputed datasets": the step does not say it again
+    assert "183 values of `sbp_6m` are imputed" in plan and "all 1,206 rows" in plan
+    assert "pooled over the 3 imputed datasets" not in plan
     assert "left out" not in plan
     app.button(key="pair_run").click().run()
     _ok(app)

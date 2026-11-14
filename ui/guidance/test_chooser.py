@@ -50,6 +50,15 @@ OTHER_QUESTIONS: tuple[tuple[str, str], ...] = (
 )
 
 
+# what a signed-rank test supposes, and where it stops (the sign test, which supposes nothing of the kind, is not
+# offered)
+_RANK_CAVEATS = (
+    "The signed-rank test supposes differences that are roughly symmetric: with strongly skewed differences, read "
+    "its result as one on the pseudo-median, which is then neither the median nor the mean.",
+    "With imputed data selected this test is not pooled: the page says what to run instead.",
+)
+
+
 def _on(tab: str) -> dict[str, str]:
     """A route to an analysis of Hypothesis tests & epidemiology: its page, the tab its link opens, and that place in
     the words of the navigation (renamed with it, never left behind). A rank test has a link of its own, which
@@ -94,6 +103,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 alternatives=()
                 if ranks
                 else ("Wilcoxon signed-rank test when the values are skewed or few",),
+                caveats=_RANK_CAVEATS if ranks else (),
                 **_on("one_rank" if ranks else "one_mean"),
             )
         if paired:
@@ -103,6 +113,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
                 else "Paired t-test",
                 why="Each participant contributes two measurements; the pairing must be respected.",
                 effect_size="mean (or pseudo-median) within-pair difference with 95% CI; Cohen's d_z",
+                caveats=_RANK_CAVEATS if (rank_only or not symmetric) else (),
                 **_on("paired_rank" if (rank_only or not symmetric) else "paired_number"),
             )
         if two:
@@ -174,7 +185,7 @@ def recommend(outcome: str, groups: str, design: str, distribution: str) -> Reco
         if two:
             return Recommendation(
                 test="Pearson chi-square test (Fisher's exact test when an expected count is below 5) with the 2x2 measures",
-                why="Two groups and a binary outcome form a 2x2 table; the measures of association answer the clinical question.",
+                why="Two groups and a binary outcome form a 2x2 table; the measures of association answer the question of the study.",
                 effect_size="relative risk or odds ratio, risk difference and NNT, all with 95% CI (choose by study design)",
                 page="analyze",
                 where="Analysis tab > Univariate > detail view > 2x2 panel",

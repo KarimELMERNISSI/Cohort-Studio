@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from biostats.diagnostic import diagnostic_accuracy
-from biostats.paired import mcnemar_test, paired_table
+from biostats.paired import mcnemar_test, one_sample_proportion, paired_table
 from biostats.reliability import (
     by_value,
     category,
@@ -19,6 +19,7 @@ from biostats.reliability import (
     cohens_kappa,
     koo_li,
     landis_koch,
+    number_of,
     rater_table,
 )
 
@@ -33,6 +34,44 @@ def test_a_rating_is_the_category_of_its_value() -> None:
     # numbers by value, anything else by name
     assert category_order(["10", "2", "1"]) == ["1", "2", "10"]
     assert category_order(["low", "High", "medium"]) == ["High", "low", "medium"]
+
+
+def test_a_text_is_a_number_only_when_written_as_one() -> None:
+    """ "1e3", "1_000", "nan" and "inf" all parse as numbers: as ratings they are names, as codes are. Spaces around
+    a number are not part of it."""
+    names = ["1e3", "1_000", "nan", "inf", "Infinity", "0x10", "1,5"]
+    assert [category(name) for name in names] == names
+    assert [category(v) for v in ("2.0", "02", " 2 ", "+2", "2.", ".5", "-1.50")] == [
+        "2",
+        "2",
+        "2",
+        "2",
+        "2",
+        "0.5",
+        "-1.5",
+    ]
+    # a number itself, whatever its size: written without an exponent, so that it reads back as the number it is
+    assert category(2.5e-7) == "0.00000025" and category(1e16) == "10000000000000000"
+    assert number_of(category(2.5e-7)) == 2.5e-7
+    # one name among the categories: all by name
+    assert category_order(["10", "9", "1e3", "2"]) == ["10", "1e3", "2", "9"]
+    assert number_of(" 12 ") == 12.0 and number_of(".5") == 0.5 and number_of("-1.5") == -1.5
+    for name in ("1e3", "nan", "inf", "1_000", ""):
+        with pytest.raises(ValueError):
+            number_of(name)
+
+
+def test_a_kappa_without_a_standard_error_has_no_interval() -> None:
+    """One rater uses one category only: kappa is 0 by construction and its standard error has no value. The
+    interval was cut to "-1 to 1", which reads as an interval that says nothing, where there is none."""
+    one_category = cohens_kappa(np.array([[19, 1], [0, 0]]))
+    assert one_category.kappa == 0.0
+    for value in (one_category.se, one_category.ci.lower, one_category.ci.upper):
+        assert np.isnan(value)
+    # an interval that passes an end of the scale is still cut there
+    near_one = cohens_kappa(np.array([[10, 0], [1, 9]]))
+    assert near_one.kappa == pytest.approx(0.9) and near_one.ci.upper == 1.0
+    assert -1 <= near_one.ci.lower < near_one.kappa
 
 
 def test_two_raters_codes_are_compared_as_values() -> None:
@@ -147,6 +186,50 @@ def test_a_paired_yes_no_table_holds_the_same_two_values() -> None:
     assert int(paired_table(first, second).to_numpy().sum()) == 5
     with pytest.raises(ValueError, match="the same two values"):
         paired_table(pd.Series(["Yes"] * 5), pd.Series(["Yes"] * 5))  # one value only
+
+
+def test_mcnemar_s_test_and_its_interval_say_when_they_disagree() -> None:
+    """Five participants changed one way and none the other among 40: the exact test gives p = 0.0625 beside an
+    interval of the change from -23.6 to -1.4 points, which leaves 0 out. The two are two methods, and they part
+    more often than those of a share."""
+    result = mcnemar_test(np.array([[35, 0], [5, 0]]))
+    assert result.p_value == pytest.approx(0.0625)
+    assert result.estimate_ci is not None
+    assert (result.estimate_ci.lower, result.estimate_ci.upper) == pytest.approx(
+        (-0.236, -0.014), abs=1e-3
+    )
+    assert any(
+        "The test and the interval disagree: the test does not reject no change, the interval leaves 0 out"
+        in said
+        and "McNemar's exact test, a Wald interval" in said
+        for said in result.warnings
+    )
+    # with pairs enough for no other warning: 6 against 16 changed, p = 0.0525 beside -11.9 to -0.5 points
+    textbook = mcnemar_test([[59, 6], [16, 80]])
+    assert [said[:35] for said in textbook.warnings] == ["The test and the interval disagree:"]
+    # they agree: nothing is added
+    assert not mcnemar_test(np.array([[744, 0], [58, 126]])).warnings
+    assert not mcnemar_test(
+        np.array([[40, 12], [12, 40]])
+    ).warnings  # no change, and an interval about 0
+
+
+def test_a_share_s_test_and_interval_that_disagree_give_the_end_of_the_interval() -> None:
+    """2 of 4 against 15%: the Wilson interval starts at 15.004%. At one decimal the screen read "15.0% to 85.0%"
+    beside "the interval leaves 15% out"; the note gives the end with the decimals that tell it from the
+    reference."""
+    close = one_sample_proportion(2, 4, 0.15)
+    assert close.p_value > 0.05
+    assert any(
+        "the test does not reject the reference, the interval leaves it out (its lower end is 15.004%)"
+        in said
+        for said in close.warnings
+    )
+    wide = one_sample_proportion(3, 10, 0.10)
+    assert any("(its lower end is 10.8%)" in said for said in wide.warnings)
+    # the two agree: no note
+    assert not one_sample_proportion(30, 100, 0.2).warnings
+    assert not one_sample_proportion(0, 39, 0.09).warnings
 
 
 def test_a_cut_off_that_calls_no_one_or_everyone_positive_is_no_division_by_zero() -> None:

@@ -351,7 +351,7 @@ def test_a_test_that_rejects_beside_an_interval_that_reaches_zero_says_so() -> N
     high = [-0.63, -0.36, 0.08, 0.16, 0.24, 0.25, 0.28, 0.72, 1.2, 1.79, 2.3, 2.44]
     border = compare_groups({"low": low, "high": high}, kind="mannwhitney", reference="low")
     assert border.p_value == pytest.approx(0.0507, abs=5e-5) and border.estimate_ci.lower > 0
-    assert any("part at the border" in w and "leaves 0 out" in w for w in border.warnings)
+    assert any("disagree at the border" in w and "leaves 0 out" in w for w in border.warnings)
 
 
 def test_an_infinite_value_is_ranked_by_the_test_and_left_out_of_the_shift() -> None:

@@ -373,11 +373,86 @@ def test_codes_that_read_as_one_number_are_kept_apart_and_said() -> None:
     assert plan.steps and "3 categories" in text
     assert "`b` holds texts beside a column of numbers: its values are read as numbers" in text
     assert "`2.0` as `2`" in text and "`04` as `4`" in text
+    assert (
+        "(`2.0` as `2`, `04` as `4`; 12 participants)." in text
+    )  # how many ratings were read that way
     # two columns of numbers, whole against decimal: one grade, and nothing to say
     whole = pd.DataFrame({"a": [2, 3, 2, 4] * 6, "b": [2.0, 3.0, 2.0, 4.0] * 6})
     assert "read as" not in _text(m.plan_raters(whole, "a", "b", m.NAMES, None, m.LINEAR))
+    # the result keeps the same word (with Guidance off the plan is not drawn), and the dossier writes it
+    from app_pages.analysis_diagnostic import kappa_of
+    from manage.report_tables import result_blocks
+
+    kept = kappa_of(codes, "a", "b", order=None, weights=None)
+    assert len(kept["notes"]) == 1 and "read as the same number" in kept["notes"][0]
+    assert "250.0 and 250.00 read as the same number" in " ".join(result_blocks(kept).lines)
+    read = kappa_of(grades, "a", "b", order=None, weights=None)
+    assert len(read["notes"]) == 1 and "its values are read as numbers" in read["notes"][0]
+    assert kappa_of(whole, "a", "b", order=None, weights=None)["notes"] == []
     # a grade written "nan" gives no order to offer
     assert m.grade_order(["2", "nan", "1"]) == []
+
+
+def test_three_columns_with_the_limits_alone_say_what_to_do(df: pd.DataFrame) -> None:
+    """Three columns, Bland-Altman ticked and the ICC not: nothing is computed, and the one line (Run's help with
+    Guidance off) said "the ICC alone is computed"."""
+    three = ["sbp_first", "sbp_second", "height"]
+    plan = m.plan_measurements(df, three, [m.BLAND_ALTMAN], m.ABSOLUTE)
+    assert not plan.steps and [item.text for item in plan.advice] == [
+        "Bland-Altman limits compare two columns (3 are chosen): keep two, or tick the ICC."
+    ]
+    both = m.plan_measurements(df, three, [m.BLAND_ALTMAN, m.ICC], m.ABSOLUTE)
+    assert both.steps and "with 3, the ICC alone is computed" in _text(both)
+    nothing = m.plan_measurements(df, three, [], m.ABSOLUTE)
+    assert [item.text for item in nothing.advice] == [
+        "Choose an analysis: Bland-Altman limits, the ICC, or both."
+    ]
+    # what the ICC is in every data is in its reading, not in every plan
+    assert "depends on how much the participants differ" not in _text(both)
+
+
+def _warnings() -> None:
+    from app_pages import analysis_layout as layout
+
+    layout.warn(
+        [
+            "a likelihood ratio is undefined (no false positive)",
+            "34 pairs were left out.",
+            "a likelihood ratio is undefined (no false positive)",
+        ]
+    )
+    layout.warn(["fewer than 10 pairs changed"])
+    layout.warn([])
+
+
+def test_the_warnings_of_a_result_stand_in_one_box_as_sentences() -> None:
+    """A box each, four stood under an accuracy at an extreme cut-off, some starting in lower case and without a
+    full stop."""
+    at = AppTest.from_function(_warnings)
+    at.run()
+    assert not at.exception
+    first, second = (w.value for w in at.warning)  # one box for a result's warnings, none for none
+    assert first.count("- ") == 2 and "A likelihood ratio is undefined" in first
+    assert first.count("likelihood") == 1 and "34 pairs were left out" in first
+    assert second == "Fewer than 10 pairs changed."
+
+
+def test_a_tests_name_inside_a_sentence_and_a_ratio_against_expected_events() -> None:
+    from app_pages import analysis_extras as extras
+
+    assert extras._named("Paired t-test") == "paired t-test"
+    assert extras._named("Paired t-test (pooled over 3 imputations)") == (
+        "paired t-test, pooled over 3 imputations"
+    )
+    assert extras._named("One-sample t-test") == "one-sample t-test"
+    assert extras._named("Wilcoxon signed-rank") == "Wilcoxon signed-rank"  # a person's name
+    # "7.5 times as many events than expected"
+    assert extras._against_expected(7.5) == "7.5 times as many events as expected"
+    assert extras._against_expected(1.36) == "36% more events than expected"
+    assert extras._against_expected(0.64) == "36% fewer events than expected"
+    # one event is one event
+    said = m.check_rates(m.ONE_RATE, 1, 1000.0, None, None)[1]
+    assert [item.text for item in said] == ["1 event in all: the intervals are wide."]
 
 
 def test_kappa_at_its_edges_is_said_before_the_run() -> None:
@@ -442,7 +517,8 @@ def test_the_plan_of_a_pooled_test_counts_what_the_imputed_datasets_give(df: pd.
     )
     plan = m.plan_paired(df, "sbp_first", "sbp_second", m.T_TEST, filled)
     assert plan.rows == N and plan.steps[0].used == N and plan.status == "ok"
-    assert "pooled over the 3 imputed datasets" in plan.steps[0].text
+    # that it is pooled is said by the line under the plan, once: not by the step as well
+    assert "pooled over" not in plan.steps[0].text and "gives the test all 240 rows" in _text(plan)
     assert "30 values of `sbp_second` are imputed" in _text(plan) and "left out" not in _text(plan)
     # a column left out of the imputation: each dataset reads the pairs that have it, and the plan says why
     left = m.pooled_rows(_imputed(numbers, ["hba1c"]), ["sbp_first", "sbp_second"])
@@ -494,6 +570,135 @@ def test_the_strata_plan_counts_the_strata_the_tests_read(df: pd.DataFrame) -> N
     assert "cannot be computed" not in _text(plan)
 
 
+def _strata_rows(cells: dict[str, tuple[int, int, int, int]]) -> pd.DataFrame:
+    """Rows from the events and the others of those treated, then of the controls, per stratum."""
+    rows: list[tuple[str, str, str]] = []
+    for name, (a, b, c, d) in cells.items():
+        rows += [(name, "Treated", "Yes")] * a + [(name, "Treated", "No")] * b
+        rows += [(name, "Control", "Yes")] * c + [(name, "Control", "No")] * d
+    return pd.DataFrame(rows, columns=["stratum", "group", "event"])
+
+
+def test_the_strata_the_tests_read_are_said_by_their_number() -> None:
+    """ "The two tests read the other 1" stood where one of the two read none. With no stratum that holds both
+    groups and both outcomes nothing can be compared: the plan refuses, where Run gave a result without a value."""
+    from biostats.rates import mantel_haenszel
+    from manage.report_tables import result_blocks
+
+    one_event_only = {"A": (10, 0, 12, 0), "B": (0, 9, 0, 11)}
+    one_left = {"A": (10, 10, 12, 8), "B": (5, 0, 7, 0)}
+    two_left = {**one_left, "C": (6, 14, 9, 11)}
+
+    def plan(cells: dict) -> m.ModelPlan:
+        return m.plan_strata(_strata_rows(cells), "event", "Yes", "group", "Control", "stratum")
+
+    none = plan(one_event_only)
+    assert none.status == "violated" and not none.steps
+    assert (
+        "No stratum of `stratum` holds both groups and both outcomes: nothing can be compared within the strata."
+        in _text(none)
+    )
+    one = plan(one_left)
+    assert one.steps and one.status == "caution"
+    assert (
+        "1 of 2 strata holds one group only or one outcome only: it adds nothing to the odds ratio, and the test "
+        "of the association reads the other one; whether the strata differ needs two." in _text(one)
+    )
+    assert "and the two tests read the other 2." in _text(plan(two_left))
+
+    # the dossier says the same of the result
+    def written(cells: dict) -> str:
+        result = mantel_haenszel(
+            _strata_rows(cells),
+            "group",
+            "event",
+            "stratum",
+            exposure_level="Treated",
+            event_level="Yes",
+        )
+        return " ".join(result_blocks(result).lines)
+
+    assert (
+        "2 strata, of which one holds both groups and both outcomes: the test of the association reads it, and "
+        "whether the strata differ needs two" in written(one_left)
+    )
+    assert (
+        "3 strata, of which the two tests read the 2 that hold both groups and both outcomes"
+        in written(two_left)
+    )
+
+
+def test_a_contradicted_direction_gives_the_medians_only_when_they_show_it() -> None:
+    """A score of few values: "here they are lower in participants with it (median 2 against 2, AUC 0.16)"."""
+    equal = pd.DataFrame(
+        {
+            "ill": ["Yes"] * 100 + ["No"] * 100,
+            "grade": [1.0] * 40 + [2.0] * 60 + [2.0] * 55 + [3.0] * 45,
+        }
+    )
+    said = _text(m.plan_accuracy(equal, "ill", "Yes", "grade", m.HIGHER, m.NO_CUTOFF, None, None))
+    assert "here they are lower in participants with it (AUC 0.16). Check the direction" in said
+    assert "median" not in said
+    apart = equal.assign(grade=[1.0] * 60 + [2.0] * 40 + [2.0] * 55 + [3.0] * 45)
+    said = _text(m.plan_accuracy(apart, "ill", "Yes", "grade", m.HIGHER, m.NO_CUTOFF, None, None))
+    assert "in participants with it (median 1 against 2, AUC 0.11)." in said
+
+
+def test_an_area_about_a_half_is_said_of_the_test_only_when_its_interval_is_narrow() -> None:
+    """With 8 participants a side, "it hardly separates the two groups" stood over half the samples of a test that
+    does separate them: an interval from 0.26 to 0.86 says little of the test, and much of how few they are."""
+    rng = np.random.default_rng(3)
+    many = pd.DataFrame(
+        {
+            "ill": np.where(rng.random(2000) < 0.5, "Yes", "No"),
+            "noise": rng.normal(50, 10, 2000).round(1),
+        }
+    )
+    said = _text(m.plan_accuracy(many, "ill", "Yes", "noise", m.HIGHER, m.NO_CUTOFF, None, None))
+    assert "95% CI 0.46 to 0.51" in said
+    assert said.endswith("without): it hardly separates the two groups.")
+    few = pd.DataFrame(
+        {
+            "ill": ["Yes"] * 8 + ["No"] * 8,
+            "noise": [52.0, 61, 47, 58, 66, 49, 55, 43, 50, 44, 57, 39, 48, 53, 60, 62],
+        }
+    )
+    said = _text(m.plan_accuracy(few, "ill", "Yes", "noise", m.HIGHER, m.NO_CUTOFF, None, None))
+    assert "95% CI 0.26 to 0.86" in said
+    assert said.endswith(
+        "without): too few participants, or a test that hardly separates the two groups."
+    )
+
+
+def test_a_kappa_that_is_0_by_construction_is_written_without_an_interval() -> None:
+    """One rater uses one category only. The dossier wrote "95% CI -1 to 1", and "0 to 0" for a table whose
+    standard error rounds to 0: there is no interval, on the page as in the dossier."""
+    from app_pages.analysis_diagnostic import kappa_of
+    from manage.report_tables import result_blocks
+
+    for second in (["X"] * 30 + ["Y"] * 10, ["X"] * 38 + ["Y"] * 2, ["X"] * 19 + ["Y"] * 21):
+        frame = pd.DataFrame({"a": ["X"] * 40, "b": second})
+        kept = kappa_of(frame, "a", "b", order=None, weights=None)
+        kappa = kept["kappa"]
+        assert kappa.kappa == 0 and np.isnan(kappa.se) and np.isnan(kappa.ci.lower)
+        assert result_blocks(kept).lines[0] == (
+            "Cohen's kappa = 0 (no interval: one rater uses one category only); 40 participants rated by both"
+        )
+    # two raters who use two categories each: an interval, as before
+    usual = pd.DataFrame({"a": ["X"] * 25 + ["Y"] * 15, "b": ["X"] * 20 + ["Y"] * 20})
+    line = result_blocks(kappa_of(usual, "a", "b", order=None, weights=None)).lines[0]
+    assert "(95% CI " in line and "no interval" not in line
+
+
+def test_every_term_of_an_analysis_has_its_definition() -> None:
+    from ui.guidance import define
+
+    for entry in m.ENTRY.values():
+        assert entry.terms and all(define(term) for term in entry.terms), entry.id
+    # the stratified analysis runs two tests: both are among its terms
+    assert {"Cochran-Mantel-Haenszel test", "Breslow-Day test"} <= set(m.ENTRY[m.STRATA].terms)
+
+
 # ----------------------------------------------------------------------------- how a result is written
 
 
@@ -509,7 +714,8 @@ def test_numbers_intervals_and_p_values_are_written_for_reading() -> None:
     assert layout.num(5.98707) == "5.99" and layout.num(None) == "n/a"
     # the whole part is kept and grouped at any size (60,962.5 read "61,000", and two means 1,200 apart read
     # "243,700 to 244,900" beside a change of "1,230"); no exponent ("+9.37e+04", "3.65e+06", "0" for 0.00001)
-    assert layout.num(1234.5) == "1,234" and layout.num(60962.5) == "60,962"
+    # a half is rounded away from zero: to the even digit, 60,962.5 read "60,962" and 1,235.5 "1,236"
+    assert layout.num(1234.5) == "1,235" and layout.num(60962.5) == "60,963"
     assert layout.num(93656) == "93,656" and layout.num(3650000) == "3,650,000"
     assert layout.num(1234.5, 6) == "1,234.5"
     assert layout.num(0.00001) == "0.00001" and layout.num(0.0004) == "0.0004"

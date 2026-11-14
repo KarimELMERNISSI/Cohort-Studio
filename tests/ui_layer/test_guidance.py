@@ -93,6 +93,30 @@ def test_specific_routes() -> None:
         )
 
 
+def test_a_signed_rank_recommendation_says_what_the_test_supposes() -> None:
+    """The route to a signed-rank test said nothing of what it supposes (differences that are roughly symmetric),
+    nor that it is not pooled once imputed data are selected."""
+    from ui.guidance.test_chooser import DESIGNS, DISTRIBUTIONS, GROUPS
+
+    symmetric, skewed = DISTRIBUTIONS
+    paired, one_group = (GROUPS[0], DESIGNS[1]), (GROUPS[2], DESIGNS[0])
+    for groups, design in (paired, one_group):
+        rank = recommend("Continuous (measurement)", groups, design, skewed)
+        assert rank.test == "Wilcoxon signed-rank test" and rank.available
+        assert any("roughly symmetric" in said and "pseudo-median" in said for said in rank.caveats)
+        assert any("not pooled" in said for said in rank.caveats)
+        mean = recommend("Continuous (measurement)", groups, design, symmetric)
+        assert mean.test.endswith("t-test") and not mean.caveats
+    # two independent groups: another rank test, which supposes no such thing
+    assert not recommend("Continuous (measurement)", GROUPS[0], DESIGNS[0], skewed).caveats
+    assert "needs the differences roughly normal, or many pairs" in GLOSSARY["Paired t-test"]
+    assert (
+        "supposes differences that are roughly symmetric" in GLOSSARY["Wilcoxon signed-rank test"]
+    )
+    assert "robust to skew" not in GLOSSARY["Wilcoxon signed-rank test"]
+    assert "expected without an association" in GLOSSARY["Cochran-Mantel-Haenszel test"]
+
+
 def test_glossary_is_substantial() -> None:
     assert len(GLOSSARY) >= 35
     assert define("p-value") and define("HEDGES' G")

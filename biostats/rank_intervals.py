@@ -337,7 +337,8 @@ def disagreement(p_value: float | None, interval: CI | None, alpha: float = 0.05
         else "the test does not reject a shift of 0 and the interval leaves 0 out"
     )
     return (
-        f"The p-value and the interval part at the border: {said}. One of the two is exact and the other a normal "
+        f"The test and the interval disagree at the border: {said}. One of the two is exact and the other a "
+        "normal "
         f"approximation, or values are tied. {read}"
     )
 

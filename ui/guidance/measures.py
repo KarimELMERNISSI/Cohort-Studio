@@ -11,7 +11,6 @@ what the user chose. A plan without a step means that nothing can be computed ye
 
 from __future__ import annotations
 
-import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -22,10 +21,12 @@ import pandas as pd
 from scipy import stats
 
 from biostats.diagnostic import YOUDEN_MIN_CLASS, delong_auc
+from biostats.rates import read_by_the_tests
 from biostats.reliability import by_value, category, category_order, number_of, rating
 from biostats.survival import EVENT_WORDS
 from core.registry import as_code
 from ui.guidance.analysis import Advice
+from ui.guidance.numbers import number
 from ui.guidance.outcomes import ModelPlan, PlanStep, _spellings
 
 # ----------------------------------------------------------------------------- the entries of the two tabs
@@ -99,9 +100,10 @@ PAIRED_ENTRIES: tuple[Entry, ...] = (
         "variable: odds and risk ratios adjusted for it (Mantel-Haenszel).",
         (
             "Mantel-Haenszel",
+            "Cochran-Mantel-Haenszel test",
             "Breslow-Day test",
             "Odds ratio (OR)",
-            "Relative risk (RR)",
+            "Risk ratio (RR)",
             "Confounder",
         ),
     ),
@@ -418,7 +420,11 @@ def _imputed(df: pd.DataFrame, columns: Sequence[str], pooled: Pooled) -> list[A
             Advice(
                 "info",
                 f"{' and '.join(filled)} {'is' if one else 'are'} imputed: each imputed dataset gives the test "
-                f"{pooled.used:,} of the {pooled.rows:,} rows.",
+                + (
+                    f"all {pooled.rows:,} rows."
+                    if pooled.used == pooled.rows
+                    else f"{pooled.used:,} of the {pooled.rows:,} rows."
+                ),
             )
         )
     lacking = [
@@ -438,30 +444,6 @@ def _imputed(df: pd.DataFrame, columns: Sequence[str], pooled: Pooled) -> list[A
             )
         )
     return said
-
-
-def decimals(value: float, digits: int) -> int:
-    """The decimals that give ``value`` ``digits`` significant figures."""
-    if value == 0 or not math.isfinite(value):
-        return 0
-    return max(0, digits - 1 - math.floor(math.log10(abs(value))))
-
-
-def number(value: Any, digits: int = 3) -> str:
-    """
-    A number as a plan, a sentence or a result writes it: ``digits`` significant figures for its decimals, "n/a"
-    when it has no value. Thousands are grouped at any size, the whole part is never rounded (60,962.5 read
-    "61,000", and two means 1,200 apart read "243,700 to 244,900" beside "a change of 1,230"), and no exponent is
-    written (0.00001 read "0", 93,656 "+9.37e+04", and a plan said that a score "runs from 174 to 2.802e+04").
-    One rule for the plans and for the results: a number is not written two ways on one screen.
-    """
-    if value is None or not math.isfinite(float(value)):
-        return "n/a"
-    amount = float(value)
-    text = f"{amount:,.{min(12, decimals(amount, digits))}f}"
-    if "." in text:
-        text = text.rstrip("0").rstrip(".")
-    return "0" if text in ("-0", "") else text
 
 
 def _num(value: float) -> str:
@@ -586,8 +568,7 @@ def plan_accuracy(
     if mode == NO_CUTOFF:
         steps.append(
             PlanStep(
-                "The area under the ROC curve with its 95% interval, and the curve. No cut-off: choose one to read "
-                "sensitivity and specificity",
+                "The area under the ROC curve with its 95% interval, and the curve",
                 len(frame),
             )
         )
@@ -614,12 +595,18 @@ def plan_accuracy(
     auc = delong_auc(labels, oriented.tolist(), pos_label=True)
     if auc["ci"].upper < 0.5:
         other = "lower" if not lower else "higher"
+        # the medians are said when they show it: "higher (median 2 against 2)" stood for a score of few values
+        medians = (
+            ""
+            if _num(with_it) == _num(without)
+            else f"median {_num(with_it)} against {_num(without)}, "
+        )
         advice.append(
             Advice(
                 "caution",
                 f"You said {direction} values point to the condition; here they are {other} in participants with it "
-                f"(median {_num(with_it)} against {_num(without)}, AUC {auc['auc']:.2f}). Check the direction, or "
-                "the value that means the condition is present.",
+                f"({medians}AUC {auc['auc']:.2f}). Check the direction, or the value that means the condition is "
+                "present.",
             )
         )
     elif auc["ci"].lower <= 0.5:
@@ -629,7 +616,14 @@ def plan_accuracy(
                 "info",
                 f"These data do not show which way the test points (AUC {auc['auc']:.2f}, 95% CI "
                 f"{auc['ci'].lower:.2f} to {auc['ci'].upper:.2f}; median {_num(with_it)} with the condition, "
-                f"{_num(without)} without): it hardly separates the two groups.",
+                f"{_num(without)} without): "
+                # said of the test only when its interval is narrow about 0.5: with 8 participants a side, it
+                # stood over half the samples of a test that separates them (true AUC 0.76)
+                + (
+                    "it hardly separates the two groups."
+                    if auc["ci"].lower >= 0.4 and auc["ci"].upper <= 0.6
+                    else "too few participants, or a test that hardly separates the two groups."
+                ),
             )
         )
     if mode != NO_CUTOFF:
@@ -736,10 +730,14 @@ def plan_measurements(
             )
         )
     elif BLAND_ALTMAN in analyses:
+        # with the ICC unticked nothing is computed: the line then says what to do (it is Run's help too)
         advice.append(
             Advice(
                 "info",
-                f"Bland-Altman limits compare two columns: with {len(columns)}, the ICC alone is computed.",
+                f"Bland-Altman limits compare two columns: with {len(columns)}, the ICC alone is computed."
+                if ICC in analyses
+                else f"Bland-Altman limits compare two columns ({len(columns)} are chosen): keep two, or tick "
+                "the ICC.",
             )
         )
     if ICC in analyses:
@@ -751,14 +749,29 @@ def plan_measurements(
             )
         )
     if not steps:
-        return ModelPlan(
-            rows,
-            (),
-            (*advice, Advice("info", "Choose an analysis: Bland-Altman limits, the ICC, or both.")),
-        )
+        # nothing ticked: say so; Bland-Altman ticked for three columns has said what to do
+        nothing = Advice("info", "Choose an analysis: Bland-Altman limits, the ICC, or both.")
+        return ModelPlan(rows, (), tuple(advice) or (nothing,))
     first = frame[columns[0]]
     for other in columns[1:]:
         advice += _same_quantity(first, frame[other])
+    if pair:
+        # a copy of a column, or one computed from the other: the result read "reads 0 higher than ... the two
+        # differ by between 0 and 0" under a plan that said nothing
+        gap = (first - frame[columns[1]]).to_numpy(dtype=float)
+        size = max(1.0, float(np.abs(frame.to_numpy(dtype=float)).max()))
+        if float(np.ptp(gap)) <= 1e-9 * size:
+            a, b = as_code(columns[0]), as_code(columns[1])
+            advice.append(
+                Advice(
+                    "caution",
+                    f"{a} and {b} hold the same value in every row used: check that they are two "
+                    "measurements, not one column twice."
+                    if abs(float(gap[0])) <= 1e-9 * size
+                    else f"{a} and {b} differ by the same amount ({_num(abs(float(gap[0])))}) in every row "
+                    "used: one looks computed from the other, and the limits of agreement have no width.",
+                )
+            )
     if pair and BLAND_ALTMAN in analyses:
         if used < 50:
             # the half-width of a limit's 95% interval (Bland & Altman 1986): t x sqrt(3 / n) SD. "About 0.65 SD"
@@ -781,14 +794,6 @@ def plan_measurements(
                     "Read the plot.",
                 )
             )
-    if ICC in analyses:
-        advice.append(
-            Advice(
-                "info",
-                "The ICC depends on how much the participants differ: the same raters score lower in a group that "
-                "is alike.",
-            )
-        )
     advice += _left_out(df, columns, used)
     return ModelPlan(rows, tuple(steps), tuple(advice))
 
@@ -839,7 +844,7 @@ def grade_order(categories: Sequence[str]) -> list[str]:
         return [name for _, name in sorted(zip(values, categories, strict=True))]  # type: ignore[type-var]
 
 
-def _writings(
+def writings(
     df: pd.DataFrame, first: str, second: str, a: Mapping[str, int], b: Mapping[str, int]
 ) -> list[Advice]:
     """
@@ -863,11 +868,15 @@ def _writings(
         shown = ", ".join(
             f"{_value(text)} as {_value(number)}" for text, number in list(read.items())[:3]
         )
+        concerned = int(
+            (df.loc[both, first].isin(list(read)) | df.loc[both, second].isin(list(read))).sum()
+        )
         return [
             Advice(
                 "info",
                 f"{as_code(where)} holds texts beside a column of numbers: its values are read as numbers "
-                f"({shown}{', ...' if len(read) > 3 else ''}).",
+                f"({shown}{', ...' if len(read) > 3 else ''}; {concerned:,} participant"
+                f"{'s' if concerned != 1 else ''}).",
             )
         ]
     numbers: dict[float, list[str]] = {}
@@ -935,7 +944,7 @@ def plan_raters(
                 column=where,
             )
         )
-    spelt += _writings(df, first, second, a, b)
+    spelt += writings(df, first, second, a, b)
     if not shared:
         return _refused(
             rows,
@@ -1002,8 +1011,13 @@ def plan_raters(
                 Advice(
                     "violated",
                     "Put every grade in the order of the scale, lowest first: the order lacks "
-                    f"{', '.join(_value(n) for n in missing[:6]) or 'none, but repeats one'}. Grades written in "
-                    "words carry no order of their own.",
+                    f"{', '.join(_value(n) for n in missing[:6]) or 'none, but repeats one'}."
+                    # said of grades in words only: numbers and Roman numerals say their order
+                    + (
+                        ""
+                        if grade_order(categories)
+                        else " Grades written in words carry no order of their own."
+                    ),
                 ),
                 *advice,
             )
@@ -1093,9 +1107,8 @@ def plan_paired(
                 Advice("caution", "Fewer than 6 pairs differ: no 95% interval can be given.")
             )
     else:
+        # pooled: the line under the plan says so ("Pooled over the 3 imputed datasets"), not the step as well
         text = f"The mean change {as_code(after)} - {as_code(before)} with its 95% interval, paired t-test"
-        if pooled is not None:
-            text += f", pooled over the {pooled.datasets} imputed datasets"
         if used < FEW_VALUES and abs(_skew(differences)) > SKEWED:
             advice.append(
                 Advice(
@@ -1279,7 +1292,6 @@ def plan_one_mean(
         )
         if pooled is not None:
             used = pooled.used
-            text += f", pooled over the {pooled.datasets} imputed datasets"
         if used < FEW_VALUES and abs(_skew(array)) > SKEWED:
             advice.append(
                 Advice(
@@ -1449,18 +1461,23 @@ def plan_strata(
         lowest += max(0, m1 - n0)
         highest += min(n1, m1)
     total = len(sizes)
+    if empty == total:
+        return _refused(
+            rows,
+            Advice(
+                "violated",
+                f"No stratum of {as_code(stratum)} holds both groups and both outcomes: nothing can be compared "
+                "within the strata.",
+            ),
+            *advice,
+        )
     if empty:
         advice.append(
             Advice(
                 "caution",
                 f"{empty} of {total} strata hold{'s' if empty == 1 else ''} one group only or one outcome only: "
-                f"{'it adds' if empty == 1 else 'they add'} nothing to the odds ratio, and the two tests read the "
-                f"other {total - empty}."
-                + (
-                    " With fewer than two such strata, whether the strata differ cannot be tested."
-                    if total - empty < 2
-                    else ""
-                ),
+                f"{'it adds' if empty == 1 else 'they add'} nothing to the odds ratio, and "
+                f"{read_by_the_tests(total - empty)}.",
             )
         )
     if small:
@@ -1486,8 +1503,8 @@ def plan_strata(
     advice += _left_out(df, [compare, outcome, stratum], used)
     step = PlanStep(
         f"Odds and risk ratios of {as_code(outcome)} = {as_code(event)}, {as_code(exposed_level)} against "
-        f"{as_code(reference)}, within the {total} groups of {as_code(stratum)}, then combined (strata of "
-        f"{min(sizes):,} to {max(sizes):,} rows)",
+        f"{as_code(reference)} ({as_code(compare)}), within the {total} groups of {as_code(stratum)}, then "
+        f"combined (strata of {min(sizes):,} to {max(sizes):,} rows)",
         used,
     )
     return ModelPlan(rows, (step,), tuple(advice))
@@ -1519,7 +1536,7 @@ EXPECTED_READING = (
 )
 SHARE_READING = (
     "The interval says how large the share may be; the test asks whether the reference is compatible with it. "
-    "They are two methods (a Wilson interval, an exact binomial test): next to the reference they can part, "
+    "They are two methods (a Wilson interval, an exact binomial test): near the reference they can disagree, "
     "and the result then says so. The reference is a value fixed beforehand, from outside these data."
 )
 
@@ -1569,7 +1586,12 @@ def check_rates(
         )
     counted = int(events or 0) + (int(reference_events or 0) if two else 0)
     if 0 < counted < LEVEL_MIN:
-        advice.append(Advice("info", f"{counted} events in all: the intervals are wide."))
+        advice.append(
+            Advice(
+                "info",
+                f"{counted} event{'s' if counted != 1 else ''} in all: the intervals are wide.",
+            )
+        )
     if any(
         e is not None and t is not None and float(e) > float(t)
         for e, t in ((events, person_time), *(((reference_events, reference_time),) if two else ()))

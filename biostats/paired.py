@@ -212,7 +212,7 @@ def one_sample_t(values: Sequence, reference_value: float, *, alpha: float = 0.0
         df=[float(n - 1)],
         p_value=float(res.pvalue),
         estimate=float(x.mean() - reference_value),
-        estimate_label=f"mean minus reference ({reference_value:g})",
+        estimate_label=f"mean minus reference ({reference_value:,.10g})",  # no exponent for 1,250,000
         estimate_ci=CI(
             lower=float(ci.low - reference_value),
             upper=float(ci.high - reference_value),
@@ -244,7 +244,7 @@ def one_sample_wilcoxon(
     return _signed_rank(
         x,
         alpha=alpha,
-        label=f"pseudo-median minus reference ({reference_value:g})",
+        label=f"pseudo-median minus reference ({reference_value:,.10g})",
         without=("value equal to the reference", "values equal to the reference"),
         kept="values that differ from it",
     )
@@ -271,6 +271,21 @@ def mcnemar_test(
         if discordant >= 10
         else ["fewer than 10 discordant pairs: the exact test is used and power is low"]
     )
+    # the test and the interval of the change are two methods, which part more often than a share's (5 changed
+    # one way and none the other among 40: p = 0.0625 beside an interval from -23.6 to -1.4 points)
+    lower, upper = float(diff - z * se), float(diff + z * se)
+    rejects, inside = float(res.pvalue) < alpha, lower <= 0 <= upper
+    if np.isfinite(diff) and rejects == inside:
+        said = (
+            "the test rejects no change, the interval holds 0"
+            if rejects
+            else "the test does not reject no change, the interval leaves 0 out"
+        )
+        warnings.append(
+            f"The test and the interval disagree: {said}. They are two methods (McNemar's "
+            f"{'exact' if exact else 'chi-square'} test, a Wald interval with 0.5 added to each of the two cells "
+            "of the pairs that changed): report both."
+        )
     return TestResult(
         name="McNemar's test (exact)" if exact else "McNemar's test",
         family="exact" if exact else "parametric",
@@ -330,6 +345,15 @@ def paired_table(
     return table
 
 
+def _apart(bound: float, reference: float) -> str:
+    """A bound of an interval as a percentage, with the fewest decimals (one at least) that tell it from the
+    reference."""
+    for places in range(1, 7):
+        if f"{100 * bound:.{places}f}" != f"{100 * reference:.{places}f}":
+            break
+    return f"{100 * bound:.{places}f}%"
+
+
 def one_sample_proportion(
     successes: int, n: int, reference_proportion: float, *, alpha: float = 0.05
 ) -> TestResult:
@@ -341,14 +365,19 @@ def one_sample_proportion(
     notes: list[str] = []
     rejects, inside = float(res.pvalue) < alpha, lo <= reference_proportion <= hi
     if rejects == inside:
-        said = (
-            "the test rejects the reference and the interval holds it"
-            if rejects
-            else "the test does not reject the reference and the interval leaves it out"
+        # the end of the interval next to the reference, with the decimals that tell the two apart: at one
+        # decimal of a percentage, "15.0% to 85.0%" stood beside "the interval leaves 15% out"
+        end, bound = min(
+            (("lower", lo), ("upper", hi)), key=lambda e: abs(e[1] - reference_proportion)
         )
+        said = (
+            "the test rejects the reference, the interval holds it"
+            if rejects
+            else "the test does not reject the reference, the interval leaves it out"
+        ) + f" (its {end} end is {_apart(float(bound), reference_proportion)})"
         notes.append(
-            f"The p-value and the interval part at the border: {said}. They are two methods (an exact binomial "
-            "test, a Wilson interval): report both."
+            f"The test and the interval disagree: {said}. They are two methods (an exact binomial test, a "
+            "Wilson interval): report both."
         )
     return TestResult(
         name="Exact binomial test",

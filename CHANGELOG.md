@@ -65,7 +65,8 @@ with its own form and button, the first columns of the file already chosen. They
 - **McNemar's test paired two columns of different values by alphabetical order** ("Yes"/"No" against "1"/"0"). It
   now asks for two columns holding the same two values, and which value is counted.
 - **A stratified analysis whose homogeneity test could not be computed read "heterogeneous across strata".** It reads
-  "not tested" when fewer than two strata hold both groups and both outcomes.
+  "not tested" when fewer than two strata hold both groups and both outcomes, or when the combined odds ratio is 0
+  or has no value.
 - **A result's own warnings were not shown** on these tabs: the pairs a signed-rank test leaves out, fewer than 10
   pairs that changed, a difference that changes with the size of the measurement.
 - **A pooled paired or one-sample t-test stamped every row of the population as analysed**; it gives the rows its
@@ -130,22 +131,28 @@ with its own form and button, the first columns of the file already chosen. They
   in the figures between them. A plan gives its rows once when every step reads the same rows.
 - **The method is inside Details everywhere**: it stood in full under the accuracy result, the share and the
   calculators.
-- **Numbers.** An estimate and its interval are written with the same decimals ("3.125, 95% CI 0.996 to 12.935",
-  where the estimate read "3.12"); thousands are grouped at any size and the whole part is no longer rounded (a
-  statistic of 60,962.5 read "61,000"); no exponent is left ("+9.37e+04", "3.65e+06"); a p-value next to 0.05
-  gets a fourth decimal (0.0499 and 0.0501 both read "0.050"); the table of every accuracy measure is in
-  percentages, as the headline; the limits of agreement and their intervals share their decimals ("20.17" stood
-  over "95% CI 19.4 to 21.0"); the plans write a number by the same rule as the results (a plan said that a score
-  "runs from 174 to 2.802e+04").
+- **Numbers.** An estimate and its interval are written with the same decimals, those the bounds need and never
+  more than one beyond the estimate's ("3.125, 95% CI 0.996 to 12.935", where the estimate read "3.12";
+  "-0.071, 95% CI -0.694 to 0.552" for a difference next to none), in every result of the two tabs and in "How
+  to read this"; an AUC, a kappa and an ICC take three decimals with their intervals; the sentence under a result
+  repeats the headline's figure ("5.5 lower" stood under "-5.50"); thousands are grouped at any size and the
+  whole part is no longer rounded (a statistic of 60,962.5 read "61,000"); a half is rounded away from zero,
+  in a p-value too (McNemar's exact 0.0625 read "0.062"); no exponent is left ("+9.37e+04", "3.65e+06", and
+  "2.47e+03" in "How to read this"); a p-value next to 0.05 takes the decimals that tell it from 0.05 (0.0499
+  and 0.0501 both read "0.050"); the table of every accuracy measure is in percentages, as the headline; the
+  limits of agreement and their intervals share their decimals ("20.17" stood over "95% CI 19.4 to 21.0"); the
+  plans write a number by the same rule as the results (a plan said that a score "runs from 174 to
+  2.802e+04").
 - **Tables.** The cross-tables of kappa and of McNemar's test are headed by the categories, the caption naming
   the two axes; McNemar's has its totals.
-- **Rates.** The sentence states the result ("The group compared has 3.1 times the rate of the reference
+- **Rates.** The sentence states the result ("The group compared has 3.125 times the rate of the reference
   group"), where it named its methods; the figures are labelled "Rate, group compared" and "Rate, reference
   group"; the second row of fields no longer repeats "(reference group)".
 - **Words on the screen.** "Last result here" names the options as the page labels them ("Names without an
   order", not "names"). When "Which test?" recommends a signed-rank test, its link opens the page on that
-  summary (it opened on the mean, and Run gave the t-test). The Terms of each analysis hold the tests it runs. "Create new variables" in an empty
-  state opens Enrich on that tab.
+  summary (it opened on the mean, and Run gave the t-test), and the recommendation says what the test
+  supposes (differences that are roughly symmetric) and that it is not pooled with imputed data. The Terms of
+  each analysis hold the tests it runs. "Create new variables" in an empty state opens Enrich on that tab.
 - **The dossier writes what the page writes:** "mean difference" and the slope with its two readings for
   Bland-Altman (it read "Proportional bias", and its warning "consider ratios or log scale"); the
   Cochran-Mantel-Haenszel test by its name, which group is compared with which, and how many strata the tests
@@ -158,6 +165,36 @@ with its own form and button, the first columns of the file already chosen. They
   writings, with the column to clean if they are one grade. A column of numbers beside a column of texts is
   still compared by value (2 against "2.0"), and the plan says which writings were read as numbers. A
   category written "nan" no longer upsets the order of the others.
+- **The Breslow-Day test at a combined odds ratio of 1.** With opposite strata, or a balanced table, the
+  combined odds ratio is exactly 1: the test then had no value ("strata not compared", over two strata of odds
+  ratios 9.00 and 0.11, where the statistic is 40), and one rounding away from 1 a wrong one (28.1 for 5.57).
+  It is now computed in the application's own code, with the same numbers everywhere else.
+- **The strata, said by their number.** "The two tests read the other 1" stood where one of them read none;
+  with no stratum that holds both groups and both outcomes the plan refuses the analysis. A stratum whose odds
+  ratio has no upper bound (a cell of its table is empty) reads "no upper bound" in the table, where a ratio
+  without a value reads "not estimable", and the sentence on the strata names it: "run from 0.458 to 0.861"
+  left out the one stratum that differed. A test that was not run is no longer written "chi2 = n/a, p n/a"
+  in the details.
+- **A test and an interval that disagree say so, for McNemar's test as well** (5 changed one way and none the
+  other among 40: p = 0.0625 beside -23.6 to -1.4 points). The share's note gives the end of the interval
+  with the decimals that tell it from the reference ("15.0% to 85.0%" stood beside "leaves 15% out").
+- **Kappa without a standard error** (one rater uses one category) has no interval: "-1 to 1" was written in
+  the dossier, and "0 to 0" for a table whose standard error rounds to 0. A text is read as a number only
+  when it is written as one ("1e3" and "1_000" are names).
+- **Two columns that hold the same values, or stand a constant apart** (a copy of a column, or one computed
+  from the other): the plan says so before the run. The result read "`a` reads 0 higher than `b` on average
+  ... the two differ by between 0 and 0", an ICC of 1.000 over "(Shrout-Fleiss)" alone, "F = n/a" and a
+  slope with "p n/a": each now says what there is (the same value in every pair, no interval, no F test, no
+  slope). Under consistency, two columns 10 apart in every row give an ICC of 1 without being said to "hold
+  the same values".
+- **A direction the data contradict** gives the two medians only when they differ ("median 2 against 2"
+  stood for a score of few values); **an area about a half** is said of the test ("it hardly separates the
+  two groups") only when its interval is narrow, and of the number of participants otherwise.
+- **Smaller, on the screen:** the one "How to read this" of two measurements stands before the last line
+  "Computed on"; a result's warnings stand in one box, as sentences; Swap turns the differences round and keeps
+  the ICC; the reference share of typed counts is no longer that of a variable of the dataset; a single rate
+  has no row label; the strata's ratios are aligned as numbers; the plan no longer repeats what the line under
+  it, the headline or the reading say (pooled, no cut-off, the ICC's dependence on the participants).
 - **Known limits** of the two tabs are listed in the handbook (chapter 5).
 - Smaller: the cut-off field says "at least" or "at most" only once a direction is chosen; the options of the
   ICC and of the limits of agreement show with their analysis only; the intervals of the limits of agreement

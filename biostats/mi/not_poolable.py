@@ -75,7 +75,8 @@ NOT_POOLABLE: dict[str, NotPoolable] = {
         ),
         NotPoolable(
             analysis="bland_altman",
-            reason="Limits of agreement are percentiles of the differences, not estimates with a variance.",
+            reason="Limits of agreement (the mean difference +/- 1.96 SD of the differences) describe the spread "
+            "of the differences: no pooling rule is established for them.",
             alternative="Pool the mean difference (bias); report the limits of agreement on the complete pairs.",
         ),
         NotPoolable(

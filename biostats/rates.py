@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Literal
@@ -197,6 +198,62 @@ def _informative(table: np.ndarray) -> bool:
     return bool(table.sum(axis=1).min() > 0 and table.sum(axis=0).min() > 0)
 
 
+def read_by_the_tests(informative: int) -> str:
+    """What the two tests read of the strata that hold both groups and both outcomes, by their number: the test
+    that the strata are alike needs two of them ("the two tests read the other 1" was said where it read
+    none)."""
+    if informative >= 2:
+        return f"the two tests read the other {informative}"
+    if informative == 1:
+        return (
+            "the test of the association reads the other one; whether the strata differ needs two"
+        )
+    return "no stratum is left for the two tests"
+
+
+def _breslow_day(tables: Sequence[np.ndarray], odds_ratio: float) -> tuple[float, float]:
+    """
+    The Breslow-Day test that the odds ratios of the strata are alike (Breslow & Day 1980; no Tarone correction):
+    in each stratum, the events among those compared that the combined odds ratio expects with the stratum's
+    margins fixed, against those seen. Statistic and p-value; without a value for a combined ratio of 0 or
+    without one.
+
+    Computed here: the library's own divides by 1 - odds ratio. At a combined ratio of exactly 1 (opposite
+    strata, a balanced table) it had no value, where the expected count is the one of chance alone and the
+    statistic can be 40; one rounding away from 1 it was wrong (28.1 for 5.57, and a negative one).
+    """
+    nan = float("nan")
+    if not math.isfinite(odds_ratio) or odds_ratio <= 0:
+        return nan, nan
+    total = 0.0
+    for table in tables:
+        a, b, c, d = (float(cell) for cell in np.asarray(table, dtype=float).ravel())
+        n1, n0, m1 = a + b, c + d, a + c
+        # the expected count A solves A (n0 - m1 + A) = odds ratio x (n1 - A)(m1 - A)
+        qa = 1 - odds_ratio
+        qb = (n0 - m1) + odds_ratio * (n1 + m1)
+        qc = -odds_ratio * n1 * m1
+        low, high = max(0.0, m1 - n0), min(n1, m1)
+        if abs(qa) < 1e-9:  # a ratio of 1: the count expected by chance alone, n1 m1 / n
+            expected = -qc / qb
+        else:
+            root = math.sqrt(max(qb * qb - 4 * qa * qc, 0.0))
+            q = -0.5 * (
+                qb + math.copysign(root, qb)
+            )  # the stable form: no two near-equal numbers subtracted
+            found = [
+                x for x in ((q / qa), (qc / q if q else nan)) if low - 1e-7 <= x <= high + 1e-7
+            ]
+            if not found:
+                return nan, nan
+            expected = found[0]
+        cells = (expected, n1 - expected, m1 - expected, n0 - m1 + expected)
+        if min(cells) <= 0:
+            return nan, nan
+        total += (a - expected) ** 2 * sum(1 / cell for cell in cells)
+    return total, float(stats.chi2.sf(total, len(tables) - 1))
+
+
 def _differ(crude: float, adjusted: float) -> bool:
     """The crude and adjusted ratios are known and differ by more than 10%."""
     known = np.isfinite(crude) and np.isfinite(adjusted) and crude > 0 and adjusted > 0
@@ -297,7 +354,10 @@ def mantel_haenszel(
                 "exposed_total": int(a + b),
                 "reference_events": int(c),
                 "reference_total": int(c + d),
-                "odds_ratio": (a * d) / (b * c) if b * c > 0 else float("nan"),
+                # without a value when both products are 0; without an upper bound when only the lower one is
+                "odds_ratio": (a * d) / (b * c)
+                if b * c > 0
+                else (float("inf") if a * d > 0 else float("nan")),
                 "risk_ratio": (a / (a + b)) / (c / (c + d))
                 if (a + b) > 0 and (c + d) > 0 and c > 0
                 else float("nan"),
@@ -317,8 +377,8 @@ def mantel_haenszel(
         left = len(tables) - len(tested)
         warnings.append(
             f"{left} of {len(tables)} strata hold{'s' if left == 1 else ''} one group only or one outcome only: "
-            f"{'it adds' if left == 1 else 'they add'} nothing to the odds ratio, and the two tests read the other "
-            f"{len(tested)}"
+            f"{'it adds' if left == 1 else 'they add'} nothing to the odds ratio, and "
+            + read_by_the_tests(len(tested))
         )
     st = StratifiedTable(tested or tables)
     or_ci = st.oddsratio_pooled_confint(alpha=alpha)
@@ -330,8 +390,7 @@ def mantel_haenszel(
         mh_statistic, mh_p = float(mh.statistic), float(mh.pvalue)
     bd_statistic, bd_p = nan, nan
     if len(tested) >= 2:  # one stratum has no other to differ from
-        bd = st.test_equal_odds(adjust=False)
-        bd_statistic, bd_p = float(bd.statistic), float(bd.pvalue)
+        bd_statistic, bd_p = _breslow_day(tested, float(st.oddsratio_pooled))
     pooled = np.sum(tables, axis=0)
     crude = (
         (pooled[0, 0] * pooled[1, 1]) / (pooled[0, 1] * pooled[1, 0])

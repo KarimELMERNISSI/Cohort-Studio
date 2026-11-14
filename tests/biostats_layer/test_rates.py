@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 from scipy import stats
 
-from biostats.rates import mantel_haenszel, rate_ratio
+from biostats.rates import _breslow_day, mantel_haenszel, rate_ratio, read_by_the_tests
 
 CASES = [
     (15, 1200, 4, 1000),
@@ -164,8 +165,16 @@ def test_one_informative_stratum_has_no_other_to_differ_from() -> None:
     assert res.n_tested == 1 and res.breslow_day_p != res.breslow_day_p  # not a number: not tested
     assert res.mh_test_p == pytest.approx(_mh_alone(SITES["A"]))
     assert res.or_mh == pytest.approx((35 * 74) / (85 * 46))
+    # said by their number: "the two tests read the other 1" stood where one of the two read none
+    assert any(
+        "the test of the association reads the other one; whether the strata differ needs two" in w
+        for w in res.warnings
+    )
+    assert not any("the two tests read" in w for w in res.warnings)
     none = _mh({"E": (10, 0, 10, 0), "F": (0, 5, 0, 5)})
     assert none.n_tested == 0 and none.mh_test_p != none.mh_test_p and none.or_mh != none.or_mh
+    assert any("no stratum is left for the two tests" in w for w in none.warnings)
+    assert read_by_the_tests(3) == "the two tests read the other 3"
 
 
 def _mh_alone(cells: tuple[int, int, int, int]) -> float:
@@ -180,3 +189,71 @@ def test_the_result_names_what_it_compares_and_the_rows_it_read() -> None:
     res = _mh(SITES)
     assert (res.compared, res.reference, res.event) == ("yes", "no", "yes")
     assert res.n == sum(sum(cells) for cells in SITES.values())
+
+
+# ----------------------------------------------------------------------------- the Breslow-Day test next to 1
+
+
+@pytest.mark.parametrize(
+    ("cells", "statistic", "p"),
+    [
+        # opposite strata, odds ratios of 9 and 1/9: by hand, 20 events expected of 30 and of 10 seen, 2 x 20
+        ({"A": (30, 10, 10, 30), "B": (10, 30, 30, 10)}, 40.0, 2.539629e-10),
+        # every stratum at 1: nothing differs
+        ({"A": (10, 10, 10, 10), "B": (3, 6, 1, 2), "C": (8, 4, 6, 3)}, 0.0, 1.0),
+        # one rounding above 1 (1.0000000000000002) and one below (0.9999999999999998)
+        ({"A": (4, 5, 7, 1), "B": (9, 12, 3, 12), "C": (6, 9, 1, 1)}, 5.567921, 0.061793),
+        ({"A": (3, 4, 11, 2), "B": (7, 6, 7, 8), "C": (9, 1, 10, 5)}, 5.712652, 0.057480),
+    ],
+)
+def test_the_breslow_day_test_has_its_value_at_a_combined_odds_ratio_of_1(
+    cells: dict, statistic: float, p: float
+) -> None:
+    """The library's formula divides by 1 - odds ratio: at a combined ratio of exactly 1 the test had no value
+    ("strata not compared" over odds ratios of 9.00 and 0.11), and one rounding away from 1 a wrong one (28.1 for
+    5.57)."""
+    res = _mh(cells)
+    assert res.or_mh == pytest.approx(1.0, abs=1e-12)
+    assert res.breslow_day_statistic == pytest.approx(statistic, abs=1e-6)
+    assert res.breslow_day_p == pytest.approx(p, abs=1e-6)
+    assert res.breslow_day_p == pytest.approx(
+        stats.chi2.sf(res.breslow_day_statistic, len(cells) - 1)
+    )
+
+
+def test_the_breslow_day_test_is_the_library_s_away_from_1() -> None:
+    from statsmodels.stats.contingency_tables import StratifiedTable
+
+    rng = np.random.default_rng(7)
+    compared = 0
+    for _ in range(300):
+        tables = [
+            rng.integers(1, 40, size=(2, 2)).astype(float) for _ in range(int(rng.integers(2, 6)))
+        ]
+        library = StratifiedTable(tables)
+        ratio = float(library.oddsratio_pooled)
+        if abs(1 - ratio) < 1e-3:
+            continue
+        theirs = library.test_equal_odds(adjust=False)
+        statistic, p = _breslow_day(tables, ratio)
+        assert statistic == pytest.approx(float(theirs.statistic), abs=1e-8)
+        assert p == pytest.approx(float(theirs.pvalue), abs=1e-8)
+        compared += 1
+    assert compared > 250
+    # a combined ratio of 0, or without a value: not tested
+    assert _breslow_day(tables, 0.0)[0] != _breslow_day(tables, 0.0)[0]
+    assert _breslow_day(tables, float("nan"))[1] != _breslow_day(tables, float("nan"))[1]
+
+
+def test_a_stratum_with_an_empty_cell_has_an_odds_ratio_without_an_upper_bound() -> None:
+    """Twelve events of 12 against 5 of 14: that stratum's odds ratio has no upper bound, which is not "without a
+    value" (the strata were said to "run from 0.545 to 0.600", leaving out the one that differed)."""
+    res = _mh({"A": (12, 0, 5, 9), "B": (20, 20, 25, 15), "C": (18, 22, 24, 16)})
+    ratios = [float(value) for value in res.per_stratum["odds_ratio"]]
+    assert ratios[0] == float("inf") and ratios[1:] == pytest.approx([0.6, 6 / 11])
+    assert res.n_tested == 3
+    assert res.breslow_day_statistic == pytest.approx(14.696011, abs=1e-6)
+    assert res.breslow_day_p == pytest.approx(0.000644, abs=1e-6)
+    # both products are 0: no value
+    without = _mh({"A": (0, 12, 0, 14), "B": (20, 20, 25, 15), "C": (18, 22, 24, 16)})
+    assert without.per_stratum["odds_ratio"].isna().tolist() == [True, False, False]

@@ -44,7 +44,7 @@ from ui.components import empty_state, error_card, help_popover
 from ui.guidance import measures as m
 from ui.guidance.measures import HELP
 from ui.progress import mark_step
-from ui.results import provenance, remember
+from ui.results import CURRENT, provenance, remember, status
 from ui.theme import OKABE_ITO
 
 QUESTION_KEY = "diag_question"
@@ -453,12 +453,10 @@ def _show_accuracy(res: dict[str, Any]) -> None:
         as_code(res["outcome"]),
         as_code(res["pos_label"]),
     )
+    # three decimals for the area and for its interval: "0.073, 95% CI 0.0473 to 0.0981" stood for an area below 0.1
+    area, around = layout.with_interval(auc["auc"], auc["ci"], places=3)
     metrics = [
-        Metric(
-            "Area under the ROC curve (AUC)",
-            f"{auc['auc']:.3f}",
-            f"{layout.interval(auc['ci'])} (DeLong)",
-        )
+        Metric("Area under the ROC curve (AUC)", area, f"{around} (DeLong)" if around else "")
     ]
     words = f"{score} against {outcome} = {present}, {'lower' if lower else 'higher'} values pointing to the condition."
     cautions: list[str] = list(res.get("cautions") or [])
@@ -754,7 +752,8 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     with_ba = pair and m.BLAND_ALTMAN in analyses and bool(plan.steps)
     with_icc = m.ICC in analyses and len(columns) >= 2 and bool(plan.steps)
     ba_config = tuple(columns) if pair else ()
-    icc_config = (tuple(columns), model)
+    # the ICC does not read the order of its columns: Swap turns the differences round, and keeps its result
+    icc_config = (tuple(sorted(columns)), model)
     if layout.run_button(
         "agree_run", ready=bool(plan.steps), what="the agreement of the measurements", plan=plan
     ):
@@ -780,11 +779,15 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             mark_step("analyse", "agreement of two measurements")
         except Exception as exc:
             error_card("The agreement could not be computed.", exc)
-    # one "How to read this" for the two results of one Run, after the last
+    # one "How to read this" for the two results of one Run, in its usual place: after the Details of the last
+    # result and before its line "Computed on" (after the second "Add to the study dossier" it read as a footer)
+    icc_follows = with_icc and status("icc", config=icc_config) == CURRENT
     readings: list[str] = []
     ba = layout.result_place("bland_altman", ba_config, guided=guided) if with_ba else None
     if ba is not None:
         readings.append(_show_bland_altman(ba, columns[0], columns[1], delta))
+        if not icc_follows:
+            help_popover("\n\n".join(readings))
         provenance("bland_altman")
     reliability = (
         # after the limits of agreement, their place has said why no result is shown
@@ -796,9 +799,32 @@ def _measurements(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     )
     if reliability is not None:
         readings.append(_show_icc(reliability, len(df)))
-        provenance("icc")
-    if readings:
         help_popover("\n\n".join(readings))
+        provenance("icc")
+    elif icc_follows and readings:  # the ICC's result was let go meanwhile: the reading still shows
+        help_popover("\n\n".join(readings))
+
+
+def _agreement_words(a: str, b: str, bias: str, reads: str, low: str, high: str) -> str:
+    """The sentence under the limits of agreement, from the figures of the headline. Without a difference on
+    average, or with the same difference in every pair, it says so ("reads 0 higher than ... the two differ by
+    between 0 and 0" stood for two columns that hold the same values)."""
+    none = not float(bias.replace(",", ""))
+    size = bias.removeprefix("-")
+    if low == high:  # the differences do not vary
+        return (
+            f"{a} and {b} hold the same value in every pair."
+            if none
+            else f"{a} reads {size} {reads} than {b} in every pair."
+        )
+    average = (
+        f"{a} and {b} read the same on average"
+        if none
+        else f"{a} reads {size} {reads} than {b} on average"
+    )
+    return (
+        f"{average}. For about 95 of 100 participants the two differ by between {low} and {high}."
+    )
 
 
 def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) -> str:
@@ -817,8 +843,7 @@ def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) ->
             ),
             Metric("Pairs", f"{ba.n:,}"),
         ],
-        f"{a} reads {bias.removeprefix('-')} {reads} than {b} on average. For about 95 of 100 participants the "
-        f"two differ by between {low} and {high}.",
+        _agreement_words(a, b, bias, reads, low, high),
         len(ba.warnings),
     )
     st.plotly_chart(_bland_altman_figure(ba, first, second), width="stretch")
@@ -839,12 +864,26 @@ def _show_bland_altman(ba: Any, first: str, second: str, delta: float | None) ->
     # the line above says the result's own word on a difference that changes with the measurement: not said twice
     layout.warn([text for text in ba.warnings if text != SLOPE_WARNING])
     with st.expander("Details: the differences and the method"):
-        st.caption(
-            f"SD of the differences {layout.num(ba.sd)} (ddof = 1); {layout.percent(ba.within_loa_pct / 100)} of "
-            "the differences lie within the limits (close to 95% by construction). Slope of the difference on the "
-            f"mean: {layout.num(ba.proportional_bias_slope, 2)} per unit, p "
-            f"{layout.p_text(ba.proportional_bias_p)}: it shows that the two spreads differ, not why."
-        )
+        if low == high or not np.isfinite(ba.proportional_bias_p):
+            # the differences do not vary: "100.0% within the limits (close to 95% by construction)" and "slope 0
+            # per unit, p n/a" stood for two columns that hold the same values
+            st.caption(
+                f"SD of the differences {layout.num(ba.sd)} (ddof = 1): every pair differs by the same amount, "
+                "which leaves no slope of the difference on the mean to read."
+            )
+        else:
+            st.caption(
+                f"SD of the differences {layout.num(ba.sd)} (ddof = 1); "
+                f"{layout.percent(ba.within_loa_pct / 100)} of the differences lie within the limits (close to 95% "
+                "by construction). Slope of the difference on the mean: "
+                f"{layout.num(ba.proportional_bias_slope, 2)} per unit, p {layout.p_text(ba.proportional_bias_p)}"
+                # said of a slope only: "it shows that the two spreads differ" stood for none
+                + (
+                    ": it shows that the two spreads differ, not why."
+                    if ba.proportional_bias_p < 0.05
+                    else "."
+                )
+            )
         st.caption("Method: " + " | ".join(ba.references))
     return (
         "**Limits of agreement.** The range within which 95% of the differences between the two measurements are "
@@ -867,16 +906,32 @@ def _show_icc(res: Any, rows: int) -> str:
         if absolute
         else "the same ranking and spacing, a constant shift between columns not counting (consistency)"
     )
+    # three decimals for the ICC and for its interval; at its edges the caption says what is missing (two columns
+    # that hold the same values read "1.000" over "(Shrout-Fleiss)" alone, a constant column "-0.000")
+    value, bounds = layout.with_interval(res.icc, res.ci, places=3)
+    if not known:
+        around = "no value on these columns"
+    elif bounds:
+        around = f"{bounds} (Shrout-Fleiss)"
+    else:
+        around = (
+            (
+                "no interval: the columns hold the same values in these rows"
+                if absolute
+                # consistency: two columns 10 apart in every row give 1 as well
+                else "no interval: apart from a constant shift, the columns hold the same values in these rows"
+            )
+            if res.icc >= 1
+            else "no interval on these columns"
+        )
     layout.headline(
         [
             Metric(
                 m.ABSOLUTE
                 if absolute
                 else m.CONSISTENCY,  # the result's name: two results follow one Run
-                f"{res.icc:.3f}" if known else "n/a",
-                f"{layout.interval(res.ci)} (Shrout-Fleiss)"
-                if known
-                else "no value on these columns",
+                value,
+                around,
             ),
             Metric(
                 "Participants",
@@ -890,8 +945,14 @@ def _show_icc(res: Any, rows: int) -> str:
     )
     with st.expander("Details: the test, the benchmark and the method"):
         low, high = koo_li(res.ci.lower), koo_li(res.ci.upper)
-        text = f"F = {layout.num(res.f_statistic)}, df = {res.df1:.0f}, {res.df2:.0f}, p {layout.p_text(res.p_value)}."
-        if known:  # an ICC without a value has no word
+        text = (
+            f"F = {layout.num(res.f_statistic)}, df = {res.df1:.0f}, {res.df2:.0f}, p "
+            f"{layout.p_text(res.p_value)}."
+            if np.isfinite(res.f_statistic)
+            else "No F test: apart from a constant shift between them, the columns hold the same values in "
+            "these rows, which leaves nothing to test against."
+        )
+        if known and bounds:  # read on the interval: without one, no word
             text += " Benchmark (Koo & Li), read on the interval: " + (
                 f"{low}." if low == high else f"from {low} to {high}."
             )
@@ -916,11 +977,15 @@ def kappa_of(
     read distances in that order.
     """
     table = rater_table(df[first], df[second], order=order if weights else None)
+    _, own, other, _ = m.rater_categories(df, first, second)
     return {
         "kappa": cohens_kappa(table.to_numpy(), weights=weights),
         "table": table,
         "order": [str(name) for name in table.index] if weights else [],
         "weights": weights,
+        # how the ratings were read as categories, kept with the result: the plan says it, and is not drawn
+        # with Guidance off (texts read as numbers beside a column of numbers; codes kept apart)
+        "notes": [item.text for item in m.writings(df, first, second, own, other)],
     }
 
 
@@ -1054,6 +1119,8 @@ def _show_kappa(result: dict[str, Any], first: str, second: str) -> None:
     counts = table.to_numpy()
     # one rater puts everyone in one category: kappa is 0 whatever the other says, and its interval has no width
     fixed = int((counts.sum(axis=1) > 0).sum()) == 1 or int((counts.sum(axis=0) > 0).sum()) == 1
+    # three decimals for kappa and for its interval ("0.199, 95% CI 0.0237 to 0.3745")
+    value, bounds = layout.with_interval(res.kappa, res.ci, places=3)
     layout.headline(
         [
             Metric(
@@ -1063,10 +1130,10 @@ def _show_kappa(result: dict[str, Any], first: str, second: str) -> None:
             ),
             Metric(
                 name,
-                f"{res.kappa:.3f}",
+                value,
                 "0 by construction: one rater uses one category only"
                 if fixed
-                else f"{layout.interval(res.ci)} · {scale}",
+                else " · ".join(part for part in (bounds, scale) if part),
             ),
         ],
         words,
@@ -1082,10 +1149,17 @@ def _show_kappa(result: dict[str, Any], first: str, second: str) -> None:
         "participants both put in the same category."
     )
     st.dataframe(shown, width="stretch")
+    for note in result.get("notes") or ():  # which writings were read as one number, or kept apart
+        st.caption(f":material/info: {note}")
     label = "Details: the standard error and the method"
     with st.expander(label if weights else label.replace(" and", ", the benchmark and")):
-        text = f"Standard error {res.se:.3f} (normal approximation for the interval)."
-        if not weights and not fixed:
+        text = (
+            f"Standard error {layout.fixed(res.se, 3)} (normal approximation for the interval)."
+            if np.isfinite(res.se)
+            else "No standard error, and no interval"
+            + (": one rater uses one category only." if fixed else " on this table.")
+        )
+        if not weights and not fixed and bounds:
             low, high = landis_koch(res.ci.lower), landis_koch(res.ci.upper)
             text += " Benchmark (Landis & Koch), read on the interval: " + (
                 f"{low} agreement." if low == high else f"from {low} to {high} agreement."
