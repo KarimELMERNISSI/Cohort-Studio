@@ -1086,6 +1086,9 @@ class _Term:
     # parameter for every value: the rows at a rare value stay in the fit, and what would leave it with a
     # cell's own parameter (a level, an indicator) leaves it here only when nearly every row holds one value
     off: Sequence[int] | None = None
+    # and the value that carries the most of the slope's weight: its rows, and its share of the weight in
+    # thousandths (one row far from the others is fitted exactly by the slope, as a lone row by a level)
+    far: tuple[int, int] | None = None
 
 
 def _off_commonest(cells: Sequence[Sequence[int]]) -> tuple[int, int, int, int]:
@@ -1106,15 +1109,43 @@ def _off_commonest(cells: Sequence[Sequence[int]]) -> tuple[int, int, int, int]:
     )
 
 
+def _far_value(cells: Mapping[str, Sequence[int]]) -> tuple[int, int] | None:
+    """
+    Of the cells of a covariate's values: the rows at the value that carries the most of its slope's weight,
+    and that share of the weight in thousandths (rounded down). A value's weight is its rows times the square
+    of its distance from the commonest value: a dose of 0 for 588 rows, 1 for 11 and 50 for one puts 99.6% of
+    it on the participant at 50, whom the slope then fits exactly. None when a value does not read as a
+    number, or when every row holds one value.
+    """
+    try:
+        held = [(float(value), int(cell[0])) for value, cell in cells.items()]
+    except TypeError, ValueError:
+        return None
+    if not held or not all(math.isfinite(value) for value, _ in held):
+        return None
+    commonest = max(range(len(held)), key=lambda place: (held[place][1], -place))
+    centre = held[commonest][0]
+    weights = [rows * (value - centre) ** 2 for value, rows in held]
+    total = sum(weights)
+    if not total > 0:
+        return None
+    far = max(range(len(held)), key=lambda place: (weights[place], -place))
+    return held[far][1], int(1000 * weights[far] / total)
+
+
 def _term_support(term: _Term, whole: Mapping[str, int], kind: str) -> dict[str, int]:
     """The counts behind a term's part: the model's for a numeric term without cells, its cell's otherwise; and,
     for a covariate of a few values, those of the rows off its commonest value under names that end in
-    ``_off`` (they are not a cell of the term: a rule that reads them asks for them by that name)."""
+    ``_off``, and the rows at the value that carries the most of the slope's weight with that share in
+    thousandths (``far_rows``, ``far_share``). They are not a cell of the term: a rule that reads them asks
+    for them by name."""
     if term.cell is None:
         return dict(whole)
     found = _cell_support(term.cell, kind)
     if term.off is not None:
         found.update({f"{name}_off": n for name, n in _cell_support(term.off, kind).items()})
+    if term.far is not None:
+        found.update({"far_rows": int(term.far[0]), "far_share": int(term.far[1])})
     return found
 
 
@@ -1192,7 +1223,15 @@ def _terms_of(
             # a few values: each is a cell, and the term is shown when the smallest of them can be; the rows off
             # the commonest value say whether the others stay in the fit
             cells_of = list(few.values())
-            numeric.append(_Term(str(name), slope, _least(cells_of[1:]), _off_commonest(cells_of)))
+            numeric.append(
+                _Term(
+                    str(name),
+                    slope,
+                    _least(cells_of[1:]),
+                    _off_commonest(cells_of),
+                    _far_value(few),
+                )
+            )
         elif apart:
             # one value for at least half of the rows: the term is carried by the rows off it
             numeric.append(_Term(str(name), slope, apart[list(apart)[1]]))
@@ -1648,6 +1687,13 @@ def _pooled_model(kind: str) -> Callable[[Any], tuple[list[Part], ResultRecord |
                     *sizes,
                     # the datasets whose fit reached a maximum: a term of a fit that did not is not compared
                     Number("converged_in", extra.get("converged_in", result.m), EXACT),
+                    # the largest share of rows without the event over the datasets: the counts above are
+                    # each the smallest, come from different datasets, and read too low together
+                    *(
+                        [Number("without_event_share_max", extra["without_share"], DETERMINISTIC)]
+                        if extra.get("without_share") is not None
+                        else []
+                    ),
                     # a count model's dispersion, the smallest and the largest over the datasets: a pooled Poisson
                     # model recorded none, and so could not say that its standard errors are too small
                     *(
@@ -1753,6 +1799,18 @@ def _pooled_survival(result: Any) -> tuple[list[Part], ResultRecord | None]:
                 Number("rows_left_out", extra.get("rows_left_out", 0), EXACT, fine=True),
                 # the rows of the groups drawn, the fewest over the datasets: what the analysis read
                 Number("rows_min", (extra.get("total") or {}).get("rows"), EXACT),
+                # the largest share of rows without the event over the datasets
+                *(
+                    [
+                        Number(
+                            "without_event_share_max",
+                            (extra.get("total") or {})["without_share"],
+                            DETERMINISTIC,
+                        )
+                    ]
+                    if (extra.get("total") or {}).get("without_share") is not None
+                    else []
+                ),
             ),
         )
     )

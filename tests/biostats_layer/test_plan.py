@@ -816,6 +816,8 @@ def test_a_pooled_record_keeps_each_imputation_and_the_smallest_counts() -> None
             len(mi.base),
             False,
         ),  # the rows the analysis read, in the dataset that has the fewest
+        # the largest share of rows without the event over the datasets (the outcome is not imputed here)
+        ("without_event_share_max", float((mi.base["died"] == 0).mean()), False),
     ]
     # the events up to each time in each of the 5 datasets: the events between two times are counted in each
     each = drug.number("events_so_far_each")
@@ -874,6 +876,9 @@ def test_a_covariate_of_a_few_values_has_the_counts_of_each_value() -> None:
         "rows_off": 2,
         "events_off": sum(died),
         "non_events_off": 2 - sum(died),
+        # the value that carries the most of the slope's weight: the dose of 3, one row, nine tenths of it
+        "far_rows": 1,
+        "far_share": 900,
     }
     # the other cell says what it is: every value of the covariate is a cell, and the term is no contrast with it
     reference = record.part("reference:dose")

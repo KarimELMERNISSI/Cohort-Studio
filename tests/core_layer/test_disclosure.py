@@ -692,8 +692,8 @@ COVER_OF_TWO = (
 # in a Cox or a count model a cell where everybody had the event has a maximum, and stays in the fit
 DROPS_OUT_NOBODY = DROPS_OUT.replace("nobody or everybody", "nobody")
 A_TABLE = (
-    "the model is withheld: its terms all compare categories, so that their numbers are the cells of a table, and "
-    f"one of them cannot be shown ({ADVICE})"
+    "the model is withheld: every term it would write compares categories, so that their numbers are the cells "
+    f"of a table, and one of them cannot be shown ({ADVICE})"
 )
 # the slope of a numeric covariate of a few values has no level to join: its own sentences
 A_VALUE = f"one of its values holds fewer than 10 {SIDES} (cap or group its values)"
@@ -701,9 +701,10 @@ A_VALUE_OF_TWO = f"one of its values holds fewer than 10 {TWO_SIDES} (cap or gro
 CAP = "cap or group the values of the covariate, and run the analysis again"
 OFF_ITS_VALUE = (
     "the model is withheld: the term of a numeric covariate is withheld, and the rows off its commonest value are "
-    "fewer than 10, or none or all of them had the event, or the term has no maximum: the terms left would be "
-    "those of the model fitted without those rows (leave the covariate out of the model, or take those rows out "
-    "of the analysis population by a criterion, and run the analysis again)"
+    "fewer than 10, or none or all of them had the event, or fewer than 10 rows at a value far from the others "
+    "carry the term, or the term has no maximum: the terms left may be those of the model fitted without those "
+    "rows (cap the values of the covariate, leave it out of the model, or take those rows out of the analysis "
+    "population by a criterion, and run the analysis again)"
 )
 OFF_ITS_VALUE_NONE = OFF_ITS_VALUE.replace("none or all of them", "none of them")
 GROUP_WITHHELD = "1 group withheld: fewer than 10 rows, events or rows without the event"
@@ -726,7 +727,7 @@ FIT_NAMES = {
 CURVE_NAMES = {
     "rows", "events", "confidence", "points_every", "time_step", "followed_until", "median", "median_lower",
     "median_upper", "later_than_followed_until", "times", "survival", "lower", "upper", "time_unit_from",
-    "decimals",
+    "limit_decimals",
 }  # fmt: skip
 
 
@@ -1176,6 +1177,7 @@ def test_a_numeric_covariate_that_a_few_rows_carry_is_read_as_cells() -> None:
     # model as a whole, the rows off its commonest value
     assert dose.support == {
         "rows": 1, "events": 1, "non_events": 0, "rows_off": 2, "events_off": 2, "non_events_off": 0,
+        "far_rows": 1, "far_share": 900,
     }  # fmt: skip
     reference = record.part("reference:dose")
     assert reference.labels == {"variable": "dose", "level": "0", "of": "values"}
@@ -1630,12 +1632,12 @@ def test_a_curve_is_given_at_multiples_of_one_step_every_k_events() -> None:
         assert len(survival) == len(times) == len(part.number("lower").value)
         steps, events = original.number("times").value, original.number("events_at").value
         full = dict(zip(steps, original.number("survival").value, strict=True))
-        # the value at a time given is the full curve's at that time, to the decimals of that time: two, in an
+        # the value at a time given is the full curve's at that time, to two decimals; its limits to one, in an
         # arm of about 200 rows
-        digits = part.number("decimals").value
-        assert set(digits) == {2} and len(digits) == len(times)
-        for t, value, places in zip(times, survival, digits, strict=True):
-            assert value == round(full[max(s for s in steps if s <= t)], places)
+        digits = part.number("limit_decimals").value
+        assert set(digits) == {1} and len(digits) == len(times)
+        for t, value in zip(times, survival, strict=True):
+            assert value == round(full[max(s for s in steps if s <= t)], 2)
         # at least k events between two times given, and none or at least k after the last
         until = part.number("followed_until").value
         flat = times[-1] == until and survival[-1] == survival[-2]
@@ -1700,9 +1702,11 @@ def test_the_end_of_a_curve_gives_no_event_back_and_says_until_when_it_was_follo
     (plateau,) = _curve_shown(pd.DataFrame({"days": days, "died": died}))
     assert plateau.number("time_step").value == 10
     assert plateau.number("times").value == [10, 30, 40, 50, 1000]
-    # fewer than 400 rows are followed from the first time on: two decimals (0.968, 0.925, 0.877 and 0.85)
+    # two decimals (0.968, 0.925, 0.877 and 0.85); fewer than 400 rows are followed from the first time on, and
+    # the limits take one
     assert plateau.number("survival").value == [0.97, 0.92, 0.88, 0.85, 0.85]
-    assert plateau.number("decimals").value == [2, 2, 2, 2, 2]
+    assert plateau.number("limit_decimals").value == [1, 1, 1, 1, 1]
+    assert all(v == round(v, 1) for v in plateau.number("lower").value)
     assert plateau.number("followed_until").value == 1000
     assert plateau.number("median").value is None  # not reached, and not named as later
     assert plateau.number("later_than_followed_until").value == []
@@ -2415,8 +2419,11 @@ def test_a_count_term_does_not_count_the_rows_without_an_event_and_the_model_wri
     assert lifted.record is not None and "term:nyha#2" in _ids(lifted)
     said = lifted.record.part("declaration")
     assert said.number("followed_to_the_event").value is True
-    assert said.number("share_without_the_event").value == 0.0075  # 3 of 400
+    # the count the declaration gives, which a count model's totals do not hold, and its share
+    assert said.number("rows_without_the_event").value == 3
+    assert said.number("share_without_the_event").value == 3 / 400
     assert said.number("beyond_the_cap").value is False and lifted.withheld == ()
+    assert said.number("changed").value is True and lifted.told == ()
 
 
 def test_a_yes_no_outcome_fitted_as_a_count_keeps_the_logistic_rule() -> None:
@@ -2446,10 +2453,258 @@ def test_a_yes_no_outcome_fitted_as_a_count_keeps_the_logistic_rule() -> None:
     for done, kind in ((as_count, "count"), (logistic, "logistic")):
         record = plan.record(kind, done.result)
         said = disclose_record(record, declared, spec=done.spec, analysis=_in_the_flow(record))
-        assert any("does not apply to a model of a yes/no outcome" in w for w in said.withheld), (
-            kind
-        )
+        # said to the person who shares, never written
+        assert any("does not apply to a model of a yes/no outcome" in w for w in said.told), kind
+        assert not any("declaration" in w for w in said.withheld), kind
         assert "declaration" not in _ids(said) and "term:nyha#3" not in _ids(said)
+
+
+def test_a_count_of_nearly_yes_or_no_keeps_three_counts_for_its_levels() -> None:
+    """A site of 30 rows, 26 with the event, every count 0 or 1: the Poisson model withholds its term as the
+    logistic model does. One participant of another site given a count of 2 lifted that rule for every level: the
+    term was written, and its standard error gave 26.00 events for 26, so 4 of the 30 without."""
+    from biostats import plan
+    from biostats.plan import specify
+    from core.disclosure import disclose_record
+
+    df = _classes({"Alpha": (300, 120), "Beta": (200, 80), "Delta": (100, 40), "Gamma": (30, 4)})
+    df["falls"] = df["died"]
+
+    def shown(frame: pd.DataFrame, count: str = "falls"):
+        done = plan.run(specify("count", count=count, compare="nyha", adjust=["age"]), frame)
+        record = plan.record("count", done.result)
+        return record, disclose_record(record, K10, spec=done.spec, analysis=_in_the_flow(record))
+
+    _, yes_no = shown(df)
+    assert "term:nyha#1" in _ids(yes_no) and "term:nyha#3" not in _ids(yes_no)
+    one = df.copy()
+    one.loc[one.index[(one["nyha"] == "Alpha") & (one["falls"] == 1)][0], "falls"] = 2
+    record, nearly = shown(one)
+    model = record.part("model").support
+    assert model["events"] == model["rows_with_events"] + 1  # no yes/no outcome as a whole
+    gamma = record.part("term:nyha#3").support
+    assert (gamma["rows"], gamma["events"], gamma["rows_without_events"]) == (30, 26, 4)
+    # the variable keeps its three counts: one of its cells holds no more events than rows
+    assert "term:nyha#1" in _ids(nearly) and "term:nyha#3" not in _ids(nearly)
+    assert nearly.withheld == (
+        f"1 term of nyha withheld: {CELL}",
+        f"1 more term of nyha withheld: {COVER}",
+        FIT,
+    )
+    # where counts are true counts (1 to 6 visits for whoever has any) the cells are judged on two
+    _, visits = shown(df, "visits")
+    assert {"term:nyha#1", "term:nyha#2", "term:nyha#3"} <= set(_ids(visits))
+
+
+def test_two_results_that_differ_by_rows_of_whom_all_or_none_had_the_event_are_a_pair() -> None:
+    """Twelve rows lack a BMI and all twelve died: curves by arm and the Cox model with BMI were both written, and
+    a reader who subtracts learns of each of the twelve that they died. "None, or at least k" was meant for
+    results on the same rows: between results on different rows, none on one side is a group where everybody, or
+    nobody, had the event, which the layer withholds as a group of curves or as a level."""
+    from biostats import plan
+    from biostats.mi import MIData
+    from biostats.plan import specify
+    from core.disclosure import disclose_record, pair_gives_back
+
+    def lacking(frame: pd.DataFrame, with_event: int, without: int) -> list:
+        died, alive = frame.index[frame["died"] == 1], frame.index[frame["died"] == 0]
+        return [*died[:with_event], *alive[:without]]
+
+    def pair(with_event: int, without: int, kind: str = "cox"):
+        df = _cohort()
+        df["bmi"] = np.random.default_rng(8).normal(27, 4, len(df)).round(1)
+        df.loc[lacking(df, with_event, without), "bmi"] = np.nan
+        roles = {"time": "days", "event": "died"} if kind == "cox" else {"outcome": "died"}
+        crude = plan.run(specify(kind, compare="arm", **roles), df)
+        adjusted = plan.run(specify(kind, compare="arm", adjust=["bmi"], **roles), df)
+        return plan.record(kind, crude.result), plan.record(kind, adjusted.result)
+
+    for kind in ("cox", "logistic"):
+        assert pair_gives_back(*pair(12, 0, kind), K10), kind  # all twelve died
+        assert pair_gives_back(*pair(0, 12, kind), K10), kind  # none of the twelve died
+        assert pair_gives_back(*pair(12, 9, kind), K10), kind
+        assert not pair_gives_back(*pair(12, 10, kind), K10), kind
+        assert not pair_gives_back(*pair(0, 0, kind), K10), kind  # the same rows
+    # an outcome declared followed to the event, the declaration holding for both results: their rows without
+    # the event are written exactly, and are not counted between the two; those with the event still are
+    assert pair_gives_back(*pair(12, 1), K10)
+    assert not pair_gives_back(*pair(12, 1), K10, followed=True)
+    assert pair_gives_back(*pair(9, 1), K10, followed=True)
+    assert pair_gives_back(*pair(0, 12), K10, followed=True)  # nobody with the event among them
+
+    # a pooled model beside its complete cases, which lack the rows whose age is imputed
+    def pooled(with_event: int, without: int):
+        truth = _cohort()
+        rng = np.random.default_rng(6)
+        gap = truth.index.isin(lacking(truth, with_event, without))
+        base = truth.copy()
+        base.loc[gap, "age"] = np.nan
+        completed = []
+        for _ in range(5):
+            one = base.copy()
+            one.loc[gap, "age"] = truth.loc[gap, "age"] + rng.normal(0, 5, gap.sum())
+            completed.append(one)
+        mi = MIData.from_completed(base, completed, methods={"age": "pmm"})
+        done = plan.run(
+            specify("logistic", pooled=True, outcome="died", compare="arm", adjust=["age"]), mi=mi
+        )
+        record = plan.record("logistic_mi", done.result)
+        return disclose_record(record, K10, spec=done.spec, analysis=_in_the_flow(record))
+
+    for with_event, without in ((12, 0), (0, 12), (12, 9)):
+        beside = pooled(with_event, without)
+        assert beside.record is not None and beside.record.complete_case is None
+        assert "the complete-case analysis is withheld" in beside.withheld
+    assert pooled(12, 12).record.complete_case is not None
+
+
+def test_one_row_far_from_the_others_carries_a_slope_and_withholds_the_model() -> None:
+    """A dose of 0 for 588 rows, 1 for 11 and 50 for one participant: twelve rows are off the commonest value, so
+    the rule read on them wrote the model's other terms. They were those of the model fitted without the
+    participant at 50 (to 3e-4 when that participant died, exactly when not): a slope fits one row exactly when
+    that row carries nearly all of its weight, rows times the squared distance from the commonest value."""
+    from biostats import plan
+    from biostats.regression import logistic_regression
+
+    df = _cohort(600, 31)
+    covariates = ["arm", "age", "dose"]
+
+    def with_dose(far: float, rows_far: int = 1):
+        frame = df.copy()
+        frame["dose"] = 0.0
+        frame.loc[frame.index[:11], "dose"] = 1.0
+        frame.loc[frame.index[11 : 11 + rows_far], "dose"] = far
+        record = plan.record("logistic", logistic_regression(frame, "died", covariates))
+        assert record is not None
+        return record, _disclose(record, compare="arm")
+
+    record, shown = with_dose(50.0)
+    held = record.part("term:dose").support
+    assert (held["rows_off"], held["far_rows"], held["far_share"]) == (12, 1, 995)  # 2500 of 2511
+    assert shown.record is None and shown.withheld == (OFF_ITS_VALUE,)
+    # at a dose of 5 the eleven other rows carry a third of the weight: the slope alone is withheld
+    record, shown = with_dose(5.0)
+    assert record.part("term:dose").support["far_share"] == 694  # 25 of 36
+    assert [i for i in _ids(shown) if i.startswith("term:")] == ["term:age", "term:arm#1"]
+    assert shown.withheld[0] == f"1 term of dose withheld: {A_VALUE}"
+    # a far value that ten rows hold is a cell that stays in the fit, as a level of ten rows does
+    record, shown = with_dose(50.0, rows_far=10)
+    held = record.part("term:dose").support
+    assert held["far_rows"] == 10 and held["far_share"] > 990
+    assert [i for i in _ids(shown) if i.startswith("term:")] == ["term:age", "term:arm#1"]
+
+
+def test_a_declared_outcome_says_whether_it_changed_a_result_and_where_a_group_lies_above_the_cap() -> (
+    None
+):
+    """The cap is read on a result as a whole. Under a result at 2%, a group of 20 rows with 6 without the event
+    is written with that count: the person who shares is told, and no group is named. The part ``declaration``
+    says whether the result writes anything it would not write without the declaration."""
+    from biostats import plan
+    from biostats.plan import specify
+    from core.disclosure import DisclosurePolicy as Policy
+    from core.disclosure import FollowedToTheEvent, disclose_record
+
+    declared = Policy(declared=(FollowedToTheEvent("died"),))
+
+    def shown(classes: dict, policy: Policy = declared):
+        done = plan.run(
+            specify("survival", time="days", event="died", group="nyha"), _classes(classes)
+        )
+        record = plan.record("survival", done.result)
+        return disclose_record(record, policy, spec=done.spec, analysis=_in_the_flow(record))
+
+    small = shown({"A": (400, 4), "B": (300, 4), "C": (20, 6)})  # 14 of 720: 1.9%
+    groups = {p.labels["group"]: p for p in small.record.parts if p.id.startswith("curve#")}
+    assert set(groups) == {"A", "B", "C"} and groups["C"].support["censored"] == 6
+    assert small.told == (
+        "1 group shown holds more than 5% of rows without the event: under the declaration that count is "
+        "written. Join such a group to another, or accept it",
+    )
+    assert "C" not in " ".join(small.told) and small.withheld == ()
+    assert small.record.part("declaration").number("changed").value is True
+    # every group holds ten rows without the event: the declaration holds, and changes nothing
+    same = shown({"A": (300, 12), "B": (300, 12)})
+    part = same.record.part("declaration")
+    assert part.number("changed").value is False and same.told == ()
+    assert part.number("rows_without_the_event").value == 24
+    assert _written(same).count('"declaration"') == 1
+    assert _ids(shown({"A": (300, 12), "B": (300, 12)}, K10)) == _ids(same)[:-1]
+
+
+def test_a_pooled_result_s_share_without_the_event_is_the_largest_of_its_datasets() -> None:
+    """Only the group is imputed, and every dataset holds 7 of 120 rows without the event (5.8%). The record's
+    counts are each the smallest over the datasets and come from different ones: read on them, the share was
+    below every dataset's, and a result above the cap in each of its datasets passed under it."""
+    from biostats import plan
+    from biostats.mi import MIData
+    from biostats.plan import specify
+    from core.disclosure import DisclosurePolicy as Policy
+    from core.disclosure import FollowedToTheEvent, _people, disclose_record
+
+    rng = np.random.default_rng(12)
+    base = _classes({"A": (60, 4), "B": (60, 3)}, seed=12)
+    base["grp"] = base["nyha"]
+    gap = rng.random(len(base)) < 0.3
+    base.loc[gap, "grp"] = np.nan
+    completed = []
+    for _ in range(5):
+        one = base.copy()
+        one.loc[gap, "grp"] = np.where(rng.random(gap.sum()) < 0.5, "A", "B")
+        completed.append(one)
+    mi = MIData.from_completed(base, completed, methods={"grp": "logreg"})
+    done = plan.run(specify("survival", pooled=True, time="days", event="died", group="grp"), mi=mi)
+    record = plan.record("survival_mi", done.result)
+    assert record is not None
+    assert record.part("data").number("without_event_share_max").value == 7 / 120
+    with_event, without = _people(record)
+    assert without / (with_event + without) < 7 / 120  # the smallest counts, of different datasets
+    declared = Policy(declared=(FollowedToTheEvent("died"),))
+    said = disclose_record(record, declared, spec=done.spec, analysis=_in_the_flow(record))
+    (refused,) = [t for t in said.told if "does not hold for this result" in t]
+    assert (
+        "5.83% of its rows are without the event in one of its imputed datasets, more than 5%"
+        in refused
+    )
+    assert "declaration" not in ([] if said.record is None else _ids(said))
+    # a pooled model holds its largest share too
+    cox = plan.run(
+        specify("cox", pooled=True, time="days", event="died", compare="grp", adjust=["age"]),
+        mi=mi,
+    )
+    of_cox = plan.record("cox_mi", cox.result)
+    assert of_cox.part("model").number("without_event_share_max").value == 7 / 120
+
+
+def test_a_term_s_caution_reads_the_counts_a_ratio_rests_on() -> None:
+    """A Cox class of 40 rows, 33 with the event and 7 without, whose variable the package tabulates, at k = 5:
+    judged on three counts, the term was marked sparse for its 7 rows without the event, which no hazard ratio
+    rests on."""
+    from biostats import plan
+    from biostats.plan import specify
+    from core.disclosure import disclose_record
+
+    df = _classes({"I": (300, 120), "II": (300, 120), "III": (40, 7)})
+    done = plan.run(specify("cox", time="days", event="died", compare="nyha", adjust=["age"]), df)
+    record = plan.record("cox", done.result)
+    shown = disclose_record(
+        record,
+        DisclosurePolicy(5),
+        spec=done.spec,
+        analysis=_in_the_flow(record),
+        tabulated=["nyha"],
+    )
+    assert shown.record.part("term:nyha#2").number("sparse").value is False
+    # nine events are few for a ratio, whatever the rule the term is judged on
+    few = plan.run(
+        specify("cox", time="days", event="died", compare="nyha", adjust=["age"]),
+        _classes({"I": (300, 120), "II": (300, 120), "III": (40, 31)}),
+    )
+    record = plan.record("cox", few.result)
+    marked = disclose_record(
+        record, DisclosurePolicy(5), spec=few.spec, analysis=_in_the_flow(record)
+    )
+    assert marked.record.part("term:nyha#2").number("sparse").value is True
 
 
 def test_a_pooled_cox_term_reads_its_smallest_rows_and_events() -> None:
@@ -2504,13 +2759,18 @@ def test_an_outcome_declared_followed_to_the_event_writes_its_small_counts_witho
     said = written.record.part("declaration")
     assert [n.name for n in said.numbers] == [
         "followed_to_the_event",
+        "rows_without_the_event",
         "share_without_the_event",
         "cap",
         "beyond_the_cap",
+        "changed",
     ]
-    assert said.number("share_without_the_event").value == 0.026  # 13 of 500
+    assert said.number("rows_without_the_event").value == 13
+    assert said.number("share_without_the_event").value == 13 / 500
     assert said.number("cap").value == 0.05 and said.number("beyond_the_cap").value is False
-    assert written.withheld == ()
+    # without the declaration nothing of the result is written: it changed it, and the part says so
+    assert said.number("changed").value is True
+    assert written.withheld == () and written.told == ()
     # the policy block of the package and its reading notes say it
     block = declared.to_dict()["declared"]
     assert block == [
@@ -2577,35 +2837,35 @@ def test_a_declaration_holds_beyond_its_cap_only_by_an_explicit_override_that_ea
     assert (
         plain.record is None
     )  # as without a declaration: no group holds 10 rows without the event
-    refused = [w for w in plain.withheld if "does not hold for this result" in w]
-    assert (
-        len(refused) == 1 and "5.4% of its rows are without the event, more than 5%" in refused[0]
-    )
-    assert "explicit override" in refused[0]
+    # the refusal is said to the person who shares, with the two counts; nothing of it is written: a share
+    # beside the rows of a result is a count, and this result is withheld for that very count
+    (refused,) = [w for w in plain.told if "does not hold for this result" in w]
+    assert "27 of its 500 rows are without the event (5.40%), more than 5%" in refused
+    assert "explicit override" in refused
+    assert not any("%" in w or "declaration" in w for w in plain.withheld)
     asked = Policy(declared=(FollowedToTheEvent("died", beyond_the_cap=True),))
     over = shown(asked)
     assert over.record is not None
     groups = {p.labels["group"]: p for p in over.record.parts if p.id.startswith("curve#")}
     assert set(groups) == {"A", "B", "C"} and groups["A"].support["censored"] == 9
     # the warning to the person who shares, and the record a reader of the result finds
-    (warning,) = [w for w in over.withheld if w.startswith("Warning: ")]
+    (warning,) = [w for w in over.told if w.startswith("Warning: ")]
     assert "holds for this result by an explicit override" in warning
-    assert "5.4% of its rows are without the event, more than 5%" in warning
+    assert "27 of its 500 rows are without the event (5.40%), more than 5%" in warning
+    assert over.withheld == ()
     said = over.record.part("declaration")
-    assert said.number("beyond_the_cap").value is True
-    assert (
-        said.number("share_without_the_event").value == 0.054 and said.number("cap").value == 0.05
-    )
+    assert said.number("beyond_the_cap").value is True and said.number("changed").value is True
+    assert said.number("rows_without_the_event").value == 27
+    assert said.number("share_without_the_event").value == 27 / 500
+    assert said.number("cap").value == 0.05
     assert asked.to_dict()["declared"][0]["beyond_the_cap"] is True
     # under the cap, the override changes nothing and nothing warns
     under = _classes({"A": (200, 5), "B": (150, 5), "C": (150, 3)})
     curves = plan.run(specify("survival", time="days", event="died", group="nyha"), under)
     record = plan.record("survival", curves.result)
     quiet = shown(asked)
-    assert (
-        quiet.withheld == ()
-        and quiet.record.part("declaration").number("beyond_the_cap").value is False
-    )
+    assert quiet.withheld == () and quiet.told == ()
+    assert quiet.record.part("declaration").number("beyond_the_cap").value is False
     with pytest.raises(ValueError, match="True or False"):
         FollowedToTheEvent("died", beyond_the_cap="yes")  # type: ignore[arg-type]
 
@@ -2704,7 +2964,8 @@ def _curve_with_unit(frame: pd.DataFrame, unit=None):
         units=None if unit is None else {"days": unit},
     )
     (curve,) = [p for p in shown.record.parts if p.id.startswith("curve#")]
-    return curve, shown.withheld
+    assert shown.withheld == ()  # what the person is told of a unit is not written
+    return curve, shown.told
 
 
 def _names(part) -> list[str]:
@@ -2865,32 +3126,38 @@ def test_the_time_step_is_read_on_the_groups_that_are_shown() -> None:
     assert [p.number("time_step").value for p in both] == [50, 50]
 
 
-def test_a_curve_s_values_take_the_decimals_that_the_rows_still_followed_allow() -> None:
-    """With every digit, a value and its lower limit give the rows at risk at each time, and so the rows whose
+def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_followed_allow() -> (
+    None
+):
+    """With every digit, a value and its limits give the rows at risk at each time, and so the rows whose
     follow-up ended between two times: 3 of them, in a study with a common closing date. Three decimals still gave
-    them back late in a curve, where 30 to 60 rows are at risk."""
+    them back, and a fourth in large groups. The value takes two decimals at every time; the limits two where 400
+    rows or more are still followed, and one below."""
     from biostats import plan
     from biostats.plan import ITERATIVE_LOOSE
     from biostats.survival import compare_survival
-    from core.disclosure import DECIMALS_BY_ROWS, decimals_at
+    from core.disclosure import LIMIT_DECIMALS_BY_ROWS, VALUE_DECIMALS, limit_decimals_at
 
-    assert DECIMALS_BY_ROWS == ((2000, 4), (400, 3), (0, 2))
-    held = (0, 10, 399, 400, 1999, 2000, 50_000)
-    assert [decimals_at(rows) for rows in held] == [2, 2, 2, 3, 3, 4, 4]
+    assert VALUE_DECIMALS == 2 and LIMIT_DECIMALS_BY_ROWS == ((400, 2), (0, 1))
+    held = (0, 10, 399, 400, 2000, 50_000)
+    assert [limit_decimals_at(rows) for rows in held] == [1, 1, 1, 2, 2, 2]
     record = plan.record("survival", compare_survival(_cohort(), "days", "died", "arm"))
     disclosed = _disclose(record)
     for part in disclosed.record.parts[:2]:
-        # about 200 rows in each arm: two decimals at every time
-        assert part.number("decimals").value == [2] * len(part.number("times").value)
-        for name in ("survival", "lower", "upper"):
+        # about 200 rows in each arm: limits at one decimal at every time
+        assert part.number("limit_decimals").value == [1] * len(part.number("times").value)
+        value = part.number("survival")
+        assert value.value and all(v == round(v, 2) for v in value.value)
+        # a value computed again agrees to one unit of the last decimal, and is compared so
+        assert value.cls == ITERATIVE_LOOSE and value.scale == 10.0
+        for name in ("lower", "upper"):
             number = part.number(name)
-            assert number.value and all(v == round(v, 2) for v in number.value), name
-            # a value computed again agrees to one unit of the last decimal, and is compared so
-            assert number.cls == ITERATIVE_LOOSE and number.scale == 10.0, name
+            assert number.value and all(v == round(v, 1) for v in number.value), name
+            assert number.cls == ITERATIVE_LOOSE and number.scale == 100.0, name
         full = record.part(part.id).number("survival").value
         assert not all(v == round(v, 3) for v in full)  # the record itself holds every digit
-    # 3,000 rows whose follow-up ends on any day of 2,000: four decimals while 2,000 rows are followed, three
-    # while 400 are, then two; the curve says which, time by time
+    # 3,000 rows whose follow-up ends on any day of 2,000: the limits take two decimals while 400 rows are
+    # followed, then one; the curve says which, time by time
     rng = np.random.default_rng(11)
     long = pd.DataFrame(
         {
@@ -2899,22 +3166,22 @@ def test_a_curve_s_values_take_the_decimals_that_the_rows_still_followed_allow()
         }
     )
     (curve,) = _curve_shown(long)
-    times, digits = curve.number("times").value, curve.number("decimals").value
-    assert digits == sorted(digits, reverse=True) and set(digits) == {4, 3, 2}
+    times, digits = curve.number("times").value, curve.number("limit_decimals").value
+    assert digits == sorted(digits, reverse=True) and set(digits) == {2, 1}
     followed = [int((long["days"] >= t).sum()) for t in times]
-    assert digits == [decimals_at(rows) for rows in followed]
-    assert followed[digits.index(3) - 1] >= 2000 > followed[digits.index(3)]
-    assert followed[digits.index(2) - 1] >= 400 > followed[digits.index(2)]
+    assert digits == [limit_decimals_at(rows) for rows in followed]
+    assert followed[digits.index(1) - 1] >= 400 > followed[digits.index(1)]
     whole = plan.record("survival", compare_survival(long, "days", "died", None))
     steps = whole.part(curve.id).number("times").value
     for name in ("survival", "lower", "upper"):
         full = dict(zip(steps, whole.part(curve.id).number(name).value, strict=True))
-        written = curve.number(name)
-        for t, value, places in zip(times, written.value, digits, strict=True):
-            assert value == round(full[max(s for s in steps if s <= t)], places), name
-        assert written.scale == 10.0  # one unit of the fewest decimals written
-    # 5,000 rows, 500 of them with the event in the first 100 days and the others followed to day 1000: four
-    # decimals throughout, and the time the flat end of the curve repeats is written as that time is
+        for t, value, places in zip(times, curve.number(name).value, digits, strict=True):
+            at = full[max(s for s in steps if s <= t)]
+            assert value == round(at, 2 if name == "survival" else places), name
+    assert curve.number("survival").scale == 10.0
+    assert curve.number("lower").scale == 100.0  # one unit of the fewest decimals written
+    # 5,000 rows, 500 of them with the event in the first 100 days and the others followed to day 1000: no third
+    # decimal, however many rows are followed
     plateau = pd.DataFrame(
         {
             "days": np.r_[rng.integers(1, 101, 500), np.full(4500, 1000)].astype(float),
@@ -2922,11 +3189,29 @@ def test_a_curve_s_values_take_the_decimals_that_the_rows_still_followed_allow()
         }
     )
     (curve,) = _curve_shown(plateau)
-    assert set(curve.number("decimals").value) == {4}
+    assert set(curve.number("limit_decimals").value) == {2}
     assert curve.number("times").value[-1] == curve.number("followed_until").value == 1000
     assert curve.number("survival").value[-1] == curve.number("survival").value[-2] == 0.9
-    assert curve.number("survival").scale == 0.1
-    assert any(v != round(v, 3) for v in curve.number("lower").value)
+    assert curve.number("lower").scale == 10.0
+    for name in ("survival", "lower", "upper"):
+        assert all(v == round(v, 2) for v in curve.number(name).value), name
+    # the flat last time repeats the time before, to the decimals of its own rows followed: 600 rows, 60 events
+    # in the first 50 days, 240 follow-ups ending on day 500 and 300 on day 1000
+    fewer = pd.DataFrame(
+        {
+            "days": np.r_[rng.integers(1, 51, 60), np.full(240, 500), np.full(300, 1000)].astype(
+                float
+            ),
+            "died": np.r_[np.ones(60), np.zeros(540)].astype(int),
+        }
+    )
+    (curve,) = _curve_shown(fewer)
+    digits = curve.number("limit_decimals").value
+    assert curve.number("times").value[-1] == 1000 and digits[-2:] == [2, 1]
+    assert curve.number("survival").value[-1] == curve.number("survival").value[-2]
+    for name in ("lower", "upper"):
+        before, flat = curve.number(name).value[-2:]
+        assert flat == round(before, 1), name
 
 
 def _greenwood(value: float, limit: float, z: float) -> float | None:
@@ -2938,15 +3223,17 @@ def _greenwood(value: float, limit: float, z: float) -> float | None:
 
 
 def _greenwood_range(
-    value: float, low: float, high: float, half: float, z: float
+    written: tuple[float, float, float], halves: tuple[float, float], z: float
 ) -> tuple[float, float] | None:
-    """The range of Greenwood's sum that the written digits of a value and of its two limits allow."""
+    """The range of Greenwood's sum that the written digits of a value and of its two limits allow (``halves``:
+    half a unit of the last decimal of the value, and of the limits)."""
+    value, low, high = written
     bounds = []
     for limit in (low, high):
         corners = [
             _greenwood(a, b, z)
-            for a in (value - half, value + half)
-            for b in (limit - half, limit + half)
+            for a in (value - halves[0], value + halves[0])
+            for b in (limit - halves[1], limit + halves[1])
         ]
         if all(c is not None for c in corners):
             bounds.append((min(corners), max(corners)))
@@ -2956,24 +3243,24 @@ def _greenwood_range(
 
 
 def _read_stretch(
-    written: dict[str, list], halves: list[float], j: int, most_rows: int, z: float, k: int = 10
+    written: list[tuple[float, float, float]],
+    halves: list[tuple[float, float]],
+    j: int,
+    most_rows: int,
+    z: float,
+    k: int = 10,
 ) -> dict[int, tuple[int, int]] | None:
     """
     What a reader gets from the digits of a curve for the stretch that ends at its place j, when no follow-up ends
     inside it: the whole pairs (rows at risk, events) that agree with the value and the limits written at both of
     its ends, as {rows: (fewest events, most events)}. The stretch multiplies the curve by (n - d) / n and adds
-    d / (n (n - d)) to Greenwood's sum. None when the digits give no reading.
+    d / (n (n - d)) to Greenwood's sum. None when the digits give no reading. Place 0 is the start: 1, exactly.
     """
-    values, low, high = written["survival"], written["lower"], written["upper"]
-    half, before = halves[j], halves[j - 1]
-    least = (values[j] - half) / (values[j - 1] + before)
-    most = (values[j] + half) / max(values[j - 1] - before, 1e-12)
-    now = _greenwood_range(values[j], low[j], high[j], half, z)
-    earlier = (
-        (0.0, 0.0)
-        if j == 1
-        else _greenwood_range(values[j - 1], low[j - 1], high[j - 1], before, z)
-    )
+    (value, _, _), (before, _, _) = written[j], written[j - 1]
+    least = (value - halves[j][0]) / (before + halves[j - 1][0])
+    most = (value + halves[j][0]) / max(before - halves[j - 1][0], 1e-12)
+    now = _greenwood_range(written[j], halves[j], z)
+    earlier = (0.0, 0.0) if j == 1 else _greenwood_range(written[j - 1], halves[j - 1], z)
     if now is None or earlier is None:
         return None
     g_low, g_high = max(now[0] - earlier[1], 0.0), now[1] - earlier[0]
@@ -3007,6 +3294,136 @@ def _lost_between(
     return sorted({a - b for a in left for b in second if a - b >= 0})
 
 
+def _limits_of(value: float, greenwood: float, z: float) -> tuple[float, float]:
+    """The log(-log) interval of a value of a curve whose Greenwood's sum is given."""
+    if not (0 < value < 1) or greenwood < 0:
+        return value, value
+    centre = math.log(-math.log(value))
+    se = math.sqrt(greenwood) / abs(math.log(value))
+    return math.exp(-math.exp(centre + z * se)), math.exp(-math.exp(centre - z * se))
+
+
+def _lost_before_each_time(
+    rows: int,
+    events: int,
+    written: list[tuple[float, float, float]],
+    halves: list[tuple[float, float]],
+    z: float,
+    k: int = 10,
+) -> list[list[int]]:
+    """
+    What a reader of the whole curve gets, who supposes a common closing date: every row without the event is
+    followed to the end unless it is lost, and no event follows the last time. The reader knows the rows and the
+    events, which are written exactly. Before a loss the curve is the share of rows still without the event (s / N,
+    Greenwood's sum 1 / s - 1 / N); after a loss of c rows it is (s / N) (r / m) with m = s - c, and at the last
+    time r = N - E - c. Every place and size of one loss whose path agrees with every value and both limits, to
+    their written digits, with at least k events between two times, is kept. For each time: the counts of rows
+    lost before it, over the paths kept (``written`` and ``halves`` without the start and without a flat last
+    time).
+    """
+    last = len(written) - 1
+    without = rows - events
+
+    def agrees(j: int, value: float, greenwood: float) -> bool:
+        shown, low, high = written[j]
+        if abs(value - shown) > halves[j][0] + 1e-9:
+            return False
+        lower, upper = _limits_of(value, greenwood, z)
+        return abs(lower - low) <= halves[j][1] + 1e-9 and abs(upper - high) <= halves[j][1] + 1e-9
+
+    def window(j: int, scale: float, most: int) -> range:
+        low = math.floor((written[j][0] - halves[j][0]) * most / scale) - 1
+        high = math.ceil((written[j][0] + halves[j][0]) * most / scale) + 1
+        return range(max(k, low), min(most, high) + 1)
+
+    plain = [
+        {s for s in window(j, 1.0, rows) if agrees(j, s / rows, 1.0 / s - 1.0 / rows)}
+        for j in range(len(written))
+    ]
+    found: set[tuple[int, int]] = set()
+    reach = {rows}
+    for j in range(len(written)):
+        reach = {s for s in plain[j] if reach and max(reach) - s >= k}
+    if without in reach:
+        found.add((last, 0))
+    for place in range(-1, last):
+        reach = {rows}
+        for j in range(place + 1):
+            reach = {s for s in plain[j] if reach and max(reach) - s >= k}
+        for at in sorted(reach):
+            scale, shift = at / rows, 1.0 / at - 1.0 / rows
+            for lost in range(1, min(without - k, at - 2 * k) + 1):
+                left, end = at - lost, without - lost
+                if end < k or end > left - k:
+                    continue
+                if not agrees(last, scale * end / left, shift + 1.0 / end - 1.0 / left):
+                    continue
+                after = {left}
+                for j in range(place + 1, last):
+                    after = {
+                        r
+                        for r in window(j, scale, left)
+                        if max(after) - r >= k
+                        and agrees(j, scale * r / left, shift + 1.0 / r - 1.0 / left)
+                    }
+                    if not after:
+                        break
+                if after and max(after) - end >= k:
+                    found.add((place, lost))
+    return [
+        sorted({(lost if place < j else 0) for place, lost in found}) for j in range(len(written))
+    ]
+
+
+def _as_a_reader_sees_it(frame: pd.DataFrame):
+    """The one curve of ``frame`` as the layer writes it, with the record's own values at its times: (the written
+    part, [(value, lower, upper)] at full precision), both without a flat last time."""
+    from biostats import plan
+    from biostats.survival import compare_survival
+
+    record = plan.record("survival", compare_survival(frame, "days", "died", None))
+    (curve,) = [p for p in _disclose(record).record.parts if p.id.startswith("curve#")]
+    times, values = curve.number("times").value, curve.number("survival").value
+    flat = (
+        len(times) >= 2
+        and times[-1] == curve.number("followed_until").value
+        and values[-1] == values[-2]
+    )
+    kept = len(times) - 1 if flat else len(times)
+    full = record.part(curve.id)
+    steps = full.number("times").value
+    place = [max(i for i, s in enumerate(steps) if s <= t) for t in times[:kept]]
+    exact = [
+        tuple(full.number(name).value[i] for name in ("survival", "lower", "upper")) for i in place
+    ]
+    return curve, exact
+
+
+def _three_lost(base: pd.DataFrame, after: int) -> pd.DataFrame:
+    """``base`` with three more rows whose follow-up ends the day after the last event at or before the time of
+    place ``after`` of its written curve: they are lost between that stretch and the next."""
+    (curve,) = _curve_shown(base)
+    time = curve.number("times").value[after]
+    days = base.loc[base["died"] == 1, "days"]
+    gap = float(days[days <= time].max() + 1)
+    lost = pd.DataFrame({"days": [gap] * 3, "died": [0] * 3})
+    return pd.concat([base, lost], ignore_index=True)
+
+
+def _closing_date(size: int, share: float, seed: int) -> pd.DataFrame:
+    """A study with a common closing date: ``share`` of its rows have the event before day 1500, the others are
+    followed to day 2000."""
+    rng = np.random.default_rng(seed)
+    events = round(share * size)
+    days = np.sort(rng.choice(np.arange(1, 1500), events, replace=False))
+    return pd.DataFrame(
+        {
+            "days": np.r_[days, np.full(size - events, 2000)].astype(float),
+            "died": np.r_[np.ones(events), np.zeros(size - events)].astype(int),
+        }
+    )
+
+
 def test_three_rows_lost_late_in_a_curve_do_not_come_back_from_its_digits() -> None:
     """75 events before day 1500, 15 rows followed to day 2000, and 3 rows whose follow-up ends late, after the last
     event before a time given (93 rows). The stretches on either side hold 39 and 26 rows at risk. A reader who
@@ -3014,47 +3431,25 @@ def test_three_rows_lost_late_in_a_curve_do_not_come_back_from_its_digits() -> N
     the rows lost between the two: 3, at three decimals."""
     from statistics import NormalDist
 
-    from biostats import plan
-    from biostats.survival import compare_survival
-
     z = NormalDist().inv_cdf(0.975)
     for seed in (1, 3):
-        rng = np.random.default_rng(seed)
-        days = np.sort(rng.choice(np.arange(1, 1500), 75, replace=False))
-        late = pd.DataFrame(
-            {
-                "days": np.r_[days, np.full(15, 2000)].astype(float),
-                "died": np.r_[np.ones(75), np.zeros(15)].astype(int),
-            }
-        )
-        (before,) = _curve_shown(late)
+        base = _closing_date(90, 75 / 90, seed)
+        (before,) = _curve_shown(base)
         third_from_the_end = before.number("times").value[-3]
-        gap = float(days[days <= third_from_the_end].max() + 1)
-        lost = pd.DataFrame({"days": [gap] * 3, "died": [0] * 3})
-        frame = pd.concat([late, lost], ignore_index=True)
-        record = plan.record("survival", compare_survival(frame, "days", "died", None))
-        (curve,) = [p for p in _disclose(record).record.parts if p.id.startswith("curve#")]
-        times, digits = curve.number("times").value, curve.number("decimals").value
-        assert third_from_the_end in times and set(digits) == {2}, seed
+        frame = _three_lost(base, -3)
+        curve, exact = _as_a_reader_sees_it(frame)
+        times, digits = curve.number("times").value, curve.number("limit_decimals").value
+        assert third_from_the_end in times and set(digits) == {1}, seed
         where = times.index(third_from_the_end)
-        full = record.part(curve.id)
-        steps = full.number("times").value
-        place = [max(i for i, s in enumerate(steps) if s <= t) for t in times]
 
-        def read(decimals: list[int], full=full, place=place, where=where, rows=len(frame)):
+        def read(value: int, limits: list[int], exact=exact, where=where, rows=len(frame)):
             """The counts of rows lost after the stretch that ends at ``where``, as the reader gets them from the
             curve written to these decimals."""
-            written = {
-                name: [
-                    1.0,
-                    *(
-                        round(full.number(name).value[i], d)
-                        for i, d in zip(place, decimals, strict=True)
-                    ),
-                ]
-                for name in ("survival", "lower", "upper")
-            }
-            halves = [0.0, *(0.5 * 10.0**-d for d in decimals)]
+            written = [(1.0, 1.0, 1.0)] + [
+                (round(s, value), round(low, d), round(high, d))
+                for (s, low, high), d in zip(exact, limits, strict=False)
+            ]
+            halves = [(0.0, 0.0)] + [(0.5 * 10.0**-value, 0.5 * 10.0**-d) for d in limits]
             first, second = (
                 _read_stretch(written, halves, j, rows, z) for j in (where + 1, where + 2)
             )
@@ -3062,13 +3457,50 @@ def test_three_rows_lost_late_in_a_curve_do_not_come_back_from_its_digits() -> N
             return _lost_between(first, second)
 
         # the values the layer writes are those of the record, to the decimals it says
-        for name in ("survival", "lower", "upper"):
-            assert curve.number(name).value == [
-                round(full.number(name).value[i], d) for i, d in zip(place, digits, strict=True)
-            ], name
-        assert read([3] * len(times)) == [3], seed  # what three decimals gave back
-        as_written = read(digits)
+        for place, (value, low, high) in enumerate(exact):
+            assert curve.number("survival").value[place] == round(value, 2)
+            assert curve.number("lower").value[place] == round(low, digits[place])
+            assert curve.number("upper").value[place] == round(high, digits[place])
+        assert read(3, [3] * len(exact)) == [3], seed  # what three decimals gave back
+        as_written = read(2, digits)
         assert 3 in as_written and len(as_written) >= 20, (seed, as_written)
+
+
+def test_a_reader_of_the_whole_curve_gets_no_count_of_rows_lost_between_two_times() -> None:
+    """A reader who fits the whole curve at once needs far less than one who takes each stretch on its own. Before
+    a loss the curve is a share of its rows, after it a share of the rows left, and limits written as finely as
+    the value pin that share near the top of the curve: from three decimals the reader got 3 rows lost to
+    follow-up exactly, at most of the times written, in cohorts of 93 to 1,000 rows."""
+    from statistics import NormalDist
+
+    z = NormalDist().inv_cdf(0.975)
+    cases = (
+        ("93 rows, lost late", _three_lost(_closing_date(90, 0.8, 9002), -3)),
+        ("450 rows, lost after the first time", _three_lost(_closing_date(447, 0.5, 3130), 0)),
+        ("1,000 rows, lost after the first time", _three_lost(_closing_date(997, 0.75, 6980), 0)),
+    )
+    for title, frame in cases:
+        curve, exact = _as_a_reader_sees_it(frame)
+        rows, events = curve.support["rows"], curve.support["events"]
+        assert (rows, rows - events) == (len(frame), int((frame["died"] == 0).sum())), title
+        digits = curve.number("limit_decimals").value[: len(exact)]
+
+        def read(value: int, limits: list[int], exact=exact, rows=rows, events=events):
+            written = [
+                (round(s, value), round(low, d), round(high, d))
+                for (s, low, high), d in zip(exact, limits, strict=True)
+            ]
+            halves = [(0.5 * 10.0**-value, 0.5 * 10.0**-d) for d in limits]
+            return _lost_before_each_time(rows, events, written, halves, z)
+
+        # at three decimals: one count of rows lost, and the true one, before some of the times written
+        fine = read(3, [3] * len(exact))
+        assert [3] in fine and all(len(counts) > 1 or counts[0] in (0, 3) for counts in fine), title
+        # as the layer writes the curve: before no time is the count of rows lost one value from 1 to 9
+        blurred = read(2, digits)
+        assert all(len(counts) > 1 or counts == [0] for counts in blurred), (title, blurred)
+        # the truth is one of several values: four of them in the group of 93 rows (2 to 5)
+        assert 3 in blurred[-1] and len(blurred[-1]) >= 4, (title, blurred[-1])
 
 
 def test_a_pooled_result_is_compared_with_the_rows_its_datasets_read() -> None:
@@ -3310,14 +3742,23 @@ def test_the_notes_a_package_reads_its_results_with_are_fixed_words() -> None:
     assert (
         "adjusted for every variable and every level" in notes[2] and "withheld whole" in notes[2]
     )
+    # a rare value of a score withholds its slope, not the model; and where a term is asked three counts
+    assert (
+        "A rare value of a numeric covariate of a few values withholds its own term only"
+        in notes[2]
+    )
+    assert "no more events than participants" in notes[1]
+    assert "is not marked: it rests on every value" in notes[4]
+    assert "A negative binomial model is never marked" in notes[9]
     assert "per unit" in notes[3] and "the reference written beside it" in notes[3]
     assert "the rarer outcome of a logistic model" in notes[4] and "Below 10 (sparse)" in notes[4]
     # what a time of a curve stands for, and what follows its last time
     assert (
-        "written to 2 decimals where fewer than 400 participants are still followed at that time, 3 from 400 "
-        "and 4 from 2,000 (decimals gives the number at each time)"
+        "the value to 2 decimals, the limits to 2 decimals where 400 participants or more are still followed at "
+        "that time, 1 decimal below (limit_decimals gives the number at each time"
     ) in notes[5]
     assert "whose follow-up ended between two times" in notes[5] and "is rough" in notes[5]
+    assert "log(-log)" in notes[5] and "limits at 1 decimal give none" in notes[5]
     assert "between 1 and the first value" in notes[5]
     assert "followed_until" in notes[6] and "12 events or more follow" in notes[6]
     assert "stays flat" not in " ".join(

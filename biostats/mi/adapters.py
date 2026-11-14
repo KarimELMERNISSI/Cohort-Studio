@@ -144,6 +144,11 @@ def _model_sizes(extracts: list[Extract]) -> dict[str, Any]:
         out["rows_with_events"] = (int(min(with_events)), int(max(with_events)))
     # a count model's dispersion in each dataset, as the smallest and the largest: a Poisson model above 1.5 has
     # standard errors that are too small, which a pooled model said of no dataset
+    # the largest share of rows without the event over the datasets: the smallest counts come from different
+    # datasets, and a share read on them is below every dataset's
+    held = with_events if all(v is not None for v in with_events) else events
+    if all(v is not None for v in held) and all(rows):
+        out["without_share"] = max((n - int(d)) / n for n, d in zip(rows, held, strict=True))
     spread = [e.extra.get("dispersion") for e in extracts]
     if spread and all(isinstance(v, int | float) and math.isfinite(v) for v in spread):
         out["dispersion"] = (float(min(spread)), float(max(spread)))
@@ -680,7 +685,17 @@ class SurvivalAdapter(Adapter):
             "rows_left_out": max(int(e.extra.get("rows_left_out") or 0) for e in extracts),
             # the rows and the events of all the groups drawn, the smallest over the datasets (a sum of each group's
             # smallest would be fewer than any dataset holds)
-            "total": {"rows": min(n for n, _ in totals), "events": min(d for _, d in totals)},
+            "total": {
+                "rows": min(n for n, _ in totals),
+                "events": min(d for _, d in totals),
+                # the largest share of rows without the event over the datasets (the smallest rows and the
+                # smallest events come from different datasets)
+                **(
+                    {"without_share": max((n - d) / n for n, d in totals)}
+                    if all(n for n, _ in totals)
+                    else {}
+                ),
+            },
         }
 
 

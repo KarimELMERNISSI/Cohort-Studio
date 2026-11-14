@@ -44,9 +44,11 @@ kind:
   stands beside a term, so nothing written shows them, and counted they withheld the ratios of the very levels
   with the most events (a level in which nearly everybody had the event). Three things keep it so. The model
   part of a count model writes neither its rows with an event nor those without. A count model of a yes/no
-  outcome (every count is 0 or 1) keeps all three counts: it is a logistic model fitted another way. And the
-  cells of a variable of which the package writes a count per level elsewhere (``tabulated``) are judged on
-  all three: such a table gives a level's rows, and the term its events;
+  outcome (every count is 0 or 1) keeps all three counts: it is a logistic model fitted another way; so does,
+  in any count model, a variable one of whose cells holds no more events than rows (nearly every count is 0
+  or 1 there, whatever a participant of another level holds). And the cells of a variable of which the
+  package writes a count per level elsewhere (``tabulated``) are judged on all three: such a table gives a
+  level's rows, and the term its events;
 - no count travels beside a term, but in a model of categories alone the numbers of a shown term are its two
   cells' counts in another form (the coefficient is their log odds ratio, the square of its standard error the sum
   of their reciprocals), and the model's totals, less the cells shown, give the withheld ones. So the cells
@@ -72,7 +74,10 @@ kind:
   score that 600 hold, the other terms move in their second or third decimal; without the 3 rows of an
   indicator, not at all). For such a term the cell that can drop out is the rows off the covariate's
   commonest value: the model is withheld when they are fewer than k, or when nobody, or everybody, of them
-  had the event;
+  had the event. Or the rows at one value far from the others: a slope fits one row exactly when that row
+  carries nearly all of its weight (rows times the squared distance from the commonest value), and the model
+  is withheld when a value held by fewer than k rows carries nine tenths of it (a dose of 0 for 588 rows, 1
+  for 11 and 50 for one). No count of cells sees such a row in a covariate of more than twenty values;
 - a Kaplan-Meier curve is given at times that are multiples of one step for the whole result, read on the groups
   it shows: at least a hundredth of the follow-up shown, and at least a floor of five times the unit the times
   are recorded in, which is never more than a tenth of the follow-up shown and never less than one unit, so that
@@ -81,19 +86,23 @@ kind:
   usual gap between two recorded times): read on the data alone, a few rows recorded finer than the others set
   it, and the times given were event times again. The curve says which of the two set its step. At least k
   events lie between two times and none or at least k after the last (in every imputed dataset, for a pooled
-  curve), and k rows are still followed at the last. The curve and its limits are written to two decimals
-  where fewer than 400 rows are still followed at the time, to three from 400 and to four from 2,000
-  (``DECIMALS_BY_ROWS``; the curve says which, time by time): with every digit they give the rows at risk at
-  each time, and so the rows whose follow-up ended between two times, and late in a curve three decimals still
-  did (with 30 to 60 rows at risk, one whole pair of rows at risk and events agrees with them: 3 rows lost to
-  follow-up came back exactly). The result says until when k rows were followed; the median is rounded up to the
+  curve), and k rows are still followed at the last. The curve is written to two decimals at every time, and
+  its limits to two decimals where 400 rows or more are still followed at the time, to one decimal below
+  (``LIMIT_DECIMALS_BY_ROWS``; the curve says which, time by time). With every digit a value and its limits
+  give the rows at risk at each time, and so the rows whose follow-up ended between two times; and limits
+  written as finely as the value pin the fractions near the top of a curve, so that a reader who fits the
+  whole curve at once, supposing a common closing date, got 3 rows lost to follow-up back exactly from three
+  decimals, and from four in the largest groups. At these decimals that reader got no count on the cohorts
+  tried (93 to 3,000 rows); in a group of about 90 rows two values can be left (2 or 3).
+  The result says until when k rows were followed; the median is rounded up to the
   step, its lower limit down and its upper limit up, or said to be later than that time. A group of fewer than k
   rows, events or rows without the event is withheld whole, and with it the smallest groups shown until the
   groups withheld hold k of each together: the number analysed, less the groups shown, gives their sum. The
   log-rank test is shown when every group is;
-- beside a pooled result, its complete-case analysis is shown only when the two differ by none, or by at least k,
-  of their rows, their rows with the event and their rows without it (group by group for curves): they differ by
-  the rows that lack a value, and by their outcomes. The complete cases take the groups the pooled result
+- beside a pooled result, its complete-case analysis is shown only when the two are on the same rows, or
+  differ by at least k rows with the event and at least k without it (group by group for curves): they differ
+  by the rows that lack a value, and by their outcomes, and rows of which all, or none, had the event are a
+  group that would not be shown on its own. The complete cases take the groups the pooled result
   withholds and may withhold more; nothing they need goes back to the result. A pooled result's rows are the
   fewest that one of its imputed datasets read, and are compared with its line of the flow as an observed
   result's are;
@@ -101,7 +110,11 @@ kind:
   everybody has the event in the end, and the few without it are no outcome to protect), the groups of curves
   and the Cox and count models as wholes need k rows and k with the event, and no longer k without: that count
   is then given exactly. Never for a yes/no outcome, and not for a result of which more than a twentieth of
-  the rows are without the event.
+  the rows are without the event, unless the declaration asks to hold beyond that cap (``beyond_the_cap``,
+  off unless asked for). The cap is read on the result as a whole. A result the declaration holds for says
+  so (its part ``declaration``), with that count, its share and whether the declaration changed what the
+  result writes. What the person who shares is told (a refusal with its share, the warning of an override, a
+  group shown above the cap) is never written: beside a result's rows, a share is a count.
 
 Only the numbers a kind's rule names are written: a number added to a record later does not travel until the rule
 says so, and a kind without a rule is withheld. No warning's wording travels: what a reader needs of the cautions
@@ -130,13 +143,21 @@ What the writer of a package must do, which this module cannot:
 - compare every two results of one outcome (:func:`outcome_of`), whatever their kinds: computed on different
   rows, they differ by the rows that lack a value, whose number is exempt and whose outcomes are not
   (:func:`pair_gives_back`: a model beside the same model adjusted for a variable that 30 rows lack says how many
-  of the 30 had the event). Of two that fail, one is written: the one computed on more rows, unless the person
-  who shares chooses the other; the one left out is named in the export log, and the person is told what
-  answers it: results fitted on one sample (a criterion on the rows that hold every covariate);
+  of the 30 had the event; all of them, or none, is said of each). Of two that fail, one is written: the one
+  computed on more rows, unless the person who shares chooses the other; the one left out is named in the
+  export log, and the person is told what answers it: results fitted on one sample (a criterion on the rows
+  that hold every covariate). Among more than two, the results are taken from the most rows down, and one is
+  written when it fails with none already written. The function reads counts: the writer, which holds the
+  rows, compares two results whose rows are not nested on the rows that only one of them reads;
 - of two models of one kind and one outcome that differ only by variables of which no term is written
   (:func:`nested_by_unwritten`), write one, by default the one without those variables: the two together give
   the events of the cell whose term is withheld, to a reader who knows its size and the level of another factor
-  it lies in;
+  it lies in. A column derived from another (capped, grouped: the trace records it) is read as that column: a
+  model beside the same model with its covariate capped, as a withheld slope's sentence advises, is such a
+  pair;
+- pass ``tabulated`` for every variable of which the package writes the rows of each level (a table of
+  characteristics, a table of the dossier, a flow broken down by level). The curves of a grouping do not
+  count: the loop below aligns their cells;
 - withhold one set of cells per grouping across the results of a package: two results that each withhold another
   cell to cover a small one give it back together. The results are disclosed in turn, in one order: each with the
   cells the results before it named (``disclose_record``'s ``cover``, made by :func:`cover_for` from what
@@ -160,8 +181,11 @@ What the writer of a package must do, which this module cannot:
   limit, and show what it did not finish, or stopped on, as not checked;
 - check every member against a closed schema: no fingerprint of rows, of cells or of a spec, no intermediate head
   of the trace, no number marked as one participant's;
+- show the person who shares what each result tells them (``DisclosedRecord.told``), keep it in the export log,
+  and never write it in the package;
 - name in the export log what is left out: the results by kind and place, the hits overridden, the texts not
-  checked.
+  checked; and the results a declaration changed, with their share of rows without the event (the part
+  ``declaration`` holds both).
 """
 
 from __future__ import annotations
@@ -214,9 +238,11 @@ class FollowedToTheEvent:
     are without the event (``MOST_WITHOUT_THE_EVENT``): such an outcome is not followed to the event.
 
     ``beyond_the_cap`` lets the declaration hold for such a result all the same. It is off unless the person
-    who declares asks for it, by an act of its own: the person is warned, and each result it changes says so
-    with its actual share of rows without the event (the part ``declaration`` of what is written: a reader of
-    the result finds it there, beside the policy that records the override).
+    who declares asks for it, by an act of its own, and has no ceiling: the person is warned (in what the
+    result tells them, which is never written), and each result the declaration holds for says so with its
+    rows without the event, their share, and whether the declaration changed what it writes (the part
+    ``declaration`` of what is written: a reader of the result finds it there, beside the policy that records
+    the override).
 
     ``outcome`` is the event variable, or the count; ``reason`` the declaring person's own words (a text of
     the user's: the finder reads it), ``role`` who declares, ``date`` when. A package writes the declaration
@@ -957,12 +983,18 @@ class DisclosedRecord:
     """
     What a shared package shows of a result: ``record`` holds the parts and the numbers that can be shown (None when
     the whole result is withheld), ``withheld`` says what is not, by count and by variable, never by a level's name.
+
+    ``told`` is for the person who shares, and is never written into a package: a declaration that is refused for
+    the result, the warning of an override, what to check of a declared unit. Its sentences can hold what a
+    package must not say: the share of a result's rows without the event is, beside its rows, their count (5.8%
+    of 120 rows is 7). The screen shows them, and the export log keeps them.
     """
 
     kind: str
     pooled: bool
     record: ResultRecord | None
     withheld: tuple[str, ...] = ()
+    told: tuple[str, ...] = ()
 
 
 # What is written of a model as a whole: its totals, and, apart, what its fit says of all its rows together. A
@@ -1060,10 +1092,10 @@ _ADVICE = (
 )
 # for the slope of a numeric covariate of a few values, which has no level to join
 _CAP = "cap or group the values of the covariate"
-# and when nearly every row holds one value: no grouping of the others brings their rows to k
+# and when nearly every row holds one value, or one value far from the others carries the slope
 _LEAVE_OUT = (
-    "leave the covariate out of the model, or take those rows out of the analysis population by a criterion, and "
-    "run the analysis again"
+    "cap the values of the covariate, leave it out of the model, or take those rows out of the analysis "
+    "population by a criterion, and run the analysis again"
 )
 
 
@@ -1113,12 +1145,39 @@ def _cell_counted(
     """
     The counts each cell of ``variable`` must hold for its term to be written in this record: those of the kind
     (:data:`_CELL_COUNTED`), or all three when the package writes a count per level of the variable elsewhere
-    (``tabulated``: such a table gives the level's rows, and the term then gives its rows without the event), and
-    for a count model of a yes/no outcome (:func:`_yes_no_count`).
+    (``tabulated``: such a table gives the level's rows, and the term then gives its rows without the event), for
+    a count model of a yes/no outcome (:func:`_yes_no_count`), and for a variable of a count model one of whose
+    cells holds no more events than rows (:func:`_nearly_yes_no`).
     """
-    if variable in tabulated or _yes_no_count(record):
+    if variable in tabulated or _yes_no_count(record) or _nearly_yes_no(record, variable):
         return _COUNTED[record.kind]
     return _CELL_COUNTED[record.kind]
+
+
+def _nearly_yes_no(record: ResultRecord, variable: str) -> bool:
+    """
+    Whether a cell of ``variable`` in a count model, its reference included, holds no more events than rows. A
+    count term's standard error gives its level's events, which are its participants with the event wherever
+    nearly every count is 0 or 1 (relapses, falls, admissions), whatever a participant of another level holds:
+    read on the whole model, one count of 2 anywhere lifted the rule for every level (a site of 30 rows, 26
+    with the event: 26.00 events read for 26). Where counts are true counts it never holds (4 visits a
+    participant).
+    """
+    if record.kind != "count" or not variable:
+        return False
+    parts = {p.id: p for p in record.parts}
+    if f"reference:{variable}" not in parts:
+        return False  # no cell behind its term
+    cells = [
+        p.support
+        for p in record.parts
+        if p.id.startswith(("term:", "reference:")) and p.labels.get("variable", "") == variable
+    ]
+    for cell in cells:
+        events, rows = _count(cell, "events"), _count(cell, "rows")
+        if isinstance(events, int) and isinstance(rows, int) and events <= rows:
+            return True
+    return False
 
 
 def _model_shown(part: Part, kind: str, policy: DisclosurePolicy, *, lifted: bool = False) -> bool:
@@ -1186,24 +1245,44 @@ def _said(count: int, what: str, why: str, *, of: str = "", more: bool = False) 
 
 
 def _differ_by_few(
-    whole: Mapping[str, Any], part: Mapping[str, Any], kind: str, policy: DisclosurePolicy
+    whole: Mapping[str, Any],
+    part: Mapping[str, Any],
+    kind: str,
+    policy: DisclosurePolicy,
+    *,
+    lifted: bool = False,
 ) -> bool:
     """
-    Whether two sets of counts, shown side by side, give a count from 1 to k - 1 by subtraction: the rows, the rows
-    with the event or the rows without it that the first holds and the second lacks (a pooled analysis and its
-    complete cases differ by the rows that lack a value, and by their outcomes).
+    Whether two sets of counts, shown side by side, give back by subtraction what a group would not be shown
+    for (a pooled analysis and its complete cases differ by the rows that lack a value, and by their outcomes).
+    On the same rows, a difference from 1 to k - 1 of the rows with the event, or without it. On different
+    rows, the rows between the two are a group of their own: fewer than k of them with the event, or without
+    it, and the pair says so of each (12 rows lack a value and all twelve died: none without the event is no
+    count that can be shown, as it is none for a group or for a level). ``lifted``: the outcome is declared
+    followed to the event, and the rows without it are not counted.
     """
+    gaps = []
     for name in _COUNTED[kind]:
         a, b = _count(whole, name), _count(part, name)
-        if not isinstance(a, int) or not isinstance(b, int) or not policy.shows(a - b) or a < b:
+        if not isinstance(a, int) or not isinstance(b, int) or a < b:
             return True
-    return False
+        gaps.append(a - b)
+    rows, *sides = gaps
+    if lifted:
+        sides = sides[:1]
+    if not rows:
+        return any(not policy.shows(n) for n in sides)
+    return any(n < policy.k for n in sides)
 
 
-def _withheld_whole(record: ResultRecord, *why: str) -> DisclosedRecord:
-    return DisclosedRecord(record.kind, record.pooled, None, tuple(why))
+def _withheld_whole(record: ResultRecord, *why: str, told: Sequence[str] = ()) -> DisclosedRecord:
+    return DisclosedRecord(record.kind, record.pooled, None, tuple(why), tuple(told))
 
 
+# The share of a slope's weight (rows times the squared distance from the commonest value), in thousandths, from
+# which the one value that carries it is the cell that drops out: a slope fits one row exactly when that row
+# carries nearly all of its weight (a dose of 0, 1 and 50: 99.6% on the participant at 50).
+FAR_SHARE = 900
 # why a term is withheld
 _REFERENCE, _CELL, _COVER = "reference", "cell", "cover"
 # what the cells behind a numeric covariate's term are, as its reference part says (biostats.plan.VALUES, COMMONEST)
@@ -1384,6 +1463,15 @@ def _off_the_commonest(part: Part) -> dict[str, int] | None:
     return off or None
 
 
+def _far_rows(part: Part) -> int | None:
+    """The rows at the one value that carries nine tenths or more of a slope's weight, as the record of a
+    covariate of a few values holds them (None: no such value, or a record that does not say)."""
+    share, rows = part.support.get("far_share"), part.support.get("far_rows")
+    if isinstance(share, int) and isinstance(rows, int) and share >= FAR_SHARE:
+        return rows
+    return None
+
+
 def _remedy(record: ResultRecord, hidden: Mapping[str, str]) -> str:
     """What answers the terms withheld: joining a small level; for the slope of a numeric covariate of a few
     values, which has no level to join, capping or grouping its values."""
@@ -1407,7 +1495,9 @@ def _why_whole(record: ResultRecord, hidden: Mapping[str, str], policy: Disclosu
       level or an indicator has a parameter of its own, which fits a lone row exactly; a slope has one
       parameter for every value, and the rows at a rare value stay in the fit. Read value by value, a count
       of hospital visits with one rare value withheld every model it adjusted. What two models isolate is
-      the rows off a covariate's commonest value (a dose of 0 for all but two rows: those two).
+      the rows off a covariate's commonest value (a dose of 0 for all but two rows: those two), or the rows
+      at one value far from the others, which carries the slope alone (a dose of 0 for 588 rows, 1 for 11 and
+      50 for one: the model written was the model without that participant).
     - Every term that would be written compares categories: the model is a table, and its numbers are its
       cells' counts in another form. A cell that is withheld comes back from the totals as soon as it is alone
       in its row of the table, whatever the complement of its own variable.
@@ -1422,12 +1512,18 @@ def _why_whole(record: ResultRecord, hidden: Mapping[str, str], policy: Disclosu
         reference = parts.get(f"reference:{part.labels.get('variable', '')}")
         off = _off_the_commonest(part)
         if off is not None:
-            if _extreme(part) or _drops_out(off, kind, policy):
+            far = _far_rows(part)
+            if (
+                _extreme(part)
+                or _drops_out(off, kind, policy)
+                or (far is not None and far < policy.k)
+            ):
                 which = "none or all" if len(_NO_MAXIMUM[kind]) > 1 else "none"
                 return (
                     "the model is withheld: the term of a numeric covariate is withheld, and the rows off its "
-                    f"commonest value are fewer than {policy.k}, or {which} of them had the event, or the term "
-                    "has no maximum: the terms left would be those of the model fitted without those rows "
+                    f"commonest value are fewer than {policy.k}, or {which} of them had the event, or fewer "
+                    f"than {policy.k} rows at a value far from the others carry the term, or the term has no "
+                    "maximum: the terms left may be those of the model fitted without those rows "
                     f"({_LEAVE_OUT})"
                 )
             continue
@@ -1447,7 +1543,8 @@ def _why_whole(record: ResultRecord, hidden: Mapping[str, str], policy: Disclosu
     references = [parts.get(f"reference:{p.labels.get('variable', '')}") for p in written]
     if all(r is not None and r.labels.get("of") != _OF_COMMONEST for r in references):
         return (
-            "the model is withheld: its terms all compare categories, so that their numbers are the cells of a "
+            "the model is withheld: every term it would write compares categories, so that their numbers are "
+            "the cells of a "
             f"table, and one of them cannot be shown ({_remedy(record, hidden)})"
         )
     return ""
@@ -1500,11 +1597,46 @@ def _term_facts(part: Part, reference: Part | None, counted: Sequence[str]) -> l
 @dataclass(frozen=True)
 class _Declared:
     """What the declaration of a result's outcome does to it: whether the rows without the event are no longer
-    counted (``lifted``), what the person who shares is told, and the part that says it in what is written."""
+    counted (``lifted``), what the person who shares is told (never written), and the numbers of the part that
+    says it in what is written."""
 
     lifted: bool = False
     told: tuple[str, ...] = ()
-    part: Part | None = None
+    numbers: tuple[Number, ...] = ()
+
+    def part(self, changed: bool) -> Part | None:
+        """The part ``declaration`` of a result the declaration holds for (None when it does not). ``changed``:
+        whether the result writes something it would not write without the declaration, so that a log of what a
+        declaration changed need not disclose each result twice."""
+        if not self.lifted:
+            return None
+        return Part("declaration", (*self.numbers, Number("changed", bool(changed), EXACT)))
+
+
+def _share_without(record: ResultRecord) -> tuple[float, int | None, int | None] | None:
+    """
+    The share of a result's rows that are without the event, with the two counts it is made of: (share, rows
+    without the event, rows); None when the record does not say. A pooled result's share is the largest over its
+    imputed datasets, as its record holds it: its counts are each the smallest over the datasets, come from
+    different datasets and read too low together (4.63% where every dataset holds 5.0%). They are no dataset's
+    counts, and are not given.
+    """
+    if record.pooled:
+        where = "data" if record.kind == "survival" else "model"
+        held = next((p for p in record.parts if p.id == where), None)
+        names = {} if held is None else {n.name: n.value for n in held.numbers}
+        largest = names.get("without_event_share_max")
+        if (
+            isinstance(largest, int | float)
+            and not isinstance(largest, bool)
+            and math.isfinite(largest)
+        ):
+            return float(largest), None, None
+    people = _people(record)
+    if people is None or not sum(people):
+        return None
+    share = people[1] / sum(people)
+    return (share, None, None) if record.pooled else (share, people[1], sum(people))
 
 
 def _followed(record: ResultRecord, policy: DisclosurePolicy, spec: AnalysisSpec) -> _Declared:
@@ -1515,9 +1647,13 @@ def _followed(record: ResultRecord, policy: DisclosurePolicy, spec: AnalysisSpec
     person who shares is then warned, and the result says so with its actual share.
 
     What is written of a result the declaration holds for has a part ``declaration``: that the outcome is declared
-    followed to the event, the share of the result's rows without the event, the cap, and whether the share is
-    beyond it. The counts of participants without the event are then written, small ones included: this part is
-    where a reader learns why.
+    followed to the event, its rows without the event and their share of its rows (a pooled result: the largest
+    share over its imputed datasets), the cap, whether the share is beyond it, and whether the declaration changed
+    what the result writes. The counts of participants without the event are then written, small ones included:
+    this part is where a reader learns why.
+
+    What the person who shares is told (a refusal, the warning of an override) is not written: a share beside a
+    result's rows is a count, and a result the declaration is refused for can be one withheld for that count.
     """
     outcome = outcome_of(spec)
     declaration = policy.declaration(outcome)
@@ -1530,39 +1666,46 @@ def _followed(record: ResultRecord, policy: DisclosurePolicy, spec: AnalysisSpec
                 "yes/no outcome: both of its sides are counted",
             )
         )
-    people = _people(record)
-    if people is None or not sum(people):
+    found = _share_without(record)
+    if found is None:
         return _Declared()
-    share = people[1] / sum(people)
+    share, without, rows = found
     beyond = share > MOST_WITHOUT_THE_EVENT
+    cap = f"{MOST_WITHOUT_THE_EVENT:.0%}"
+    counted = (
+        f"{without:,} of its {rows:,} rows are without the event ({share:.2%})"
+        if without is not None and rows is not None
+        else f"{share:.2%} of its rows are without the event in one of its imputed datasets"
+    )
     if beyond and not declaration.beyond_the_cap:
         return _Declared(
             told=(
                 f"the declaration that participants are followed to {outcome} does not hold for this result: "
-                f"{share:.1%} of its rows are without the event, more than {MOST_WITHOUT_THE_EVENT:.0%}. It can "
-                "be made to hold beyond that share by an explicit override, which each result then says",
+                f"{counted}, more than {cap}. It can be made to hold beyond that share by an explicit "
+                "override, which each result it holds for then says",
             )
         )
-    part = Part(
-        "declaration",
-        (
-            Number("followed_to_the_event", True, EXACT),
-            Number("share_without_the_event", round(share, 4), EXACT),
-            Number("cap", MOST_WITHOUT_THE_EVENT, EXACT),
-            Number("beyond_the_cap", beyond, EXACT),
+    numbers = (
+        Number("followed_to_the_event", True, EXACT),
+        *([Number("rows_without_the_event", without, EXACT)] if without is not None else []),
+        Number(
+            "share_without_the_event_max" if record.pooled else "share_without_the_event",
+            share,
+            DETERMINISTIC,
         ),
+        Number("cap", MOST_WITHOUT_THE_EVENT, EXACT),
+        Number("beyond_the_cap", beyond, EXACT),
     )
     told = (
         (
             f"Warning: the declaration that participants are followed to {outcome} holds for this result by an "
-            f"explicit override: {share:.1%} of its rows are without the event, more than "
-            f"{MOST_WITHOUT_THE_EVENT:.0%}. Counts of participants without the event are written, small ones "
-            "included, and the result says so",
+            f"explicit override: {counted}, more than {cap}. Counts of participants without the event are "
+            "written, small ones included, and the result says so",
         )
         if beyond
         else ()
     )
-    return _Declared(True, told, part)
+    return _Declared(True, told, numbers)
 
 
 def _disclose_model(
@@ -1578,11 +1721,12 @@ def _disclose_model(
     parts = {p.id: p for p in record.parts}
     model = parts.get("model")
     declared = _followed(record, policy, spec)
+    told = list(declared.told)
     if model is None or not _model_shown(model, kind, policy, lifted=declared.lifted):
         return _withheld_whole(
             record,
             f"the model is withheld: fewer than {policy.k} {_SIDES}, or residual degrees of freedom",
-            *declared.told,
+            told=told,
         )
     hidden, variables = _withheld_terms(record, policy, cover, tabulated=tabulated)
     written = [
@@ -1595,7 +1739,7 @@ def _disclose_model(
         return _withheld_whole(
             record,
             f"the model is withheld: none of its terms can be shown ({_remedy(record, hidden)})",
-            *declared.told,
+            told=told,
         )
     if compare and compare not in written:
         # the coefficients of the adjustment are not effects on their own, and with a term withheld what is left
@@ -1604,13 +1748,13 @@ def _disclose_model(
             record,
             f"the model is withheld: no term of its comparison can be shown, and what is left is its adjustment "
             f"({_remedy(record, hidden)})",
-            *declared.told,
+            told=told,
         )
     if whole := _why_whole(record, hidden, policy):
-        return _withheld_whole(record, whole, *declared.told)
+        return _withheld_whole(record, whole, told=told)
     # the comparison first: what is withheld of it is what a reader looks for
     ordered = sorted(variables, key=lambda v: v != compare)
-    withheld = [*declared.told, *_term_sentences(record, hidden, ordered, policy, tabulated)]
+    withheld = _term_sentences(record, hidden, ordered, policy, tabulated)
     names = _POOLED_MODEL_NUMBERS if record.pooled else _MODEL_NUMBERS[kind]
     if hidden:
         withheld.append(
@@ -1645,8 +1789,9 @@ def _disclose_model(
         elif prefix == "term":
             if part.id not in hidden:
                 kept = _kept(part, term_names)
-                counted = _cell_counted(record, variable, tabulated)
-                facts = _term_facts(part, parts.get(f"reference:{variable}"), counted)
+                # the caution reads the kind's own counts, whatever the term is judged on: beside a variable
+                # judged on three counts it marked few rows without the event, which no ratio rests on
+                facts = _term_facts(part, parts.get(f"reference:{variable}"), _CELL_COUNTED[kind])
                 shown.append(Part(kept.id, (*kept.numbers, *facts), kept.support, kept.labels))
         elif prefix == "ph":
             if f"term:{rest}" in parts and f"term:{rest}" not in hidden:
@@ -1664,24 +1809,25 @@ def _disclose_model(
             inner.record is None
             or observed is None
             or not policy.shows(_left_out(record.complete_case))
-            or _differ_by_few(model.support, observed.support, kind, policy)
+            or _differ_by_few(model.support, observed.support, kind, policy, lifted=declared.lifted)
         ):
             # the two analyses differ by the rows that lack a value and by their outcomes: a few of either, and
             # the pair is a subtraction
             withheld.append("the complete-case analysis is withheld")
         else:
             complete = inner.record
-            # what the declaration says of the complete cases is said by their own record
-            withheld += [
-                f"complete-case analysis: {w}" for w in inner.withheld if w not in declared.told
-            ]
-    if declared.part is not None:
-        shown.append(declared.part)
+            withheld += [f"complete-case analysis: {w}" for w in inner.withheld]
+            told += [f"complete-case analysis: {t}" for t in inner.told if t not in told]
+    # changed: without the declaration the model as a whole would not be written
+    says = declared.part(changed=not _model_shown(model, kind, policy))
+    if says is not None:
+        shown.append(says)
     return DisclosedRecord(
         record.kind,
         record.pooled,
         ResultRecord(record.kind, record.pooled, tuple(shown), (), complete, record.record_version),
         tuple(withheld),
+        tuple(told),
     )
 
 
@@ -1692,17 +1838,20 @@ UNITS_A_STEP = (
     5  # and at least this many of the data's own unit, as far as a tenth of the follow-up allows
 )
 UNIT_CENTILE = 0.05  # the data's own unit: the gap that this part of the gaps between two recorded times stay below
-# The decimals of a curve's value and of its limits at a time, by the rows still followed then (from this many
-# rows, this many decimals; the most rows first). A value near 0.3 written to three decimals is known to 0.2% of
-# itself: with 30 to 60 rows at risk, one whole pair of rows at risk and events agrees with it, and the rows whose
-# follow-up ended between two times come back. At these decimals no stretch between two times of the cohorts tried
-# (93 to 5,000 rows) is left with fewer than 5 pairs.
-DECIMALS_BY_ROWS = ((2000, 4), (400, 3), (0, 2))
+# The decimals of a curve's value at every time, and of its limits by the rows still followed then (from this many
+# rows, this many decimals; the most rows first). A value and limits written to three decimals give back, late in a
+# curve, the rows whose follow-up ended between two times (one whole pair of rows at risk and events agrees with a
+# stretch of 30 to 60 rows at risk). Read whole, a curve gives them back early too: before a loss it is a share of
+# its rows, after it a share of the rows left, and limits written as finely as the value pin that share near the
+# top of the curve. Limits coarser than the value are what blurs it; a fourth decimal gave the count back in groups
+# of 2,000 rows and more, where three did not.
+VALUE_DECIMALS = 2
+LIMIT_DECIMALS_BY_ROWS = ((400, 2), (0, 1))
 
 
-def decimals_at(rows: int) -> int:
-    """The decimals a curve's value and limits are written to at a time when ``rows`` rows are still followed."""
-    return next(places for least, places in DECIMALS_BY_ROWS if rows >= least)
+def limit_decimals_at(rows: int) -> int:
+    """The decimals a curve's limits are written to at a time when ``rows`` rows are still followed."""
+    return next(places for least, places in LIMIT_DECIMALS_BY_ROWS if rows >= least)
 
 
 def _clean(value: float) -> float:
@@ -1968,10 +2117,11 @@ def _curve(
 
     Its rows, its events and its rows without the event travel with it (the table under a curve), with the step of
     its times, until when k rows were followed (``followed_until``) and every how many events a time is given
-    (``points_every``). Its value and its limits at a time are written to the decimals that the rows still
-    followed then allow (:func:`decimals_at`), and ``decimals`` says how many, time by time. Where k rows are
-    followed beyond the last time with no event between, one more time is given at ``followed_until``, with the
-    same value, written as at the time it repeats: the curve is flat to there. The median is rounded up to the
+    (``points_every``). Its value is written to two decimals, and its limits to the decimals that the rows still
+    followed at the time allow (:func:`limit_decimals_at`): ``limit_decimals`` says how many, time by time.
+    Where k rows are followed beyond the last time with no event between, one more time is given at
+    ``followed_until``, with the same value and the same limits, written to the decimals of that time's own
+    rows followed (never more than the time before): the curve is flat to there. The median is rounded up to the
     step, its lower limit down and its upper limit up (outwards), each given when k rows are still followed at
     that time; otherwise it is later than ``followed_until`` (``later_than_followed_until`` names those), or not
     reached (no value, and not named there).
@@ -1986,7 +2136,6 @@ def _curve(
     held = _values(part)
     by_name = {n.name: n for n in part.numbers}
     places = _points(timeline, step, k)
-    digits = [decimals_at(timeline.at_risk(time, step)) for time, _ in places]
     until = _followed_until(timeline, step, k)
     # k rows are followed beyond the last time with no event between: the curve is flat to there
     if (
@@ -1996,7 +2145,9 @@ def _curve(
         and timeline.last_step(until, step) == places[-1][1]
     ):
         places.append((until, places[-1][1]))
-        digits.append(digits[-1])  # the value of the time before, as it is written there
+    # the decimals of the limits at each time, the flat last time included: it repeats the time before to no
+    # more decimals than its own rows followed allow
+    digits = [limit_decimals_at(timeline.at_risk(time, step)) for time, _ in places]
     later: list[str] = []
 
     def quantile(name: str, direction: Callable[[float, float], float]) -> float | None:
@@ -2033,12 +2184,22 @@ def _curve(
         *quantiles,
         Number("later_than_followed_until", later, EXACT),
         Number("times", [time for time, _ in places], EXACT),
-        Number("decimals", digits, EXACT),
+        Number("limit_decimals", digits, EXACT),
     ]
-    # The curve and its limits to the decimals of each time. With every digit, a value and its limit give the rows
-    # at risk at each time, and so the rows whose follow-up ended between two times, which can be 1 to k - 1 (3 of
-    # them, in a study with a common closing date). A value computed again agrees to one unit of the last decimal:
-    # its class allows a thousandth of the scale, which is set by the fewest decimals written.
+    # The curve to two decimals and its limits to those of each time. With every digit, a value and its limit give
+    # the rows at risk at each time, and so the rows whose follow-up ended between two times, which can be 1 to
+    # k - 1 (3 of them, in a study with a common closing date). A value computed again agrees to one unit of the
+    # last decimal: its class allows a thousandth of the scale, which for the limits is set by the fewest decimals
+    # written.
+    if held.get("survival") is not None:
+        numbers.append(
+            Number(
+                "survival",
+                [_decimals(held["survival"][j], VALUE_DECIMALS) for _, j in places],
+                ITERATIVE_LOOSE,
+                scale=10.0 ** (3 - VALUE_DECIMALS),
+            )
+        )
     scale = 10.0 ** (3 - min(digits)) if digits else 1.0
     numbers += [
         Number(
@@ -2047,7 +2208,7 @@ def _curve(
             ITERATIVE_LOOSE,
             scale=scale,
         )
-        for name in ("survival", "lower", "upper")
+        for name in ("lower", "upper")
         if held.get(name) is not None
     ]
     if held.get("fmi") is not None:
@@ -2266,12 +2427,16 @@ def _disclose_survival(
         if (
             both
             and policy.shows(_left_out(record.complete_case))
-            and not any(_differ_by_few(p.support, o.support, "survival", policy) for p, o in pairs)
+            and not any(
+                _differ_by_few(p.support, o.support, "survival", policy, lifted=lifted)
+                for p, o in pairs
+            )
             and not _differ_by_few(
                 _together(every, "survival"),
                 _together(list(observed.values()), "survival"),
                 "survival",
                 policy,
+                lifted=lifted,
             )
         ):
             beside = (cases, theirs, few)
@@ -2288,20 +2453,33 @@ def _disclose_survival(
         *declared.told,
         *_unit_told(unit, own, step, read, policy.k, str(spec.variables.get("time") or "the time")),
     ]
-    if told or declared.part is not None:
-        written = disclosed.record
-        if written is not None and declared.part is not None:
-            written = ResultRecord(
-                written.kind,
-                written.pooled,
-                (*written.parts, declared.part),
-                (),
-                written.complete_case,
-                written.record_version,
+    says = None
+    if lifted:
+        # the cap is read on the result as a whole: a group shown can lie above it, and the person is told
+        # (no group is named)
+        above = sum(1 for i in shown if _above_the_cap(main.curves[i]))
+        if above:
+            told.append(
+                f"{above} group{'s' if above != 1 else ''} shown hold{'s' if above == 1 else ''} more than "
+                f"{MOST_WITHOUT_THE_EVENT:.0%} of rows without the event: under the declaration that count "
+                "is written. Join such a group to another, or accept it"
             )
-        disclosed = DisclosedRecord(
-            disclosed.kind, disclosed.pooled, written, (*disclosed.withheld, *told)
+        # changed: without the declaration another set of groups would be withheld
+        before, _ = _withheld_groups(_Groups.of(record), policy, asked)
+        says = declared.part(changed=set(before) != set(hidden))
+    written = disclosed.record
+    if written is not None and says is not None:
+        written = ResultRecord(
+            written.kind,
+            written.pooled,
+            (*written.parts, says),
+            (),
+            written.complete_case,
+            written.record_version,
         )
+    disclosed = DisclosedRecord(
+        disclosed.kind, disclosed.pooled, written, disclosed.withheld, tuple(told)
+    )
     if record.complete_case is None or disclosed.record is None:
         return disclosed
     withheld = list(disclosed.withheld)
@@ -2322,6 +2500,18 @@ def _disclose_survival(
             record.record_version,
         ),
         tuple(withheld),
+        tuple(told),
+    )
+
+
+def _above_the_cap(group: Part) -> bool:
+    """Whether more than a twentieth of a group's rows are without the event, as its counts say."""
+    rows, without = _count(group.support, "rows"), _count(group.support, "censored")
+    return (
+        isinstance(rows, int)
+        and isinstance(without, int)
+        and rows > 0
+        and without / rows > MOST_WITHOUT_THE_EVENT
     )
 
 
@@ -2626,21 +2816,34 @@ def _people(record: ResultRecord) -> tuple[int, int] | None:
     return sum(a for a, _ in sides), sum(b for _, b in sides)
 
 
-def pair_gives_back(first: ResultRecord, second: ResultRecord, policy: DisclosurePolicy) -> bool:
+def pair_gives_back(
+    first: ResultRecord,
+    second: ResultRecord,
+    policy: DisclosurePolicy,
+    *,
+    followed: bool = False,
+) -> bool:
     """
-    Whether two results of one outcome, written in one package, give a count from 1 to k - 1 between them. Two
-    results computed on different rows differ by the rows that lack a value: their number is exempt, their
-    outcomes are not. A model beside the same model adjusted for a variable that 30 rows lack says how many of the
-    30 had the event; where three rows lack a value and all three had it, it says so of each.
+    Whether two results of one outcome, written in one package, give back between them what a group would not
+    be shown for. Two results computed on different rows differ by the rows that lack a value: their number is
+    exempt, their outcomes are not. A model beside the same model adjusted for a variable that 30 rows lack says
+    how many of the 30 had the event; where twelve rows lack a value and all twelve had it, it says so of each.
 
-    True when the participants with the event, or those without it, differ between the two by 1 to k - 1, or when
-    a record does not say them. For the writer of a package, which compares every two results of one outcome
-    (:func:`outcome_of`), whatever their kinds, and writes one of a pair that fails.
+    True when the two differ and the participants with the event between them, or those without it, are fewer
+    than k (none included: those rows are a group where everybody, or nobody, had the event), or when a record
+    does not say them. ``followed``: the outcome is declared followed to the event and the declaration holds
+    for both results (each then writes a part ``declaration``); their rows without the event are written
+    exactly, and are not counted here. For the writer of a package, which compares every two results of one
+    outcome (:func:`outcome_of`), whatever their kinds, and writes one of a pair that fails.
     """
     a, b = _people(first), _people(second)
     if a is None or b is None:
         return True
-    return any(not policy.shows(abs(x - y)) for x, y in zip(a, b, strict=True))
+    between = [abs(x - y) for x, y in zip(a, b, strict=True)]
+    if not any(between):
+        return False  # the same participants, as far as the counts say
+    sides = between[:1] if followed else between
+    return any(n < policy.k for n in sides)
 
 
 def _covariates(spec: AnalysisSpec) -> set[str]:
@@ -2677,12 +2880,12 @@ def nested_by_unwritten(
 
 
 def _decimals_said() -> str:
-    """ "2 decimals where fewer than 400 participants are still followed at that time, 3 from 400 and 4 from
-    2,000", from the rule itself."""
-    (most, finest), (least, middle), (_, fewest) = DECIMALS_BY_ROWS
+    """ "2 decimals where 400 participants or more are still followed at that time, 1 decimal below", from the rule
+    itself."""
+    (least, finest), (_, fewest) = LIMIT_DECIMALS_BY_ROWS
     return (
-        f"{fewest} decimals where fewer than {least:,} participants are still followed at that time, {middle} "
-        f"from {least:,} and {finest} from {most:,}"
+        f"{finest} decimals where {least:,} participants or more are still followed at that time, {fewest} decimal "
+        "below"
     )
 
 
@@ -2697,24 +2900,31 @@ def reading_notes(policy: DisclosurePolicy) -> tuple[str, ...]:
         f"A term of a logistic model is written only when the cells behind it each hold {k} rows, {k} with the "
         f"event and {k} without; a term of a Cox or a count model, when they each hold {k} rows and {k} with "
         "the event. For such a term the rows without the event are not counted: it can stand for a level in "
-        "which nearly everybody had the event, and no count per level is written beside it. Over studies, "
+        "which nearly everybody had the event, and no count per level is written beside it (where the "
+        "package writes such a count, and in a count model where a level holds no more events than "
+        "participants, the three counts are asked of the term). Over studies, "
         "the terms written for small levels are selected by their outcome, and the withheld ones are not "
         "missing at random: join small levels on subject-matter grounds before the analysis.",
         "A term that is written is the full model's, adjusted for every variable and every level, those withheld "
         "included. When a term is withheld, the numbers of the fit as a whole are withheld with it; a model "
-        "whose terms all compare categories, or one with a cell of a few participants, is withheld whole.",
+        "whose written terms would all compare categories, or one with a level of a few participants, is "
+        "withheld whole. A rare value of a numeric covariate of a few values withholds its own term only.",
         "A ratio labelled per unit is for one unit more of its variable; a ratio with a level compares that level "
         "with the reference written beside it.",
         f"Events per parameter count the rarer outcome of a logistic model and the events of a Cox model; a count "
         f"model has none. Below {SPARSE_BELOW} (sparse), a model's ratios may be unstable; a term marked sparse "
-        f"rests on fewer than {SPARSE_BELOW} participants with the event in one of its cells, or, in a logistic "
-        "model, without it.",
+        f"rests on fewer than {SPARSE_BELOW} participants, or fewer than {SPARSE_BELOW} with the event, in one "
+        "of its cells, or, in a logistic model, without it. The slope of a numeric covariate of a few values "
+        "is not marked: it rests on every value.",
         f"A survival curve is given at chosen times, multiples of its time step, with at least {k} events between "
         "two of them. Its value and its limits at a time are the full curve's at the end of the step that ends "
-        f"there, written to {_decimals_said()} (decimals gives the number at each time): with more digits they "
-        "would count the participants whose follow-up ended between two times. A standard error worked out "
-        "from limits written to 2 decimals is rough. Before the first time the curve lies between 1 and the "
-        "first value; between two times, between their two values.",
+        f"there: the value to {VALUE_DECIMALS} decimals, the limits to {_decimals_said()} (limit_decimals "
+        "gives the number at each time, and the flat last time repeats the time before): with more digits they "
+        "would count the participants whose follow-up ended between two times. The limits are those of an "
+        "interval on the log(-log) scale, from Greenwood's variance, at the level written as confidence. A "
+        "standard error worked out from limits at 2 decimals is rough (within about 5% in most curves, and "
+        "up to a quarter where the curve is near 1); limits at 1 decimal give none. Before the first time "
+        "the curve lies between 1 and the first value; between two times, between their two values.",
         f"After its last time a curve is not given. When that time is the one followed_until names, {k} "
         "participants were followed to there. When it is earlier, the curve goes on below its last value: "
         f"{k} events or more follow. A curve can have no time at all, and still its table and its median.",
@@ -2725,17 +2935,22 @@ def reading_notes(policy: DisclosurePolicy) -> tuple[str, ...]:
         "they do not add up, and a pooled curve can stop earlier than the curve of any one dataset.",
         f"A Poisson model marked overdispersed has a dispersion above {OVERDISPERSED_ABOVE:g} (a pooled one, in at "
         "least one of its imputed datasets): its standard errors are too small, so its intervals are too narrow "
-        "and its p-values too low.",
+        "and its p-values too low. A negative binomial model is never marked: its dispersion is a parameter "
+        "of the model.",
         "The time step of a curve is at least five times the unit its times are recorded in, where the "
         "follow-up allows. time_unit_from says which unit that was: declared, the unit the study declares for "
         "the time variable (time_unit names it, time_unit_size gives it in the variable's numbers); or data, the "
         "unit read on the recorded times, when they are recorded more coarsely or no unit is declared.",
         *(
-            f"The study declares that its participants are followed to {one.outcome}: for that outcome the "
-            "count of participants without the event is given exactly, a small one included, in the groups "
-            "of its curves and in its Cox and count models. A result this holds for says so (its part "
-            "declaration), with the share of its rows without the event. The declaration does not hold for "
-            f"a result of which more than {MOST_WITHOUT_THE_EVENT:.0%} of the rows are without the event"
+            f"The study declares that its participants are followed to {one.outcome} (nearly all of them have "
+            "that event in the end, or, for a count, at least one): for that outcome the count of "
+            "participants without the event is given exactly, a small one included, in the groups of its "
+            "curves and with its Cox and count models. A result this holds for says so in its part "
+            "declaration: its rows without the event and their share (for a pooled result, the largest share "
+            "over its imputed datasets), and whether the declaration changed what the result writes. The "
+            "share is read on the result as a whole: a group shown can lie above it. The declaration does not "
+            f"hold for a result of which more than {MOST_WITHOUT_THE_EVENT:.0%} of the rows are without the "
+            "event"
             + (
                 ", unless by the explicit override this study asked for: such a result is marked "
                 "beyond_the_cap."
@@ -3586,12 +3801,13 @@ def _place(name: str, path: tuple[str, ...]) -> str:
 
 __all__ = [
     "ASKED",
-    "DECIMALS_BY_ROWS",
     "DEFAULT_K",
+    "FAR_SHARE",
     "FEW_LEFT_OUT",
     "FLOOR_K",
     "FOR_ITS_ROWS",
     "FOR_THE_OTHER_SIDE",
+    "LIMIT_DECIMALS_BY_ROWS",
     "LITERAL",
     "MOST_WITHOUT_THE_EVENT",
     "OTHER_POPULATION",
@@ -3601,6 +3817,7 @@ __all__ = [
     "TIME_UNITS",
     "UNCHECKED",
     "VALUE",
+    "VALUE_DECIMALS",
     "Closure",
     "DisclosedAnalysis",
     "DisclosedBox",
@@ -3616,12 +3833,12 @@ __all__ = [
     "TimeUnit",
     "cover_for",
     "data_unit",
-    "decimals_at",
     "disclose_flow",
     "disclose_record",
     "disclose_spec",
     "flow_closure",
     "identifying_columns",
+    "limit_decimals_at",
     "named_together",
     "nested_by_unwritten",
     "normal",
