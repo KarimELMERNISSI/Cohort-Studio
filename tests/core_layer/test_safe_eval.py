@@ -437,8 +437,8 @@ def test_what_an_expression_builds_is_bounded(
         ("np.where(df['age'] > 50, 'x' * 10000, '')", "builds more than"),
         ("np.select([df['age'] > 50], ['x' * 10000], 'y')", "builds more than"),
         ("np.full(len(df), 'x' * 10000)", "builds more than"),
-        ("df['site'].cumsum()", "builds more than"),
-        ("np.cumsum(df['site'])", "builds more than"),
+        ("df['site'].cumsum()", "A cumulative sum of texts"),
+        ("np.cumsum(df['site'])", "A cumulative sum of texts"),
         ("df['site'] * 500", "builds more than"),
     ],
 )
@@ -683,3 +683,111 @@ def test_sums_of_numbers_and_selections_compute_as_before() -> None:
     assert evaluate("np.full(len(df), np.array(['n/a'], dtype='U3'))", df)[0] == "n/a"
     labelled = evaluate("np.array(['site '], dtype='U5') + np.array(df['site'], dtype=str)", df)
     assert labelled[1] == "site Esch"
+
+
+# --- what the last re-read found: a cumulative sum of texts, columns aligned by labels held many times, the arrays a
+# list holds; and a text formatted with %
+
+_THREE_THOUSAND = "df['age'][[0] * 3200]"
+_AND_MORE = "df['age'][[0] * 3300]"
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        # a cumulative sum of texts holds every text before it, row after row: it grows as the square of the list
+        ("np.cumsum([df['site'].str.pad(100)] * 100)", "A cumulative sum of texts"),
+        ("np.cumsum(['a', 'b'])", "A cumulative sum of texts"),
+        ("df[['site']].cumsum()", "A cumulative sum of texts"),
+        # two columns whose labels repeat are joined label by label: 3,200 rows labelled 0 beside 3,300
+        *(
+            (expression, "builds more than 10,000,000 values")
+            for expression in (
+                f"{_THREE_THOUSAND} {sign} {_AND_MORE}"
+                for sign in ("+", "-", "*", "/", "//", "%", "**", "&", "|", "^")
+            )
+        ),
+        *(
+            (f"{_THREE_THOUSAND}.{method}({_AND_MORE})", "builds more than 10,000,000 values")
+            for method in (
+                "add",
+                "sub",
+                "mul",
+                "div",
+                "truediv",
+                "floordiv",
+                "mod",
+                "pow",
+                "eq",
+                "lt",
+            )
+        ),
+        *(
+            (f"np.{function}({_THREE_THOUSAND}, {_AND_MORE})", "builds more than 10,000,000 values")
+            for function in ("add", "subtract", "multiply", "divide", "maximum", "minimum", "hypot")
+        ),
+        (f"{_THREE_THOUSAND}.where({_AND_MORE} > 0)", "builds more than 10,000,000 values"),
+        (f"np.clip({_THREE_THOUSAND}, {_AND_MORE}, 100)", "builds more than 10,000,000 values"),
+        # two tables whose columns repeat: 1,000 columns named age beside 1,100, on ten rows
+        ("df[['age'] * 1000] - df[['age'] * 1100]", "builds more than 10,000,000 values"),
+        # numpy gives every value of an array laid out from a list the width of its widest member
+        (f"np.array([{_WIDE}] * 200)", "builds more than 10,000,000 characters"),
+        (f"np.asarray([[{_WIDE}] * 20] * 10)", "builds more than 10,000,000 characters"),
+        ("np.array([['x' * 10000] + ['a'] * 999] * 10)", "builds more than 10,000,000 characters"),
+        # a text formatted with %: its width is a number written inside the text
+        ("'%20000000d' % 1", "A text formatted with %"),
+        ("'%s' % df['age']", "A text formatted with %"),
+        ("df['site'] % 1", "A text formatted with %"),
+        ("df['site'].mod(1)", "A text formatted with %"),
+    ],
+)
+def test_the_last_routes_past_the_budget_are_closed(expression: str, message: str) -> None:
+    """``np.cumsum([df['site'].str.pad(100)] * 100)`` built fifty million characters on ten rows, ``df['age'][[0] *
+    3200] + df['age'][[0] * 3300]`` 10,560,000 values (``[0] * 30000`` beside ``[0] * 30001``: 900 million), a list of
+    200 arrays of 100,000 characters twenty million, and ``'%20000000d' % 1`` a text of twenty million characters."""
+    df = pd.DataFrame({"site": ["Alpha", "Beta"] * 5, "age": np.arange(10.0)})
+    with pytest.raises(UnsafeExpressionError, match=message):
+        evaluate(expression, df)
+
+
+def test_columns_combined_and_arrays_laid_out_compute_as_before(sites: pd.DataFrame) -> None:
+    """Every operator, method and function of two columns that is now checked gives what pandas and numpy give."""
+    age, n = sites["age"], sites["n"]
+    same = {
+        "df['age'] - df['n']": age - n,
+        "df['age'] / df['n']": age / n,
+        "df['age'] // df['n']": age // n,
+        "df['age'] % 7": age % 7,
+        "df['age'] % df['n']": age % n,
+        "(df['age'] > 50) & (df['n'] > 1)": (age > 50) & (n > 1),
+        "(df['age'] > 50) | (df['n'] > 1)": (age > 50) | (n > 1),
+        "(df['age'] > 50) ^ (df['n'] > 1)": (age > 50) ^ (n > 1),
+        "df['age'].sub(df['n'])": age.sub(n),
+        "df['age'].div(df['n'])": age.div(n),
+        "df['age'].truediv(df['n'])": age.truediv(n),
+        "df['age'].floordiv(df['n'])": age.floordiv(n),
+        "df['age'].mod(df['n'])": age.mod(n),
+        "df['age'].eq(df['n'] * 40)": age.eq(n * 40),
+        "df['age'].ge(60)": age.ge(60),
+        "df['age'].clip(50, 60)": age.clip(50, 60),
+        "df['age'].clip(lower=df['n'] * 20)": age.clip(lower=n * 20),
+        "df['age'].where(df['n'] > 1, 0)": age.where(n > 1, 0),
+        "np.maximum(df['age'], df['n'])": np.maximum(age, n),
+        "np.subtract(df['age'], df['n'])": np.subtract(age, n),
+        "np.hypot(df['age'], df['n'])": np.hypot(age, n),
+        "np.logical_and(df['age'] > 50, df['n'] > 1)": np.logical_and(age > 50, n > 1),
+        "np.clip(df['age'], 50, 60)": np.clip(age, 50, 60),
+        "df['age'][[0, 1]] - df['age'][[1, 0]]": age[[0, 1]] - age[[1, 0]],
+    }
+    for expression, expected in same.items():
+        found = evaluate(expression, sites)
+        pd.testing.assert_series_equal(found, expected, check_names=False, obj=expression)
+    table = evaluate("df[['age', 'n']].sub(df['n'], axis=0)", sites)
+    pd.testing.assert_frame_equal(table, sites[["age", "n"]].sub(n, axis=0))
+    laid = evaluate("np.array([df['age'], df['n']])", sites)
+    assert laid.shape == (2, 60) and laid[1, 2] == 3
+    assert evaluate("np.array([['a', 'bb']] * 3)", sites).shape == (3, 2)
+    assert evaluate("np.array([np.array(['n/a'], dtype='U3')] * 5)", sites).shape == (5, 1)
+    assert evaluate("np.cumsum([1, 2, 3])", sites).tolist() == [1, 3, 6]
+    assert evaluate("df['n'].cumsum()", sites).iloc[-1] == 120
+    assert evaluate("'a' + 'b'") == "ab" and evaluate("7 % 3") == 1

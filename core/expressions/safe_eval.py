@@ -24,15 +24,19 @@ anyone reads it (``9 ** 9 ** 8`` would keep the server busy for minutes), in two
   size is read through ``int``, ``float``, ``abs``, ``round``, ``max`` and ``min`` too (``str.pad(int(1e8))``);
 * when it is computed, what each step builds, whatever its sizes are made of: the characters of a text or of a
   column of texts that is repeated (``*``, ``mul``, ``np.multiply``), joined to another (``+``, ``add``,
-  ``np.add``), padded, accumulated or rewritten (``str.replace``); a text written into every row (``replace``,
-  ``where``, ``mask``, ``fillna``); the values of an array, with the width a text or a fixed-width text type gives
-  each of them, an array of such a type included (``np.full``, ``np.ones``, ``np.zeros``, ``np.where``,
-  ``np.select``, ``np.array``, ``astype``, ``+``); the elements of a repeated list; what a selection by a computed
-  list of labels selects, a label held several times counted each time (``df[['age'] * 10000]``,
-  ``df['age'][[0] * 3500][[0] * 3500]``); the intervals asked of ``pd.cut`` and ``pd.qcut`` as a number; the digits
-  of a whole number raised to a power; the order of ``np.diff``, which is a pass over its values each. A sum of
-  texts (``sum``, ``np.sum``, ``np.nansum``) is refused: it has no use in a formula, and numpy joins texts one by
-  one, in a time that grows as the square of their length. Each size passing on its own bounds nothing: two
+  ``np.add``), padded or rewritten (``str.replace``); a text written into every row (``replace``, ``where``,
+  ``mask``, ``fillna``); the values of an array, with the width a text or a fixed-width text type gives each of
+  them, an array of such a type included, alone or in a list (``np.full``, ``np.ones``, ``np.zeros``,
+  ``np.where``, ``np.select``, ``np.array``, ``astype``, ``+``); the elements of a repeated list; what a selection
+  by a computed list of labels selects, a label held several times counted each time (``df[['age'] * 10000]``,
+  ``df['age'][[0] * 3500][[0] * 3500]``); the rows of columns and tables combined by an operator, a method or a
+  function of two of them, which pandas first aligns by their labels (a label held a times on one side and b
+  times on the other is a times b rows: ``df['age'][[0] * 3200] - df['age'][[0] * 3300]``); the intervals asked
+  of ``pd.cut`` and ``pd.qcut`` as a number; the digits of a whole number raised to a power; the order of
+  ``np.diff``, which is a pass over its values each. A sum of texts (``sum``, ``np.sum``, ``np.nansum``) and a
+  cumulative sum of texts (``cumsum``, ``np.cumsum``) are refused: they have no use in a formula, and numpy joins
+  texts one by one, in a time that grows as the square of their length. So is a text formatted with ``%``, whose
+  width is a number written inside the text (``'%20000000d' % 1``). Each size passing on its own bounds nothing: two
   products of 10,000 build a hundred million copies, twenty padded columns added are twenty times the column, and
   ``np.ones(len(df) ** 4)`` asks for a size that is no number written in the expression. One budget holds for a
   step: ``MAX_ELEMENTS`` values or characters, or ``MAX_PER_ROW`` characters a row in a table of more rows (codes
@@ -440,7 +444,23 @@ def _np_facade(policy: ExpressionPolicy, rows: int = 0) -> SimpleNamespace:
     for name, guard in _NP_GUARDS.items():
         if name in allowed:
             allowed[name] = guard(allowed[name])
+    for name in list(allowed):
+        # a function of two values aligns two columns by their labels first (np.subtract, np.maximum, ...), and
+        # np.clip calls the column's own clip, which aligns its bounds
+        found = getattr(np, name)
+        if isinstance(found, np.ufunc) and found.nin == 2 or name == "clip":
+            allowed[name] = _aligned_call(allowed[name])
     return SimpleNamespace(**allowed)
+
+
+def _aligned_call(function: Callable[..., Any]) -> Callable[..., Any]:
+    """A numpy function given two columns or tables, counted as pandas aligns them (:func:`_check_aligned`)."""
+
+    def aligned(*args: Any, **kwargs: Any) -> Any:
+        _check_aligned(*args, *kwargs.values())
+        return function(*args, **kwargs)
+
+    return aligned
 
 
 def _pd_facade(policy: ExpressionPolicy) -> SimpleNamespace:
@@ -644,6 +664,7 @@ _TIMES = "__times__"  # the name a product is computed under when one of its sid
 _POWER = "__power__"  # a power, likewise
 _PLUS = "__plus__"  # a sum, likewise: of texts, it joins them
 _ITEM = "__item__"  # a selection by a key that is computed
+_OPERATED = "__operated__"  # any other operator of two values: columns are aligned by their labels
 _METHOD = (
     "__method__"  # a method that repeats, pads, accumulates or rewrites, called through its check
 )
@@ -766,12 +787,87 @@ def _check_times(left: Any, right: Any) -> None:
             _over(_weight(held) * most, 0, "values")
 
 
+def _joined(first: pd.Index, second: pd.Index) -> int:
+    """
+    The labels two columns are aligned on: the same labels in the same order are read position by position;
+    otherwise pandas joins them, and a label held a times on one side and b times on the other is held a times b
+    times, a label of one side only as often as there.
+    """
+    if first.equals(second):
+        return len(first)
+    if first.is_unique and second.is_unique:
+        return len(first) + len(second)  # at most
+    try:
+        left = first.value_counts(dropna=False)
+        right = second.value_counts(dropna=False)
+        both = left.index.intersection(right.index)
+        mine = left.loc[both].to_numpy(dtype="int64")
+        theirs = right.loc[both].to_numpy(dtype="int64")
+    except TypeError, ValueError, KeyError:
+        return len(first) * len(second)  # what a join of these labels can hold at most
+    paired = int((mine * theirs).sum())
+    return paired + len(first) - int(mine.sum()) + len(second) - int(theirs.sum())
+
+
+def _aligned_size(first: pd.Series | pd.DataFrame, second: pd.Series | pd.DataFrame) -> int:
+    """The values two columns or tables give once aligned: rows by rows, and columns by columns for two tables; a
+    column beside a table is aligned on its columns, or on its rows when asked (the larger is counted)."""
+    if isinstance(first, pd.Series) and isinstance(second, pd.Series):
+        return _joined(first.index, second.index)
+    if isinstance(first, pd.DataFrame) and isinstance(second, pd.DataFrame):
+        return _joined(first.index, second.index) * _joined(first.columns, second.columns)
+    table = first if isinstance(first, pd.DataFrame) else second
+    column = second if table is first else first
+    if not isinstance(table, pd.DataFrame) or not isinstance(column, pd.Series):
+        return len(first) * len(second)
+    return max(
+        _joined(table.columns, column.index) * len(table),
+        _joined(table.index, column.index) * table.shape[1],
+    )
+
+
+def _check_aligned(*sides: Any) -> None:
+    """
+    Columns and tables combined are first aligned by their labels, whatever they hold: numbers pass every check of
+    texts, and ``df['age'][[0] * 3200] - df['age'][[0] * 3300]`` held 10,560,000 values, each selection passing on
+    its own (``[0] * 30000`` against ``[0] * 30001``: 900 million). Each column or table given is counted against
+    the first. A formula's columns share their labels, and are read position by position.
+    """
+    labelled = [side for side in sides if isinstance(side, pd.Series | pd.DataFrame)]
+    for other in labelled[1:]:
+        first = labelled[0]
+        _over(_aligned_size(first, other), max(len(first), len(other)), "values")
+
+
 def _times(left: Any, right: Any) -> Any:
     """``left * right``, once :func:`_check_times` has passed it. A text written in the expression is counted when
     the expression is read; a column of texts is known only when it is computed: ``df['site'] * 100000000`` builds
     a hundred million copies of each site's name."""
+    _check_aligned(left, right)
     _check_times(left, right)
     return left * right
+
+
+_OPERATORS: dict[str, Callable[[Any, Any], Any]] = {
+    "Sub": operator.sub,
+    "Div": operator.truediv,
+    "FloorDiv": operator.floordiv,
+    "Mod": operator.mod,
+    "BitAnd": operator.and_,
+    "BitOr": operator.or_,
+    "BitXor": operator.xor,
+}
+_FORMATTED = "A text formatted with % is not allowed in a formula: join texts with +."
+
+
+def _operated(left: Any, right: Any, name: str) -> Any:
+    """``left - right``, ``/``, ``//``, ``%``, ``&``, ``|`` or ``^``, once the columns it combines are counted as
+    aligned (:func:`_check_aligned`). A text formatted with ``%`` is refused: ``'%20000000d' % 1`` is a text of
+    twenty million characters, its width a number written inside a text, which no check reads."""
+    if name == "Mod" and _holds_text(left):
+        raise UnsafeExpressionError(_FORMATTED)
+    _check_aligned(left, right)
+    return _OPERATORS[name](left, right)
 
 
 def _array_width(value: Any) -> int:
@@ -819,6 +915,7 @@ def _check_plus(left: Any, right: Any) -> None:
 
 def _plus(left: Any, right: Any) -> Any:
     """``left + right``, once :func:`_check_plus` has passed it."""
+    _check_aligned(left, right)
     _check_plus(left, right)
     return left + right
 
@@ -990,6 +1087,7 @@ def _check_power(base: Any, exponent: Any) -> None:
 
 
 def _power(base: Any, exponent: Any) -> Any:
+    _check_aligned(base, exponent)
     _check_power(base, exponent)
     return base**exponent
 
@@ -1029,16 +1127,23 @@ def _check_replace(receiver: Any, args: tuple, kwargs: dict) -> None:
     _over(total + float(matches.sum()) * each, rows)
 
 
+_TEXT_CUMSUM = "A cumulative sum of texts is not allowed in a formula."
+
+
 def _check_cumsum(receiver: Any) -> None:
-    """The cumulative sum of a column of texts holds, row after row, every text before it."""
-    if _holds_text(receiver) and not isinstance(receiver, str):
-        rows = _rows(receiver)
-        total, _ = _characters(receiver)
-        _over(total * (rows + 1) / 2, rows)
+    """A cumulative sum of texts holds, row after row, every text before it: refused as a sum of texts is
+    (:func:`_check_sum`), a list of columns included (``np.cumsum([df['site'].str.pad(100)] * 100)`` built fifty
+    million characters on ten rows, and grows as the square of the list)."""
+    if _strings_in(receiver):
+        raise UnsafeExpressionError(_TEXT_CUMSUM)
 
 
 def _method(receiver: Any, name: str, *args: Any, **kwargs: Any) -> Any:
     """``receiver.name(...)`` for the methods that build by a size, checked before they do."""
+    if name in _ALIGNING:
+        _check_aligned(receiver, *args, *kwargs.values())
+    if name == "mod" and _holds_text(receiver):
+        raise UnsafeExpressionError(_FORMATTED)
     if name in ("str.pad", "str.zfill"):
         _check_width(receiver, args[0] if args else kwargs.get("width"))
     elif name == "str.replace":
@@ -1067,7 +1172,27 @@ def _method(receiver: Any, name: str, *args: Any, **kwargs: Any) -> Any:
 
 _FILLED = frozenset({"replace", "where", "mask", "fillna"})  # a value written into the rows
 # of a column, an array or a table
-_GUARDED_METHODS = frozenset({"mul", "pow", "cumsum", "add", "astype", "sum"}) | _FILLED
+# the methods that align a column or a table given to them with their receiver
+_ALIGNING = frozenset(
+    {
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "truediv",
+        "floordiv",
+        "mod",
+        "pow",
+        "eq",
+        "ne",
+        "lt",
+        "le",
+        "gt",
+        "ge",
+    }
+    | {"where", "mask", "fillna", "clip"}
+)
+_GUARDED_METHODS = frozenset({"mul", "pow", "cumsum", "add", "astype", "sum"}) | _FILLED | _ALIGNING
 _GUARDED_STR_METHODS = frozenset({"pad", "zfill", "replace"})  # of its texts
 
 
@@ -1140,23 +1265,61 @@ def _chosen(function: Callable[..., Any]) -> Callable[..., Any]:
     return chosen
 
 
+def _values_in(value: Any, seen: dict[int, int] | None = None) -> int:
+    """The single values a list holds once laid out by numpy: a column or an array for its own, a list repeated
+    counted each time it is held and read once."""
+    if isinstance(value, list | tuple):
+        seen = {} if seen is None else seen
+        known = seen.get(id(value))
+        if known is None:
+            if len(value) > _LONG_LIST and set(map(type, value)) <= _SINGLE_VALUES | {str}:
+                known = len(value)
+            else:
+                known = sum(_values_in(item, seen) for item in value)
+            seen[id(value)] = known
+        return known
+    if isinstance(value, pd.DataFrame | pd.Series | pd.Index | np.ndarray):
+        return max(int(np.size(value)), 1)
+    return 1
+
+
+def _widest_in(value: Any, seen: dict[int, int] | None = None) -> int:
+    """The width numpy gives each value it lays out from a list: the longest text the list holds, or the widest
+    fixed-width text type of the arrays in it (each list read once)."""
+    if isinstance(value, str):
+        return len(value)
+    if isinstance(value, np.ndarray):
+        return _array_width(value)
+    if not isinstance(value, list | tuple):
+        return 0
+    seen = {} if seen is None else seen
+    known = seen.get(id(value))
+    if known is None:
+        if len(value) > _LONG_LIST and set(map(type, value)) <= _SINGLE_VALUES:
+            known = 0
+        else:
+            known = max((_widest_in(item, seen) for item in value), default=0)
+        seen[id(value)] = known
+    return known
+
+
 def _laid_out(function: Callable[..., Any]) -> Callable[..., Any]:
-    """``np.array`` and ``np.asarray`` of a list: its values, each as wide as its longest text."""
+    """``np.array`` and ``np.asarray`` of a list: its values, each as wide as the widest text it holds, or as the
+    widest fixed-width text type of its arrays (``[np.array(['x'], dtype='U100000')] * 200`` is 200 values of
+    100,000 characters), nested lists counted value by value."""
 
     def laid_out(*args: Any, **kwargs: Any) -> Any:
         given = args[0] if args else None
         kind = kwargs.get("dtype", args[1] if len(args) > 1 else None)
         if isinstance(given, list | tuple):
-            held = _weight(given)
-            _over(held, 0, "values")
-            widest = _fixed_text(given)
-            if widest > MAX_PER_ROW:
-                _over(len(given) * widest, len(given))
+            _over(_weight(given), 0, "values")
+            values = _values_in(given)
+            widest = _widest_in(given)
             if _text_type(kind):
                 # a text type: every value as wide as the longest text of the columns and arrays in the list
-                longest = max(widest, _text_width(kind), _longest_in(given))
-                if longest > MAX_PER_ROW:
-                    _over(held * longest, int(held))
+                widest = max(widest, _text_width(kind), _longest_in(given))
+            if widest > MAX_PER_ROW:
+                _over(values * widest, values)
         elif isinstance(given, pd.Series | pd.Index | np.ndarray):
             width = _text_width(kind)
             if width > MAX_PER_ROW:
@@ -1288,9 +1451,10 @@ class _Guards(ast.NodeTransformer):
         name = _guard_of(node)
         if name is None:
             return node
-        call = ast.Call(
-            func=ast.Name(id=name, ctx=ast.Load()), args=[node.left, node.right], keywords=[]
-        )
+        args: list[ast.expr] = [node.left, node.right]
+        if name == _OPERATED:  # which operator, by its name
+            args.append(ast.Constant(value=type(node.op).__name__))
+        call = ast.Call(func=ast.Name(id=name, ctx=ast.Load()), args=args, keywords=[])
         return ast.copy_location(call, node)
 
     def visit_Subscript(self, node: ast.Subscript) -> ast.AST:
@@ -1326,15 +1490,17 @@ def _both_numbers(node: ast.BinOp) -> bool:
 
 
 def _guard_of(node: ast.AST) -> str | None:
-    """The check a product, a power or a sum is computed through; None for any other node, and for two
-    numbers."""
+    """The check an operator of two values is computed through: a product, a power and a sum their own, any other
+    the alignment of the columns it combines; None for any other node, and for two numbers."""
     if not isinstance(node, ast.BinOp) or _both_numbers(node):
         return None
     if isinstance(node.op, ast.Mult):
         return _TIMES
     if isinstance(node.op, ast.Add):
         return _PLUS
-    return _POWER if isinstance(node.op, ast.Pow) else None
+    if isinstance(node.op, ast.Pow):
+        return _POWER
+    return _OPERATED if type(node.op).__name__ in _OPERATORS else None
 
 
 def _computed_key(node: ast.AST) -> bool:
@@ -1405,6 +1571,7 @@ def evaluate_tree(
         _TIMES: _times,
         _POWER: _power,
         _PLUS: _plus,
+        _OPERATED: _operated,
         _ITEM: _item,
         _METHOD: _method,
     }

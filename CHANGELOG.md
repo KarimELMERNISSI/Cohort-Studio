@@ -333,18 +333,23 @@ with its own form and button, the first columns of the file already chosen. They
   counted. An expression nested too deep to be read (240 methods called one after the other) is refused as too
   complex, where the application stopped on it. What an expression builds is bounded when it is computed, not
   only the sizes written in it: at most 10,000,000 values or characters, or 100 per row of a larger table.
-  `(df['site'] * 10000) * 10000`, `df['site'].str.pad(10000) * 10000`, `[0] * 10**12`, `np.ones(len(df) ** 4)`
-  and a cumulative sum of a column of texts were accepted, each step passing on its own; a power of whole
-  numbers of more than 1,024 bits is refused too. Counted the same way: texts joined (`+`, `add`, `np.add`:
+  `(df['site'] * 10000) * 10000`, `df['site'].str.pad(10000) * 10000`, `[0] * 10**12` and `np.ones(len(df) ** 4)`
+  were accepted, each step passing on its own; a power of whole numbers of more than 1,024 bits is refused too.
+  Counted the same way: texts joined (`+`, `add`, `np.add`:
   twenty padded columns added were twenty times the column), a selection by a computed list of labels, by what
   it selects (`df[['age'] * 10000]`; `df['age'][[0] * 3500][[0] * 3500]`, a label held 3,500 times selected
   3,500 times), a long text written into every row (`replace`, `where`, `mask`, `fillna`), an array given a
   fixed-width text type (`dtype='U100000'`, `astype`) or spread over every row (`np.full`, `np.where`,
-  `np.select`, `+`), and the order of `np.diff`, each order being a pass over the values. A sum of texts
-  (`sum`, `np.sum`, `np.nansum`) is refused: it has no use in a formula, and numpy joins texts one by one, in a
-  time that grows as the square of their length. Not bounded: the time a pattern takes, what several steps
-  hold together, and what a step builds by a way these checks do not see. The budget refuses what the checks
-  see before it is built; it is no memory limit and no time limit.
+  `np.select`, `+`) or laid out from a list (`np.array([np.array(['x'], dtype='U100000')] * 200)`), the order
+  of `np.diff`, each order being a pass over the values, and two columns or tables combined by an operator, a
+  method or a function of two values, which pandas first aligns by their labels (`df['age'][[0] * 3200] -
+  df['age'][[0] * 3300]` held 10,560,000 values: each label held 3,200 times on one side and 3,300 on the other).
+  A sum of texts (`sum`, `np.sum`, `np.nansum`) and a cumulative sum of texts (`cumsum`, `np.cumsum`, a list of
+  columns included) are refused: they have no use in a formula, and numpy joins texts one by one, in a time that
+  grows as the square of their length. So is a text formatted with `%`, whose width is a number written inside
+  the text (`'%20000000d' % 1` was a text of twenty million characters). Not bounded: the time a pattern takes,
+  what several steps hold together, and what a step builds by a way these checks do not see. The budget refuses
+  what the checks see before it is built; it is no memory limit and no time limit.
 
 ### Privacy: what today's documents leave out (M8, first steps)
 
