@@ -3,7 +3,6 @@ import functools
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.figure_factory as ff
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
@@ -61,6 +60,32 @@ def hover_columns_input(df: pd.DataFrame) -> list[str] | None:
         help="Extra columns shown in the tooltip of each point.",
     )
     return chosen or None
+
+
+DENSITY_POINTS = 500  # the points each density curve is drawn through
+DENSITY_CUT = 3  # bandwidths beyond the smallest and the largest value, where the curve falls to about nothing
+
+
+def density_curves(samples: list, labels: list[str], colors: list[str]) -> go.Figure:
+    """
+    The smooth density of each group, one curve each: a Gaussian kernel density with Scott's bandwidth, as
+    figure_factory's distplot drew it before Plotly 7.1 removed it (the mode raised an error). Each curve runs
+    from three bandwidths below its group's smallest value to three above its largest, where it falls to about
+    nothing, as seaborn draws one; a group of one distinct value has no density, and is left out.
+    """
+    fig = go.Figure()
+    for sample, label, color in zip(samples, labels, colors, strict=True):
+        values = np.asarray(sample, dtype=float)
+        values = values[np.isfinite(values)]
+        if np.unique(values).size < 2:
+            continue
+        kernel = stats.gaussian_kde(values)
+        reach = DENSITY_CUT * float(np.sqrt(kernel.covariance[0, 0]))
+        grid = np.linspace(values.min() - reach, values.max() + reach, DENSITY_POINTS)
+        fig.add_trace(
+            go.Scatter(x=grid, y=kernel(grid), mode="lines", name=str(label), line={"color": color})
+        )
+    return fig
 
 
 def app():
@@ -363,8 +388,7 @@ def app():
                                 colors.append(selected_color[i % len(selected_color)])
                     
                     if hist_data:
-                        # Create distplot with no histogram, only curve
-                        fig = ff.create_distplot(hist_data, group_labels, show_hist=False, show_rug=False, colors=colors)
+                        fig = density_curves(hist_data, group_labels, colors)
                         fig.update_layout(title=f"Density Plot of {x_col}", xaxis_title=x_col, yaxis_title="Density")
                     else:
                         st.warning("Not enough data to generate KDE.")
@@ -1331,7 +1355,9 @@ def app():
 
                 plot_filename = f"{plot_type.lower().replace(' ', '_')}_export"
                 plot_config = eu.get_publication_plot_config(filename=plot_filename, format_type="svg", scale=3)
-                st.plotly_chart(fig, width='content', config=plot_config)
+                # the figure's own template, chosen above: Streamlit's theme painted its ticks and axis titles light in
+                # the dark theme, on the template's white paper
+                st.plotly_chart(fig, width='content', config=plot_config, theme=None)
 
                 with st.expander("Figure Export & Publication Options", expanded=False):
                     # what each file holds: the image first, which answers the title; then the data, which the

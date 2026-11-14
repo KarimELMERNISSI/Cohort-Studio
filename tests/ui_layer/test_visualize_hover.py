@@ -6,6 +6,7 @@ colour group, a point showed another row's values.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 from pathlib import Path
@@ -125,3 +126,27 @@ def test_no_tooltip_columns_where_a_mark_is_not_a_row(visualize: AppTest) -> Non
     at.run()
     assert not at.exception, [str(e.value)[:300] for e in at.exception]
     assert not [m for m in at.multiselect if m.key == "viz_hover_cols"]
+
+
+def test_the_smooth_density_draws_a_curve_and_every_figure_keeps_its_own_template(
+    visualize: AppTest,
+) -> None:
+    """ "Smooth Density (KDE)" called figure_factory's distplot, which Plotly 7.1 removed: the mode raised an error.
+    And Streamlit's theme painted the ticks and axis titles light in the dark theme, on the figure's white paper."""
+    at = visualize
+    _select(at.sidebar.selectbox, "Plot Category", "Distribution")
+    at.run()
+    _select(at.sidebar.selectbox, "Plot Type", "Histogram")
+    at.run()
+    _select(at.selectbox, "Representation", "Smooth Density (KDE)")
+    at.run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    figure = _figure(at)
+    curves = [trace for trace in figure["data"] if trace.get("mode") == "lines"]
+    assert curves
+    # an array travels as typed bytes (8 for each number)
+    held = curves[0]["x"]
+    points = len(base64.b64decode(held["bdata"])) // 8 if isinstance(held, dict) else len(held)
+    assert points == 500
+    # the page's own template, not Streamlit's theme
+    assert at.get("plotly_chart")[-1].proto.theme == ""

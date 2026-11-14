@@ -42,6 +42,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   before the click. A clustermap whose labels are hidden no longer writes them in its file: every sample's identifier
   was there, on its axis and in its heatmap, though none was shown.
 
+### Visualize: the smooth density draws again, and every figure reads in the dark theme
+
+- **Histogram > Representation > "Smooth Density (KDE)" draws its curves again.** It called Plotly's
+  `figure_factory.create_distplot`, which Plotly 7.1 no longer has, and the mode stopped with an error. Each group's
+  density is now a Gaussian kernel density with Scott's bandwidth, as before, drawn from three bandwidths below its
+  smallest value to three above its largest, where it falls to about nothing.
+- **In the dark theme, a figure's axes, ticks and titles are readable again.** The page paints each figure with its
+  own template (white paper for the default one), while Streamlit's theme coloured the ticks and axis titles light:
+  they nearly vanished. The figure now keeps its own template in both themes.
+
 ### Hypothesis tests & epidemiology: two tabs, one analysis at a time
 
 *Diagnostic accuracy & agreement* and *Paired, rates & stratified* stacked eleven analyses on two long tabs, each
