@@ -45,8 +45,10 @@ from pathlib import Path
 # utils to 66 at 68.3 with the tests of the environment's commit, code fingerprint and lock checksum (2026-11-10).
 # app_pages to 68 at 70.9 with the tests that drive the tabs Diagnostic accuracy & agreement and Paired, rates &
 # stratified through the page (2026-11-12).
+# app_pages to 70 at 72.1, and utils to 72 at 74.1, with the tests of the dossier's cut-off, the z-score file, the
+# clustermap's hidden labels, the density curves and the record of the AI confirmations (2026-11-14).
 FLOORS: dict[str, float] = {
-    "app_pages": 68.0,
+    "app_pages": 70.0,
     "biostats": 93.0,
     "core": 94.0,
     "enrich": 87.0,
@@ -57,7 +59,7 @@ FLOORS: dict[str, float] = {
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 87.0,
-    "utils": 66.0,
+    "utils": 72.0,
 }
 MARGIN = 4.0  # a package more than this above its floor fails until the floor is raised
 
