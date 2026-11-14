@@ -69,6 +69,54 @@ def test_the_tooltip_columns_follow_the_points_of_each_group(visualize: AppTest)
         assert [c[0] for c in trace["customdata"]] == rows["patient_id"].tolist()
 
 
+def test_each_file_of_a_figure_says_what_it_holds(visualize: AppTest) -> None:
+    """A researcher attached the interactive file of a histogram to a paper as a supplement: every participant's
+    value went with it, and nothing on the page said so (the data-protection review, PS-M1). The file of a scatter
+    plot with an identifier in its tooltip holds every participant's identifier beside their values, and the cohort
+    files hold every column of the rows, not only the two drawn."""
+    from app_pages.visualization import (
+        EXPORT_DATA_CAPTION,
+        EXPORT_IMAGE_CAPTION,
+        HTML_HELP,
+        JSON_HELP,
+        ROWS_HELP,
+    )
+
+    at = visualize
+    _select(at.sidebar.selectbox, "Plot Category", "Relationships")
+    at.run()
+    _select(at.sidebar.selectbox, "Plot Type", "Scatter Plot")
+    at.run()
+    _select(at.selectbox, "X Variable", "age")
+    _select(at.selectbox, "Y Variable", "sbp")
+    at.run()
+    at.multiselect(key="viz_hover_cols").set_value(["patient_id"]).run()
+    assert not at.exception, [str(e.value)[:300] for e in at.exception]
+    captions = [c.value for c in at.caption]
+    # the image first, which answers the expander's title; then the data
+    assert captions.index(EXPORT_IMAGE_CAPTION) + 1 == captions.index(EXPORT_DATA_CAPTION)
+    buttons = {b.proto.label: b.proto.help for b in at.get("download_button")}
+    assert buttons["Interactive HTML (.html)"] == HTML_HELP
+    assert buttons["Plotly Figure JSON (.json)"] == JSON_HELP
+    assert (
+        buttons["Filtered Cohort CSV (.csv)"]
+        == buttons["Filtered Cohort Excel (.xlsx)"]
+        == ROWS_HELP
+    )
+    # what the sentences say: the figure's own specification holds each participant's value and identifier
+    data = at.session_state["data"]
+    (trace,) = [t for t in _figure(at)["data"] if t.get("type") == "scatter"]
+    assert [c[0] for c in trace["customdata"]] == data["patient_id"].tolist()
+    for said in (EXPORT_DATA_CAPTION, HTML_HELP, JSON_HELP):
+        assert "the data behind the figure" in said and "where the dataset itself may go" in said
+    # the cohort files are the rows, every column, as their help says
+    from utils.export_utils import to_csv_bytes
+
+    written = to_csv_bytes(data).decode("utf-8").splitlines()[0].split(",")
+    assert len(written) == data.shape[1] > 2 and "patient_id" in written
+    assert "Every column of the rows behind this figure" in ROWS_HELP
+
+
 def test_no_tooltip_columns_where_a_mark_is_not_a_row(visualize: AppTest) -> None:
     at = visualize
     _select(at.sidebar.selectbox, "Plot Category", "Distribution")

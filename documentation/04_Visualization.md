@@ -104,6 +104,10 @@ Significance formatting follows standard biomedical conventions:
 
 The camera icon of the plot toolbar downloads the figure; the other formats are under *Figure Export & Publication Options* below the plot.
 
+For a publication, use the image: the camera icon at the top right of the figure, shown when the pointer is over it, saves it as an SVG. The image holds the figure as drawn, without its tooltips: a figure that draws each participant (a scatter plot, a box's outliers) or names a group of one still shows them. After a zoom, the points out of view stay in the file, hidden: save it at the full view.
+
+**The other files hold the data behind the figure.** The interactive figure and its JSON keep, for most plots, the exact value of each participant, even under a histogram's bars or a box, and the columns you chose to show on hover (an identifier too, if you chose one). The cohort files hold the rows, every column. Share them only where the dataset itself may go, not as a figure or a supplement of a paper.
+
 ### Export Modalities
 
 1. **Vector Graphics (SVG)**:
@@ -111,10 +115,12 @@ The camera icon of the plot toolbar downloads the figure; the other formats are 
 2. **Interactive HTML (`.html`)**:
    - A self-contained file with Plotly.js embedded (a few megabytes) that keeps hover tooltips, zoom, pan and trace toggling.
    - It opens offline in a web browser, without Python or CohortStudio.
+   - It holds the data behind the figure: for most plots, each participant's exact value.
 3. **Plotly JSON (`.json`)**:
    - The complete figure specification, for programmatic storage or reuse.
+   - It holds the data behind the figure, as the interactive figure does.
 4. **Filtered Cohort Data (`.csv` & `.xlsx`)**:
-   - The rows behind the figure: the analysis population, after the *Outliers Handler*. The summary statistics shown under *Statistical Insights* are not part of these files.
+   - Every column of the rows behind the figure (the analysis population, after the *Outliers Handler*), not only the columns drawn. The summary statistics shown under *Statistical Insights* are not part of these files.
 
 ---
 

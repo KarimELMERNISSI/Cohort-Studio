@@ -6,6 +6,17 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Privacy: what the exports and the dossier hold, and who confirmed the AI engine's data sharing
+
+- **Explore > Visualize says what each file of a figure holds.** The interactive figure (HTML) and its JSON hold the
+  data behind the figure: for most plots each participant's exact value, even under a histogram's bars or a box,
+  and the columns chosen for the tooltip (an identifier too); the cohort files are the rows, every column, not only
+  the two drawn. Nothing on the page said so, and the caption offered "publication-quality figures, standalone
+  interactive graphics". The expander now says first that the image the camera icon saves is the one for a
+  publication (the figure as drawn, without its tooltips; after a zoom, the points out of view stay in it, hidden,
+  so it is saved at the full view), then that the files below hold the data, to share only where the dataset
+  itself may go; each button says what its own file holds.
+
 ### Hypothesis tests & epidemiology: two tabs, one analysis at a time
 
 *Diagnostic accuracy & agreement* and *Paired, rates & stratified* stacked eleven analyses on two long tabs, each

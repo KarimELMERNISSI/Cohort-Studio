@@ -16,6 +16,37 @@ from ui.components import no_dataset
 from ui.components.text import plain
 from ui.state import get_state
 
+# What each file of a figure holds. The image the camera icon saves holds the figure as drawn, without its
+# tooltips; after a zoom, the points out of view stay in it, hidden by a clip (100 of 100 in a scatter, and a
+# box's outlier, read in the browser). The interactive
+# figure and its JSON hold the data behind it: for most plots each participant's exact value, even under a
+# histogram's bars or a box, and the columns chosen for the tooltip (an identifier too); the cohort files are the
+# rows, every column. A researcher attached the interactive file of a histogram to a paper as a supplement, and every
+# participant's value went with it. (A count bar or a pie holds counts only: "for most plots".)
+EXPORT_IMAGE_CAPTION = (
+    "For a publication, use the image: the camera icon at the top right of the figure, shown when the pointer is "
+    "over it, saves an SVG of the figure as drawn, without its tooltips. After a zoom, the points out of view "
+    "stay in it, hidden: save it at the full view."
+)
+EXPORT_DATA_CAPTION = (
+    "**The files below hold the data behind the figure.** The interactive figure and its JSON keep, for most plots, "
+    "the exact value of each participant, even under a histogram's bars or a box, and the columns you chose to show "
+    "on hover. The cohort files hold the rows, every column. Share them only where the dataset itself may go."
+)
+HTML_HELP = (
+    "A figure you can zoom and hover, which opens without an internet connection. It holds the data behind the "
+    "figure, for most plots each participant's exact value: share it only where the dataset itself may go, not as a "
+    "figure or a supplement of a paper."
+)
+JSON_HELP = (
+    "The figure's specification, for use in code. It holds the data behind the figure, as the interactive figure "
+    "does: share it only where the dataset itself may go."
+)
+ROWS_HELP = (
+    "Every column of the rows behind this figure (the analysis population, after the Outliers Handler), not only the "
+    "columns drawn. Share it only where the dataset itself may go."
+)
+
 
 def hover_columns_input(df: pd.DataFrame) -> list[str] | None:
     """
@@ -1303,7 +1334,10 @@ def app():
                 st.plotly_chart(fig, width='content', config=plot_config)
 
                 with st.expander("Figure Export & Publication Options", expanded=False):
-                    st.caption("Download publication-quality figures, standalone interactive graphics, or underlying cohort data slices.")
+                    # what each file holds: the image first, which answers the title; then the data, which the
+                    # interactive figure and its JSON carry, and which a researcher attached to a paper as a figure
+                    st.caption(EXPORT_IMAGE_CAPTION)
+                    st.caption(EXPORT_DATA_CAPTION)
                     exp_col1, exp_col2, exp_col3, exp_col4 = st.columns(4)
                     with exp_col1:
                         st.download_button(
@@ -1312,7 +1346,7 @@ def app():
                             data=functools.partial(eu.fig_to_html_str, fig, include_plotlyjs=True),
                             file_name=f"{plot_filename}.html",
                             mime="text/html",
-                            help="Self-contained interactive figure (zoom, hover, pan) that opens without an internet connection.",
+                            help=HTML_HELP,
                             on_click="ignore",
                             key="btn_dl_fig_html"
                         )
@@ -1323,7 +1357,7 @@ def app():
                             data=json_data,
                             file_name=f"{plot_filename}.json",
                             mime="application/json",
-                            help="Serialized JSON specification of traces and layouts for programmatic embedding.",
+                            help=JSON_HELP,
                             key="btn_dl_fig_json"
                         )
                     with exp_col3:
@@ -1333,7 +1367,7 @@ def app():
                             data=csv_bytes,
                             file_name=f"{plot_filename}_cohort.csv",
                             mime="text/csv",
-                            help="Export the active filtered cohort subset used to render this graphic.",
+                            help=ROWS_HELP,
                             key="btn_dl_fig_csv"
                         )
                     with exp_col4:
@@ -1343,7 +1377,7 @@ def app():
                             data=excel_bytes,
                             file_name=f"{plot_filename}_cohort.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            help="Export the active filtered cohort subset to formatted Excel format.",
+                            help=ROWS_HELP,
                             key="btn_dl_fig_xlsx"
                         )
 
