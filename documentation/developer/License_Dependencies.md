@@ -68,14 +68,14 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | numpy | 2.5.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
 | openpyxl | 3.1.5 | MIT |
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
-| pandas | 3.1.0 | BSD-3-Clause |
+| pandas | 3.1.1 | BSD-3-Clause |
 | patsy | 1.0.3 | BSD |
 | pillow | 13.0.0 | MIT-CMU |
 | plotly | 7.1.0 | MIT |
 | protobuf | 7.36.2 | 3-Clause BSD License |
-| pyarrow | 26.0.0 | Apache-2.0 |
-| pydantic | 2.14.2 | MIT |
-| pydantic-core | 2.50.2 | MIT |
+| pyarrow | 26.0.1 | Apache-2.0 |
+| pydantic | 2.14.3 | MIT |
+| pydantic-core | 2.50.4 | MIT |
 | pydantic-settings | 2.16.2 | MIT |
 | pydeck | 0.9.3 | Apache License 2.0 |
 | pyparsing | 3.3.3 | MIT |
@@ -94,7 +94,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | six | 1.17.0 | MIT |
 | starlette | 1.8.0 | BSD-3-Clause |
 | statsmodels | 0.15.0 | BSD-3-Clause |
-| streamlit | 1.66.1 | Apache-2.0 |
+| streamlit | 1.67.0 | Apache-2.0 |
 | tabulate | 0.10.0 | MIT |
 | threadpoolctl | 3.7.0 | BSD-3-Clause |
 | tqdm | 4.70.1 | MPL-2.0 AND MIT |
@@ -112,14 +112,14 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 
 | Package | Version | Licence |
 | :--- | :--- | :--- |
-| anthropic | 2.3.0 | Apache |
+| anthropic | 2.6.0 | Apache |
 | cffi | 2.1.1 | MIT-0 |
 | cryptography | 50.0.2 | Apache-2.0 OR BSD-3-Clause |
 | deprecation | 2.1.0 | Apache |
 | distro | 1.9.0 | Apache |
 | docstring-parser | 0.18.0 | MIT |
 | google-auth | 2.62.0 | Apache |
-| google-genai | 2.34.0 | Apache-2.0 |
+| google-genai | 3.0.0 | Apache-2.0 |
 | grpcio | 1.84.0 | Apache-2.0 |
 | h2 | 4.4.1 | MIT |
 | hpack | 4.2.0 | MIT |
@@ -134,18 +134,18 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | lance-namespace | 0.13.0 | Apache-2.0 |
 | lance-namespace-urllib3-client | 0.13.0 | Apache-2.0 |
 | lancedb | 0.41.0 | Apache |
-| langchain-core | 1.7.3 | MIT |
+| langchain-core | 1.7.6 | MIT |
 | langchain-protocol | 0.0.20 | MIT |
 | langchain-text-splitters | 1.1.3 | MIT |
 | langsmith | 0.14.12 | MIT |
-| openai | 3.42.0 | Apache-2.0 |
-| opentelemetry-api | 1.45.1 | Apache-2.0 |
+| openai | 3.46.0 | Apache-2.0 |
+| opentelemetry-api | 1.45.2 | Apache-2.0 |
 | orjson | 3.13.0 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | portalocker | 3.2.0 | BSD-3-Clause |
 | pyasn1 | 0.6.5 | BSD-2-Clause |
 | pyasn1-modules | 0.4.2 | BSD |
 | pycparser | 3.11 | BSD-3-Clause |
-| pypdf | 6.21.4 | BSD-3-Clause |
+| pypdf | 7.0.0 | BSD-3-Clause |
 | pywin32 | 312 | PSF |
 | qdrant-client | 1.20.0 | Apache |
 | requests-toolbelt | 1.0.0 | Apache |
@@ -201,5 +201,5 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | pytest-cov | 7.1.0 | MIT |
 | pytest-mock | 3.17.0 | MIT |
 | python-discovery | 1.6.2 | MIT |
-| ruff | 0.17.3 | MIT |
+| ruff | 0.17.4 | MIT |
 | virtualenv | 21.15.5 | MIT |

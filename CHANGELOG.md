@@ -6,6 +6,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Dependency updates: Streamlit 1.67, pypdf 7, google-genai 3 and seven others
+
+- For a known vulnerability: opentelemetry-api 1.45.2 (CVE-2026-126360), which the Anthropic SDK uses; no pull
+  request named it.
+- Updated in `uv.lock`, as Dependabot proposed: Streamlit 1.67.0 (every plot type of Visualize and the z-score tab
+  read in the browser, light and dark), pypdf 7.0.0, which reads the PDF documents of the AI engine's library,
+  google-genai 3.0.0, the SDK of the Gemini connector, pandas 3.1.1, pyarrow 26.0.1, pydantic 2.14.3, openai 3.46.0,
+  anthropic 2.6.0 and langchain-core 1.7.6; for development, ruff 0.17.4, which the pre-commit hook follows.
+
 ### Privacy: what the exports and the dossier hold, and who confirmed the AI engine's data sharing
 
 - **Explore > Visualize says what each file of a figure holds.** The interactive figure (HTML) and its JSON hold the
