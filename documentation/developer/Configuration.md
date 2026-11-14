@@ -21,3 +21,5 @@ The `config/` folder may hold local copies of study configurations. Its JSON fil
 ## Environment settings
 
 `.env.example` lists the variables with their defaults. `documentation/10_Developer_Guide.md` describes the AI keys, the vector database and the accounts.
+
+**The record of the AI engine's data sharing** is the server log: a line for each confirmation that study data may go to an AI recipient, for each withdrawal, for each confirmation a sign-out ended, and for each engine started under one (the account and the recipients, never what is sent). It is written by the logger `cohortstudio.audit` at INFO, whatever `CMP_LOG_LEVEL` says. Keep that log: under Docker it lives with the container, so set logging options that rotate without deleting, or save `docker compose logs` before an update.

@@ -16,6 +16,16 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   publication (the figure as drawn, without its tooltips; after a zoom, the points out of view stay in it, hidden,
   so it is saved at the full view), then that the files below hold the data, to share only where the dataset
   itself may go; each button says what its own file holds.
+- **The server log keeps each confirmation of the AI engine's data sharing**: who ticked or unticked the box, for
+  which recipients, and when; never what is sent. The confirmation lives in one browser tab, so an organisation
+  asked whether study data went to a cloud provider on a given day, and by whom, had no answer. A sign-out ends each
+  confirmation with a line of its own, and an engine that starts under one writes a line too: a confirmation is a
+  permission, the start says that data could then be sent. These lines have a logger of their own
+  (`cohortstudio.audit`) at INFO, which `CMP_LOG_LEVEL=WARNING` silenced without a word; `.env.example` says how
+  to keep that log under Docker, where it lives with the container. A name, or an Ollama server's answer, can no
+  longer break a line of the log: every character that is not printable is written as its escape (a line separator,
+  a terminal's escape), and an answer that is no readable address names its recipient "an address that cannot be
+  read", still to be confirmed (a "[" in it stopped Settings' AI card with an error).
 
 ### Hypothesis tests & epidemiology: two tabs, one analysis at a time
 

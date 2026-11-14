@@ -110,11 +110,25 @@ def end_session(reason: str) -> None:
     is cleared, even if stopping failed, and the app runs again from the sign-in screen with nothing of the last user.
     """
     try:
+        _end_confirmations()
         drop_ai_engine(reason)
     finally:
         for key in list(st.session_state.keys()):
             del st.session_state[key]
     st.rerun()
+
+
+def _end_confirmations() -> None:
+    """The confirmations of the AI engine's data sharing end with the session: the record keeps a line for each
+    (``RAGManager.end_confirmations``); a record that cannot be written does not keep the session open."""
+    end = getattr(st.session_state.get(ENGINE_KEY), "end_confirmations", None)
+    if callable(end):
+        try:
+            end()
+        except Exception as exc:
+            logger.warning(
+                "The end of the AI confirmations could not be recorded (%s)", type(exc).__name__
+            )
 
 
 def drop_ai_engine(reason: str) -> None:

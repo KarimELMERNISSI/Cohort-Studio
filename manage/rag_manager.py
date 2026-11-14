@@ -59,7 +59,7 @@ from utils.llm_utils import (
     parse_json_safe,
     provider_error,
 )
-from utils.logging_config import redact_secrets
+from utils.logging_config import audit_logger, redact_secrets, single_line
 
 from .rag_computed_vars import ComputedVarsMixin
 from .rag_documents import DocumentsMixin
@@ -68,6 +68,15 @@ from .rag_documents import DocumentsMixin
 from .rag_taxonomy import TaxonomyMixin
 
 logger = logging.getLogger(__name__)
+
+
+_audit = audit_logger()
+
+
+def _record(message: str, account: str, recipients: frozenset[str]) -> None:
+    """One line of the record of the AI confirmations (``utils.logging_config.audit_logger``): the account and the
+    recipients, each on one line, never what is sent; the time is the log's own."""
+    _audit.info(message, single_line(account), single_line(" + ".join(sorted(recipients))[:500]))
 
 
 def _passages(docs) -> str:
@@ -197,6 +206,8 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         # box of Settings > AI engine > Data sharing: a provider confirmed as Claude's embedding provider is not
         # confirmed to answer on its own, which receives more (column summaries, descriptions, criteria)
         self.confirmed: set[frozenset[str]] = set()
+        # the account each was confirmed by, for the line written when the session ends it
+        self.confirmed_by: dict[frozenset[str], str] = {}
         self.stop_reason: str | None = None  # why a running engine was stopped (shown by Settings)
 
     @staticmethod
@@ -243,10 +254,27 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         """Whether data leaves this machine and the private network."""
         return bool(self.recipients())
 
-    def confirm(self, *recipients: str) -> None:
-        """The user confirms that data may be sent to these recipients together (one box of Settings)."""
-        if recipients:
-            self.confirmed.add(frozenset(recipients))
+    def _account(self, account: str | None) -> str:
+        """The account a confirmation is recorded under: the signed-in name the page passes, else the workspace's."""
+        found = account or (self.scope.username if self.scope is not None else None)
+        return str(found or "unknown account")[:200]
+
+    def confirm(self, *recipients: str, account: str | None = None, again: bool = False) -> None:
+        """
+        The user confirms that data may be sent to these recipients together (one box of Settings). The server log
+        keeps a line for each confirmation: the account, the recipients and the time, never what is sent, so that an
+        organisation asked whether study data went to a cloud provider on a given day, and by whom, has an answer
+        (the confirmation itself lives in one browser tab). ``again``: the box was ticked earlier in the session, and
+        its line written then (an engine manager rebuilt since).
+        """
+        if not recipients:
+            return
+        confirmed = frozenset(recipients)
+        new = confirmed not in self.confirmed
+        self.confirmed.add(confirmed)
+        self.confirmed_by.setdefault(confirmed, self._account(account))
+        if new and not again:
+            _record("AI data sharing confirmed by the account %s for: %s", self._account(account), confirmed)
 
     def is_confirmed(self, recipients: frozenset[str]) -> bool:
         return not recipients or recipients in self.confirmed
@@ -317,18 +345,38 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
             return True
         return False
 
-    def withdraw_consent(self, *recipients: str) -> bool:
+    def withdraw_consent(self, *recipients: str, account: str | None = None) -> bool:
         """
         The user withdraws the confirmation of ``recipients`` (all of them when none is named): every confirmation
-        that names one of them goes. An engine that sends data to one of them stops at once: the confirmation used
-        to be checked only when the engine started, so it kept answering. Returns whether it stopped.
+        that names one of them goes, and the server log keeps a line for each (the account, the recipients and the
+        time). An engine that sends data to one of them stops at once: the confirmation used to be checked only when
+        the engine started, so it kept answering. Returns whether it stopped.
         """
         withdrawn = set(recipients) if recipients else {r for confirmed in self.confirmed for r in confirmed}
+        gone = sorted((c for c in self.confirmed if c & withdrawn), key=lambda c: sorted(c))
         self.confirmed = {c for c in self.confirmed if not c & withdrawn}
+        for confirmed in gone:
+            self.confirmed_by.pop(confirmed, None)
+            _record(
+                "AI data sharing confirmation withdrawn by the account %s for: %s", self._account(account), confirmed
+            )
         if self.holds_connections() and self.recipients() & withdrawn:
             self.stop("the data-sharing confirmation was withdrawn")
             return True
         return False
+
+    def end_confirmations(self) -> None:
+        """
+        The session ends (a sign-out, or another user signed in to it): every confirmation it held ends with it,
+        and the record keeps a line for each, under the account that gave it. Without it the record said when a
+        confirmation began and not when it ended. A closed tab or a server stopped writes nothing: a confirmation
+        is read as held until a withdrawal, a sign-out or the end of that session, at the latest.
+        """
+        for confirmed in sorted(self.confirmed, key=sorted):
+            account = self.confirmed_by.get(confirmed) or self._account(None)
+            _record("AI data sharing confirmation of the account %s ended with the session for: %s", account, confirmed)
+        self.confirmed = set()
+        self.confirmed_by = {}
 
     def is_available(self):
         """Check if RAG dependencies are available."""
@@ -444,6 +492,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         embedding_provider=None,
         embedding_api_key=None,
         embedding_base_url=None,
+        account=None,
     ):
         """Initialize the RAG system with documents, embeddings, the vector database and the LLM.
 
@@ -455,7 +504,9 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         the embedded mode (default ``CMP_QDRANT_URL``).
 
         Without a ``provider``, the engine's own (the server's ``CMP_AI_PROVIDER``, local Ollama by default); without
-        a model, the first its provider declares.
+        a model, the first its provider declares. An engine whose recipients need the confirmation writes a line in
+        the record as it starts (``account``: the signed-in name, else the workspace's): a confirmation is a
+        permission, and the line of the start says that data could then be sent.
         """
         if not self.is_available():
             return False, f"Missing dependencies: {MISSING_LIBS_ERROR}. Please install required packages."
@@ -590,6 +641,10 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
 
             # 3. Create Connectors (Embeddings & LLM)
             if progress_callback: progress_callback(50, "Initializing connectors & embeddings...")
+            if needed:  # from here, data may be sent to them: the documents to embed, then the chat
+                _record(
+                    "AI engine starting for the account %s; data may be sent to: %s", self._account(account), needed
+                )
             self.llm, embeddings = ConnectorFactory.create_connectors(
                 provider=provider_clean,
                 model_name=model_name,

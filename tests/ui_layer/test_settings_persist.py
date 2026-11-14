@@ -71,6 +71,27 @@ def test_the_ai_provider_model_and_consent_survive_a_revisit(app: AppTest) -> No
     assert not [w for w in app.warning if "Session State API" in str(w.value)]
 
 
+def test_ticking_and_unticking_the_consent_writes_a_line_each_with_the_account(
+    app: AppTest, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The confirmation lives in one browser tab: the server log keeps who gave it, and withdrew it, for which
+    recipients and when, never what is sent."""
+    pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")
+    import logging
+
+    app.selectbox(key="rag_provider_select").select("gemini").run()
+    with caplog.at_level(logging.INFO, logger="cohortstudio.audit"):
+        app.checkbox(key="rag_consent::gemini").check().run()
+        _visit(app, "start")
+        _visit(app, "settings")  # a revisit writes nothing
+        app.checkbox(key="rag_consent::gemini").uncheck().run()
+    lines = [r.getMessage() for r in caplog.records if "AI data sharing" in r.getMessage()]
+    assert lines == [
+        "AI data sharing confirmed by the account persist_user for: gemini",
+        "AI data sharing confirmation withdrawn by the account persist_user for: gemini",
+    ]
+
+
 def test_settings_start_from_the_engine_that_runs(signed_in: AppTest, tmp_path: Path) -> None:
     """An engine running before Settings is first shown in the session: the page shows it, not Ollama."""
     pytest.importorskip("langchain_core", reason="the AI engine is in the optional 'ai' extra")

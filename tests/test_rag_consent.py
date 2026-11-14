@@ -63,6 +63,29 @@ def _engine(monkeypatch, tmp_path, provider: str, embedding: str | None = None) 
     return manager
 
 
+def test_an_engine_that_sends_data_writes_a_line_in_the_record_as_it_starts(
+    monkeypatch, tmp_path, caplog
+) -> None:
+    """A confirmation is a permission: the record also says when an engine started under it, so that data could be
+    sent from then on (the account and the recipients, never what is sent). A start refused writes no such line."""
+    import logging
+
+    from utils.logging_config import AUDIT_LOGGER
+
+    def lines() -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.name == AUDIT_LOGGER]
+
+    with caplog.at_level(logging.INFO, logger=AUDIT_LOGGER):
+        refused = rm.RAGManager(documents_dir=str(tmp_path), provider="gemini", api_key="sk-test")
+        ok, _ = refused.initialize_system(provider="gemini", model_name="model", account="dr.martin")
+        assert not ok and lines() == []
+        _engine(monkeypatch, tmp_path, "gemini")
+    assert lines() == [
+        "AI data sharing confirmed by the account unknown account for: gemini",
+        "AI engine starting for the account unknown account; data may be sent to: gemini",
+    ]
+
+
 def test_withdrawing_the_confirmation_stops_a_cloud_engine(monkeypatch, tmp_path) -> None:
     manager = _engine(monkeypatch, tmp_path, "gemini")
     llm = manager.llm

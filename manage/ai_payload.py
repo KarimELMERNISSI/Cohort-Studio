@@ -356,9 +356,29 @@ def recipient(
         return None
     if provider not in local_providers():
         return provider
-    if provider == OLLAMA and (remote_host or cloud_model(model)):
-        return f"{provider}@{host_of(remote_host) or 'ollama.com'}"
+    if provider == OLLAMA and remote_host:
+        return f"{provider}@{answered_host(remote_host)}"
+    if provider == OLLAMA and cloud_model(model):
+        return f"{provider}@ollama.com"
     return server_recipient(provider, base_url)
+
+
+UNREADABLE_ADDRESS = "an address that cannot be read"
+
+
+def answered_host(remote_host: str) -> str:
+    """
+    The host an Ollama server answers that it runs a model at, as a recipient names it: the host of an address
+    read as Settings reads one (``utils.settings.server_address``), else :data:`UNREADABLE_ADDRESS`, still a
+    recipient that needs the confirmation. An answer is no address the server chose: a "[" in it stopped the
+    AI card with an error, and a line separator or a terminal's escape reached the record's line.
+    """
+    from utils.settings import server_address
+
+    try:
+        return host_of(server_address(remote_host)) or UNREADABLE_ADDRESS
+    except ValueError:
+        return UNREADABLE_ADDRESS
 
 
 def server_recipient(provider: str | None, base_url: str | None) -> str | None:

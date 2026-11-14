@@ -43,8 +43,33 @@ def redact_secrets(text: str) -> str:
 
 
 def single_line(value: object) -> str:
-    """``value`` on one line, for a log entry: a typed name, path or formula cannot forge another entry."""
-    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+    """
+    ``value`` on one line, for a log entry: a typed name, path or formula cannot forge another entry. Each
+    character that is not printable is written as its escape (``\\n``, ``\\x1b``, ``\\u2028``): a line break
+    of another kind (U+2028, U+0085) breaks a line in many log viewers, and a terminal's escape rewrites the
+    screen of whoever reads the log.
+    """
+    text = str(value)
+    if text.isprintable():
+        return text
+    return "".join(
+        one if one.isprintable() else one.encode("unicode_escape").decode("ascii") for one in text
+    )
+
+
+AUDIT_LOGGER = "cohortstudio.audit"
+
+
+def audit_logger() -> logging.Logger:
+    """
+    The logger of the record an organisation answers from: who confirmed that study data may go to an AI
+    recipient, who withdrew it, the confirmations a sign-out ended, and the engines started under one. At INFO
+    whatever ``CMP_LOG_LEVEL`` says: that setting quiets the rest of the log, and must not silence this record.
+    The record is the server's log, kept as long as the log is (``.env.example`` says how).
+    """
+    found = logging.getLogger(AUDIT_LOGGER)
+    found.setLevel(logging.INFO)
+    return found
 
 
 # a quoted string (not an apostrophe inside a word, as in "the file's"), and a path of two parts or more (not a URL's)

@@ -836,9 +836,9 @@ def _consent_changed(key: str, recipients: tuple[str, ...]) -> None:
     """
     manager = st.session_state.rag_manager
     if st.session_state.get(key):
-        manager.confirm(*recipients)
+        manager.confirm(*recipients, account=_account())
         return
-    if manager.withdraw_consent(*recipients):
+    if manager.withdraw_consent(*recipients, account=_account()):
         st.session_state["rag_stop_notice"] = STOP_NOTICE
     # every confirmation naming these recipients went: so do the ticks of their other boxes, which would otherwise
     # confirm them again when shown
@@ -939,7 +939,7 @@ def _running_engine(manager) -> None:
     st.info(f"The AI engine runs with {_names(order, embedding)}: your data goes there.", icon=":material/cloud_sync:")
     if st.button("Withdraw the confirmation and stop", key="rag_withdraw_stop", icon=":material/block:"):
         withdrawn = manager.recipients()
-        manager.withdraw_consent(*withdrawn)
+        manager.withdraw_consent(*withdrawn, account=_account())
         for key in [k for k in st.session_state if isinstance(k, str) and k.startswith("rag_consent::")]:
             if set(_consent_recipients(key)) & withdrawn:
                 st.session_state[key] = False  # the boxes of these recipients start unticked
@@ -1014,7 +1014,8 @@ def _consent_card(cfg: dict, vector: dict | None = None) -> bool:
             )
         )
         if consent and not manager.is_confirmed(frozenset(recipients)):
-            manager.confirm(*recipients)  # ticked earlier in the session, for an engine manager rebuilt since
+            # ticked earlier in the session, for an engine manager rebuilt since: its line was written then
+            manager.confirm(*recipients, account=_account(), again=True)
         return consent
 
 
@@ -1327,6 +1328,7 @@ def _engine_card(
                     vector_engine=vector.get("vector_engine"),
                     qdrant_url=vector.get("qdrant_url"),
                     qdrant_api_key=vector.get("qdrant_api_key"),
+                    account=_account(),
                 )
                 status.update(label=msg if success else "Initialisation failed", state="complete" if success else "error")
                 if not success:
