@@ -23,17 +23,22 @@ anyone reads it (``9 ** 9 ** 8`` would keep the server busy for minutes), in two
   built by ``np.full``, ``np.ones`` or ``np.zeros``, a padding width, a text repeated a constant number of times. A
   size is read through ``int``, ``float``, ``abs``, ``round``, ``max`` and ``min`` too (``str.pad(int(1e8))``);
 * when it is computed, what each step builds, whatever its sizes are made of: the characters of a text or of a
-  column of texts that is repeated (``*``, ``mul``, ``np.multiply``), padded, accumulated or rewritten
-  (``str.replace``); the values of an array, with the width a text gives each of them (``np.full``, ``np.where``,
-  ``np.select``, ``np.array``); the elements of a repeated list; the intervals asked of ``pd.cut`` and ``pd.qcut``
-  as a number; the digits of a whole number raised to a power. Each size passing on its own bounds nothing: two
-  products of 10,000 build a hundred million copies, and ``np.ones(len(df) ** 4)`` asks for a size that is no
-  number written in the expression. One budget holds for a step: ``MAX_ELEMENTS`` values or characters, or
-  ``MAX_PER_ROW`` characters a row in a table of more rows (codes padded to twelve characters are not refused
-  in a table of a million rows).
+  column of texts that is repeated (``*``, ``mul``, ``np.multiply``), joined to another (``+``, ``add``,
+  ``np.add``), padded, accumulated or rewritten (``str.replace``); a text written into every row (``replace``,
+  ``where``, ``mask``, ``fillna``); the values of an array, with the width a text or a fixed-width text type gives
+  each of them (``np.full``, ``np.ones``, ``np.zeros``, ``np.where``, ``np.select``, ``np.array``, ``astype``); the
+  elements of a repeated list; the columns of a table asked for by a computed list (``df[['age'] * 10000]``); the
+  intervals asked of ``pd.cut`` and ``pd.qcut`` as a number; the digits of a whole number raised to a power; the
+  order of ``np.diff``, which is a pass over its values each. Each size passing on its own bounds nothing: two
+  products of 10,000 build a hundred million copies, twenty padded columns added are twenty times the column, and
+  ``np.ones(len(df) ** 4)`` asks for a size that is no number written in the expression. One budget holds for a
+  step: ``MAX_ELEMENTS`` values or characters, or ``MAX_PER_ROW`` characters a row in a table of more rows (codes
+  padded to twelve characters are not refused in a table of a million rows).
 
-What is not bounded: the time a pattern takes (pandas runs it with an engine that backtracks). An expression nested
-too deep to be walked is refused as too complex.
+What is not bounded: the time a pattern takes (pandas runs it with an engine that backtracks), and what several
+steps hold together (each step has the budget: an expression of a few steps holds a few times as much). The budget
+stops what one line can ask of the server; it is no memory limit and no time limit, which a process has only from
+outside. An expression nested too deep to be walked is refused as too complex.
 """
 
 from __future__ import annotations
@@ -633,6 +638,8 @@ def validate(
 
 _TIMES = "__times__"  # the name a product is computed under when one of its sides is not a number written in it
 _POWER = "__power__"  # a power, likewise
+_PLUS = "__plus__"  # a sum, likewise: of texts, it joins them
+_ITEM = "__item__"  # a selection by a key that is computed
 _METHOD = (
     "__method__"  # a method that repeats, pads, accumulates or rewrites, called through its check
 )
@@ -708,6 +715,10 @@ def _largest(value: Any) -> float:
     return 0.0
 
 
+_LONG_LIST = 1_000  # a list of more items than this is first read by the types of its items
+_SINGLE_VALUES = frozenset({int, float, bool, complex, type(None)})
+
+
 def _weight(value: Any, seen: dict[int, float] | None = None) -> float:
     """What a list is once laid out: its values, a column or an array counting for its own, a text for its
     characters. A list repeated holds one list many times: each is weighed once."""
@@ -715,11 +726,16 @@ def _weight(value: Any, seen: dict[int, float] | None = None) -> float:
     if isinstance(value, list | tuple):
         known = seen.get(id(value))
         if known is None:
-            known = 0.0
-            for item in value:
-                known += _weight(item, seen)
-                if known > MAX_ELEMENTS:
-                    break
+            if len(value) > _LONG_LIST and set(map(type, value)) <= _SINGLE_VALUES:
+                # a long list of single values weighs its length: weighed one by one, six million zeros took
+                # ten seconds of the check that is there to save time
+                known = float(len(value))
+            else:
+                known = 0.0
+                for item in value:
+                    known += _weight(item, seen)
+                    if known > MAX_ELEMENTS:
+                        break
             seen[id(value)] = known
         return known
     if isinstance(value, pd.DataFrame | pd.Series | pd.Index | np.ndarray):
@@ -752,6 +768,108 @@ def _times(left: Any, right: Any) -> Any:
     a hundred million copies of each site's name."""
     _check_times(left, right)
     return left * right
+
+
+def _check_plus(left: Any, right: Any) -> None:
+    """What a sum builds when it joins: two texts, or two columns of texts, row by row (twenty padded columns
+    added are twenty times the column, each passing on its own), and two lists end to end. Numbers add as they
+    did."""
+    if isinstance(left, list | tuple) and isinstance(right, list | tuple):
+        _over(_weight(left) + _weight(right), 0, "values")
+        return
+    if not (_holds_text(left) and _holds_text(right)):
+        return
+    rows = max(_rows(left), _rows(right))
+    joined = 0.0
+    for side in (left, right):
+        characters, _ = _characters(side)
+        # a text alone is joined to every row of the other side
+        joined += characters * (rows if isinstance(side, str) else 1)
+    _over(joined, rows)
+
+
+def _plus(left: Any, right: Any) -> Any:
+    """``left + right``, once :func:`_check_plus` has passed it."""
+    _check_plus(left, right)
+    return left + right
+
+
+def _item(receiver: Any, key: Any) -> Any:
+    """``receiver[key]``, the key being computed. A table asked for more columns than it holds is asked for some
+    of them many times: ``df[['age'] * 10000]`` is ten thousand copies of a column, the list itself being ten
+    thousand names."""
+    if isinstance(receiver, pd.DataFrame):
+        names = None
+        if (
+            isinstance(key, list | tuple)
+            or isinstance(key, np.ndarray | pd.Index)
+            and key.dtype != bool
+        ):
+            names = len(key)
+        if names is not None and names > receiver.shape[1]:
+            _over(len(receiver) * names, len(receiver), "values")
+    return receiver[key]
+
+
+def _widest_text(value: Any, depth: int = 0) -> int:
+    """The longest text among the values a method is given to write: a text, or those of a list or of a
+    mapping."""
+    if isinstance(value, str):
+        return len(value)
+    if depth > 3:
+        return 0
+    if isinstance(value, Mapping):
+        held = [one for pair in list(value.items())[:MAX_WIDTH] for one in pair]
+        return max((_widest_text(one, depth + 1) for one in held), default=0)
+    if isinstance(value, list | tuple):
+        return max((_widest_text(one, depth + 1) for one in value[:MAX_WIDTH]), default=0)
+    return 0
+
+
+def _check_filled(receiver: Any, args: tuple, kwargs: dict) -> None:
+    """A text written into the cells of a column or of a table, at most once in each (``replace``, ``where``,
+    ``mask``, ``fillna``): a text of 10,000 characters is ten thousand times the column. A label of ordinary
+    length is never refused, whatever the table."""
+    widest = max((_widest_text(one) for one in (*args, *kwargs.values())), default=0)
+    if widest > MAX_PER_ROW:
+        held = isinstance(receiver, pd.DataFrame | pd.Series | pd.Index | np.ndarray)
+        cells = int(np.size(receiver)) if held else 1
+        _over(cells * widest, _rows(receiver))
+
+
+def _text_width(kind: Any) -> int:
+    """The characters each value of a fixed-width text type holds (``'U100000'``); 0 for any other type, and for
+    ``str``, which is as wide as its longest text."""
+    if kind is None or kind is str:
+        return 0
+    try:
+        found = np.dtype(kind)
+    except TypeError, ValueError:
+        return 0
+    if found.kind == "U":
+        return int(found.itemsize // 4)
+    return int(found.itemsize) if found.kind == "S" else 0
+
+
+def _text_type(kind: Any) -> bool:
+    """Whether a type asked of an array is a text type: every value is then as wide as the longest."""
+    if kind is None:
+        return False
+    if kind is str:
+        return True
+    try:
+        return np.dtype(kind).kind in "US"
+    except TypeError, ValueError:
+        return False
+
+
+def _check_astype(receiver: Any, args: tuple, kwargs: dict) -> None:
+    """An array given a fixed-width text type holds that width for every value (pandas keeps each text at its
+    own length, whatever the width asked)."""
+    if isinstance(receiver, np.ndarray):
+        width = _text_width(args[0] if args else kwargs.get("dtype"))
+        if width > MAX_PER_ROW:
+            _over(int(receiver.size) * width, _rows(receiver))
 
 
 def _whole(value: Any) -> bool:
@@ -843,6 +961,12 @@ def _method(receiver: Any, name: str, *args: Any, **kwargs: Any) -> Any:
         _check_power(receiver, args[0] if args else kwargs.get("other"))
     elif name == "cumsum":
         _check_cumsum(receiver)
+    elif name == "add":
+        _check_plus(receiver, args[0] if args else kwargs.get("other"))
+    elif name in _FILLED:
+        _check_filled(receiver, args, kwargs)
+    elif name == "astype":
+        _check_astype(receiver, args, kwargs)
     target = receiver
     *through, last = name.split(".")
     for part in through:
@@ -850,7 +974,9 @@ def _method(receiver: Any, name: str, *args: Any, **kwargs: Any) -> Any:
     return getattr(target, last)(*args, **kwargs)
 
 
-_GUARDED_METHODS = frozenset({"mul", "pow", "cumsum"})  # of a column or a table
+_FILLED = frozenset({"replace", "where", "mask", "fillna"})  # a value written into the rows
+# of a column, an array or a table
+_GUARDED_METHODS = frozenset({"mul", "pow", "cumsum", "add", "astype"}) | _FILLED
 _GUARDED_STR_METHODS = frozenset({"pad", "zfill", "replace"})  # of its texts
 
 
@@ -884,6 +1010,11 @@ def _array_of(function: Callable[..., Any], rows: int) -> Callable[..., Any]:
         fill = args[1] if len(args) > 1 else kwargs.get("fill_value")
         if isinstance(fill, str):  # every value as wide as the text
             _over(asked * max(len(fill), 1), asked)
+        # or as wide as a fixed-width text type says (the third argument of np.full, the second of the others)
+        place = 2 if function is np.full else 1
+        width = _text_width(kwargs.get("dtype", args[place] if len(args) > place else None))
+        if width > MAX_PER_ROW:
+            _over(asked * width, asked)
         return function(*args, **kwargs)
 
     return sized
@@ -910,14 +1041,66 @@ def _laid_out(function: Callable[..., Any]) -> Callable[..., Any]:
 
     def laid_out(*args: Any, **kwargs: Any) -> Any:
         given = args[0] if args else None
+        kind = kwargs.get("dtype", args[1] if len(args) > 1 else None)
         if isinstance(given, list | tuple):
-            _over(_weight(given), 0, "values")
+            held = _weight(given)
+            _over(held, 0, "values")
             widest = _fixed_text(given)
             if widest > MAX_PER_ROW:
                 _over(len(given) * widest, len(given))
+            if _text_type(kind):
+                # a text type: every value as wide as the longest text of the columns and arrays in the list
+                longest = max(widest, _text_width(kind), _longest_in(given))
+                if longest > MAX_PER_ROW:
+                    _over(held * longest, int(held))
+        elif isinstance(given, pd.Series | pd.Index | np.ndarray):
+            width = _text_width(kind)
+            if width > MAX_PER_ROW:
+                _over(int(np.size(given)) * width, _rows(given))
         return function(*args, **kwargs)
 
     return laid_out
+
+
+def _longest_in(given: Any, seen: set[int] | None = None, depth: int = 0) -> int:
+    """The longest text of the columns and arrays a list holds, each read once (a list repeated holds one
+    column many times)."""
+    seen = set() if seen is None else seen
+    if id(given) in seen or depth > 3:
+        return 0
+    seen.add(id(given))
+    if isinstance(given, list | tuple):
+        return max((_longest_in(one, seen, depth + 1) for one in given[:MAX_WIDTH]), default=0)
+    if isinstance(given, pd.Series | pd.Index | np.ndarray) and _holds_text(given):
+        return _characters(given)[1]
+    return 0
+
+
+def _summed(function: Callable[..., Any]) -> Callable[..., Any]:
+    def summed(*args: Any, **kwargs: Any) -> Any:
+        if len(args) >= 2:
+            _check_plus(args[0], args[1])
+        return function(*args, **kwargs)
+
+    return summed
+
+
+def _differenced(function: Callable[..., Any]) -> Callable[..., Any]:
+    """``np.diff``: each order is a pass over the values, and an order is a number an expression may write up to
+    10^15 (``n=10**9`` would run for minutes on ten rows). The passes are counted with the values."""
+
+    def differenced(*args: Any, **kwargs: Any) -> Any:
+        order = args[1] if len(args) > 1 else kwargs.get("n", 1)
+        if args and isinstance(order, int | np.integer) and not isinstance(order, bool):
+            size = max(int(np.size(args[0])), 1)
+            # beyond the number of values a difference is empty; below it, the passes are counted
+            if int(order) > 1 and (int(order) > size or int(order) * size > _budget(size)):
+                raise UnsafeExpressionError(
+                    "A difference of that order is not allowed: each order is a pass over the values."
+                )
+        return function(*args, **kwargs)
+
+    return differenced
 
 
 def _multiplied(function: Callable[..., Any]) -> Callable[..., Any]:
@@ -955,6 +1138,8 @@ _NP_GUARDS: dict[str, Callable[[Callable[..., Any]], Callable[..., Any]]] = {
     "multiply": _multiplied,
     "power": _raised,
     "cumsum": _accumulated,
+    "add": _summed,
+    "diff": _differenced,
 }
 _BINNED = frozenset({"cut", "qcut"})
 
@@ -977,8 +1162,9 @@ def _binned(function: Callable[..., Any]) -> Callable[..., Any]:
 
 
 class _Guards(ast.NodeTransformer):
-    """The tree as it is computed: each product and each power with a side that is not a number written in the
-    expression, and each call of a method that builds by a size, go through their check."""
+    """The tree as it is computed: each product, each power and each sum with a side that is not a number written
+    in the expression, each call of a method that builds by a size, and each selection by a computed key go
+    through their check."""
 
     def visit_BinOp(self, node: ast.BinOp) -> ast.AST:
         self.generic_visit(node)
@@ -987,6 +1173,15 @@ class _Guards(ast.NodeTransformer):
             return node
         call = ast.Call(
             func=ast.Name(id=name, ctx=ast.Load()), args=[node.left, node.right], keywords=[]
+        )
+        return ast.copy_location(call, node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> ast.AST:
+        self.generic_visit(node)
+        if not _computed_key(node):
+            return node
+        call = ast.Call(
+            func=ast.Name(id=_ITEM, ctx=ast.Load()), args=[node.value, node.slice], keywords=[]
         )
         return ast.copy_location(call, node)
 
@@ -1014,17 +1209,37 @@ def _both_numbers(node: ast.BinOp) -> bool:
 
 
 def _guard_of(node: ast.AST) -> str | None:
-    """The check a product or a power is computed through; None for any other node, and for two numbers."""
+    """The check a product, a power or a sum is computed through; None for any other node, and for two
+    numbers."""
     if not isinstance(node, ast.BinOp) or _both_numbers(node):
         return None
     if isinstance(node.op, ast.Mult):
         return _TIMES
+    if isinstance(node.op, ast.Add):
+        return _PLUS
     return _POWER if isinstance(node.op, ast.Pow) else None
+
+
+def _computed_key(node: ast.AST) -> bool:
+    """Whether a selection's key is computed (``df[['age'] * 10000]``, ``df[df['age'] > 50]``): neither a name
+    or a number written in the expression, nor a list of them (as long as the expression at most), nor a
+    slice."""
+    if not isinstance(node, ast.Subscript):
+        return False
+    key = node.slice
+    if isinstance(key, ast.Constant | ast.Slice):
+        return False
+    if isinstance(key, ast.List | ast.Tuple):
+        if any(isinstance(item, ast.Slice) for item in key.elts):
+            return False  # a slice is no value to pass on
+        return not all(isinstance(item, ast.Constant) for item in key.elts)
+    return True
 
 
 def _guarded_method(node: ast.AST) -> tuple[ast.expr, str] | None:
     """The receiver and the name of a call that goes through :func:`_method`: ``x.mul(...)``, ``x.pow(...)``,
-    ``x.cumsum(...)``, and ``x.str.pad(...)``, ``x.str.zfill(...)``, ``x.str.replace(...)``. numpy's and pandas'
+    ``x.cumsum(...)``, ``x.add(...)``, ``x.astype(...)``, ``x.replace(...)``, ``x.where(...)``, ``x.mask(...)``,
+    ``x.fillna(...)``, and ``x.str.pad(...)``, ``x.str.zfill(...)``, ``x.str.replace(...)``. numpy's and pandas'
     own functions are checked in their facades."""
     if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
         return None
@@ -1040,7 +1255,8 @@ def _guarded(tree: ast.Expression) -> ast.Expression:
     """The tree as it is evaluated: a copy with its checks, or the tree itself when it has nothing to check (the
     caller's tree is never changed: it may be evaluated again, and would then not pass the validation)."""
     checked = (
-        _guard_of(node) is not None or _guarded_method(node) is not None for node in ast.walk(tree)
+        _guard_of(node) is not None or _guarded_method(node) is not None or _computed_key(node)
+        for node in ast.walk(tree)
     )
     if not any(checked):
         return tree
@@ -1071,6 +1287,8 @@ def evaluate_tree(
         "pd": _pd_facade(policy),
         _TIMES: _times,
         _POWER: _power,
+        _PLUS: _plus,
+        _ITEM: _item,
         _METHOD: _method,
     }
     namespace.update(extra_locals)

@@ -533,3 +533,85 @@ def test_ordinary_expressions_compute_as_they_did(sites: pd.DataFrame) -> None:
     as_given = ast.dump(tree)
     assert evaluate_tree(tree, sites).str.len().eq(24).all()
     assert ast.dump(tree) == as_given
+
+
+# --- the routes past the budget that were left: a sum, a selection, a text written into every row, a text type ---
+
+_PADDED = "df['site'].str.pad(1000)"
+
+
+@pytest.mark.parametrize(
+    ("expression", "rows", "message"),
+    [
+        # twenty padded columns joined: each passes on its own, and their sum is twenty times the column
+        (" + ".join([_PADDED] * 20), 1000, "builds more than"),
+        (_PADDED + f".add({_PADDED})" * 19, 1000, "builds more than"),
+        (
+            "np.add(np.add(np.add(df['site'].str.pad(5000), df['site'].str.pad(5000)), "
+            "df['site'].str.pad(5000)), df['site'].str.pad(5000))",
+            1000,
+            "builds more than",
+        ),
+        (" + ".join(["np.full(100, 'x' * 10000)"] * 20), 100, "builds more than"),
+        ("[0] * 6000000 + [0] * 6000000", 20, "builds more than"),
+        # a table asked for one column ten thousand times
+        ("df[['age'] * 10000]", 2000, "builds more than"),
+        # a long text written into every row
+        ("df['site'].replace('Alpha', 'x' * 10000)", 4000, "builds more than"),
+        ("df['site'].where(df['age'] > 1000, 'x' * 10000)", 4000, "builds more than"),
+        ("df['site'].mask(df['age'] < 1000, 'x' * 10000)", 4000, "builds more than"),
+        ("df['site'].where(df['age'] > 1000).fillna('x' * 10000)", 4000, "builds more than"),
+        # a text type gives every value of an array the width of the longest, or the width it names
+        ("np.array([df['site'].str.pad(1000)] * 1000, dtype=str)", 20, "builds more than"),
+        ("np.array(df['site'], dtype='U100000')", 2000, "builds more than"),
+        ("np.asarray(df['site']).astype('U100000')", 2000, "builds more than"),
+        ("np.zeros(len(df), dtype='U100000')", 2000, "builds more than"),
+        ("np.full(len(df), 'x', dtype='U100000')", 2000, "builds more than"),
+        # each order of a difference is a pass over the values
+        ("np.diff(df['age'], n=1000000)", 10, "A difference of that order"),
+        ("np.diff(df['age'], 10 ** 9)", 10, "A difference of that order"),
+    ],
+)
+def test_the_routes_past_the_budget_that_were_left_are_closed(
+    expression: str, rows: int, message: str
+) -> None:
+    """Twenty ``df['site'].str.pad(1000)`` joined by ``+`` built twenty million characters on a thousand rows, each
+    column passing on its own; ``df[['age'] * 10000]`` a table of twenty million values; a text of 10,000
+    characters given to ``replace``, ``where`` or ``fillna`` forty million characters on four thousand rows; and
+    ``np.diff(..., n=10**9)`` would have run for minutes on ten rows."""
+    rng = np.random.default_rng(1)
+    df = pd.DataFrame(
+        {"site": rng.choice(["Alpha", "Beta"], rows), "age": rng.normal(60, 9, rows).round(1)}
+    )
+    with pytest.raises(UnsafeExpressionError, match=message):
+        evaluate(expression, df)
+
+
+def test_ordinary_sums_selections_and_labels_are_not_refused() -> None:
+    """What a formula does with texts and columns on a table of 200,000 rows computes as before."""
+    rows = 200_000
+    large = pd.DataFrame(
+        {
+            "site": ["Luxembourg", "Esch", "Metz", "Arlon"] * 50_000,
+            "age": list(range(40, 80)) * 5_000,
+        }
+    )
+    assert evaluate("df['site'] + '-' + df['site']", large).iloc[1] == "Esch-Esch"
+    assert evaluate("df['site'].add('!')", large).iloc[0] == "Luxembourg!"
+    assert evaluate("df['age'] + 1", large).iloc[0] == 41
+    assert evaluate("np.add(df['age'], df['age'])", large).iloc[0] == 80
+    assert evaluate("df[['age', 'site']]", large).shape == (rows, 2)
+    assert evaluate("df[['age'] * 2]", large).shape == (rows, 2)
+    assert evaluate("df[df['age'] > 70]", large)["age"].min() == 71
+    renamed = evaluate("df['site'].replace('Esch', 'Esch-sur-Alzette')", large)
+    assert renamed.iloc[1] == "Esch-sur-Alzette"
+    assert evaluate("df['site'].where(df['age'] > 50, 'younger')", large).iloc[0] == "younger"
+    assert evaluate("df['site'].mask(df['age'] > 50, 'older')", large).iloc[39] == "older"
+    filled = evaluate("df['site'].where(df['age'] > 50).fillna('unknown')", large)
+    assert filled.iloc[0] == "unknown"
+    assert evaluate("df['age'].astype('float64')", large).dtype == "float64"
+    assert evaluate("np.asarray(df['site']).astype('U12')", large).dtype == np.dtype("<U12")
+    assert evaluate("np.diff(df['age'])", large).shape == (rows - 1,)
+    assert evaluate("np.diff(df['age'], n=2)", large).shape == (rows - 2,)
+    assert evaluate("[1, 2] + [3]", large) == [1, 2, 3]
+    assert evaluate("'a' + 'b'") == "ab"

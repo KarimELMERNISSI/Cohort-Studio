@@ -335,7 +335,12 @@ with its own form and button, the first columns of the file already chosen. They
   only the sizes written in it: at most 10,000,000 values or characters, or 100 per row of a larger table.
   `(df['site'] * 10000) * 10000`, `df['site'].str.pad(10000) * 10000`, `[0] * 10**12`, `np.ones(len(df) ** 4)`
   and a cumulative sum of a column of texts were accepted, each step passing on its own; a power of whole
-  numbers of more than 1,024 bits is refused too. The time a pattern takes is not bounded.
+  numbers of more than 1,024 bits is refused too. Counted the same way: a sum of texts (`+`, `add`, `np.add`:
+  twenty padded columns added were twenty times the column), a table asked for one column many times
+  (`df[['age'] * 10000]`), a long text written into every row (`replace`, `where`, `mask`, `fillna`), an
+  array given a fixed-width text type (`dtype='U100000'`, `astype`), and the order of `np.diff`, each order
+  being a pass over the values. Not bounded: the time a pattern takes, and what several steps hold together.
+  The budget stops what one line can ask of the server; it is no memory limit and no time limit.
 
 ### Privacy: what today's documents leave out (M8, first steps)
 
