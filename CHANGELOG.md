@@ -35,6 +35,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   at any cut-off rank them one by one (the dossier wrote "AUC 1 (1 to 1)" beside one participant with the
   condition, who had the largest score). A cut-off typed beforehand is written as before, and the page shows
   everything, as it did.
+- **Two more exports say what they hold, and one holds less.** Epidemiology > Z-scores wrote every column of every
+  row (an identifier, initials, a birth date) for the z-score of one variable: its file now holds the row number,
+  each variable with its z-score and the reference grouping, and its button says it holds one value per participant.
+  Validate's comparison of two datasets writes both whole beside the summary of what differs: the page now says so
+  before the click. A clustermap whose labels are hidden no longer writes them in its file: every sample's identifier
+  was there, on its axis and in its heatmap, though none was shown.
 
 ### Hypothesis tests & epidemiology: two tabs, one analysis at a time
 

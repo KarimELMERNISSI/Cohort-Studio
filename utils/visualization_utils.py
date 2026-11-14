@@ -355,6 +355,12 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
         # Determine Heatmap Axes Values
         x_vals = col_dendro_x_vals if show_col_dendrogram else col_order
         y_vals = row_dendro_y_vals if show_row_dendrogram else row_order
+        # labels hidden are not written either: the figure's file (its JSON, its HTML) held every sample's
+        # identifier, on its axis and in its heatmap, when none was shown; positions stand for them
+        if not show_col_labels and not show_col_dendrogram:
+            x_vals = list(range(len(col_order)))
+        if not show_row_labels and not show_row_dendrogram:
+            y_vals = list(range(len(row_order)))
         
         # Calculate explicit ranges for Heatmap to ensure it touches dendrograms
         hm_x_range = None
@@ -499,7 +505,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
             domain=hm_x_domain, 
             tickmode='array', 
             tickvals=x_vals, 
-            ticktext=col_order, 
+            ticktext=list(col_order) if show_col_labels else None,
             tickangle=45,
             title='',
             automargin=True,
@@ -513,7 +519,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
             domain=hm_y_domain, 
             tickmode='array', 
             tickvals=y_vals, 
-            ticktext=row_order, 
+            ticktext=list(row_order) if show_row_labels else None,
             side='left',
             title='',
             automargin=True,

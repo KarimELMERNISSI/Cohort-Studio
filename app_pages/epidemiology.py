@@ -1154,6 +1154,29 @@ def visualize_result(df, group_col, target, analyzer):
                      text=counts['percentage'].apply(lambda x: f'{x:1.2f}%'))
         st.plotly_chart(fig, width='stretch')
 
+ZSCORE_FILE_HELP = (
+    "One row per participant: the row number, each variable standardised with its z-score, and the reference "
+    "grouping when one was chosen. These are each participant's values: share the file only where the dataset "
+    "itself may go."
+)
+
+
+def zscore_file(
+    z_df: pd.DataFrame, target_vars: list[str], z_cols: list[str], group_col: str | None
+) -> pd.DataFrame:
+    """
+    What the z-score file holds: what was asked, and no other column of the data. The row number, each variable
+    standardised beside its z-score, and the reference grouping when one was chosen: the file held every column of
+    every row (an identifier, initials, a birth date) for the z-score of one variable.
+    """
+    columns = [name for pair in zip(target_vars, z_cols, strict=True) for name in pair]
+    if group_col is not None and group_col in z_df.columns and group_col not in columns:
+        columns.insert(0, group_col)
+    held = z_df[columns].copy()
+    held.insert(0, "Row", z_df.index)
+    return held
+
+
 def run_zscore_analysis(df, analyzer):
     st.header("Z-Score Standardization & Reference Analysis")
     
@@ -1402,11 +1425,13 @@ def run_zscore_analysis(df, analyzer):
     # Download buttons
     col_dl1, col_dl2 = st.columns(2)
     with col_dl1:
+        grouping = ref_group_col if ref_method == "Internal Control Group" else None
         st.download_button(
             label="Download Z-Score Data",
-            data=to_excel(z_df[list(df.columns) + z_cols]),
+            data=to_excel(zscore_file(z_df, list(target_vars), z_cols, grouping), index=False),
             file_name="z_score_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help=ZSCORE_FILE_HELP,
         )
     with col_dl2:
         st.download_button(

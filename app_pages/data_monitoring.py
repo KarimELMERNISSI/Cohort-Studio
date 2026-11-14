@@ -57,6 +57,12 @@ from utils.optional import available_methods
 
 #############################################################################################
 
+COMPARISON_EXPORT_CAPTION = (
+    "The file below holds both datasets whole, every row and every column, beside the summary of what differs: "
+    "share it only where both datasets may go."
+)
+
+
 def export_comparison_results(df1, df2, comparison_result_filtered, 
                                rows_only_in_df1, rows_only_in_df2, 
                                modified_common_ids, common_id, key_base):
@@ -1934,9 +1940,11 @@ def _compare_tab(opened: bool) -> None:
                 styled_df = comparison_result_filtered.style.apply(mc.highlight_modifications_tuples, args=("summary", rows_only_in_df1, rows_only_in_df2, modified_common_ids, common_id), axis=1)
                 st.dataframe(styled_df, width="stretch")
 
-                # Prepare Excel writer
+                # the file holds both datasets, every row: said before the click
+                st.caption(COMPARISON_EXPORT_CAPTION)
                 if st.download_button(
                     label="Export Comparison Results",
+                    help=COMPARISON_EXPORT_CAPTION,
                     key="compare_export_download_bt",
                     data=export_comparison_results(
                         df1, df2, comparison_result_filtered,
