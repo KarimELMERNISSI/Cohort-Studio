@@ -87,20 +87,25 @@ kind:
   it, and the times given were event times again. The curve says which of the two set its step. At least k
   events lie between two times and none or at least k after the last (in every imputed dataset, for a pooled
   curve), and k rows are still followed at the last. The curve is written to two decimals at every time, and
-  its limits to two decimals where 400 rows or more are still followed at the time, to one decimal below
-  (``LIMIT_DECIMALS_BY_ROWS``; the curve says which, time by time). With every digit a value and its limits
-  give the rows at risk at each time, and so the rows whose follow-up ended between two times; and limits
-  written as finely as the value pin the fractions near the top of a curve, so that a reader who fits the
-  whole curve at once, supposing a common closing date, got 3 rows lost to follow-up back exactly from three
-  decimals, and from four in the largest groups. At these decimals that reader got no count on the cohorts
-  tried (93 to 3,000 rows); in a group of about 90 rows two values can be left (2 or 3).
+  its limits to two decimals where its rows times the value written there come to 400 or more, to one
+  decimal below (``LIMIT_DECIMALS_BY_ROWS``; the curve says which, time by time). With every digit a value and
+  its limits give the rows at risk at each time, and so the rows whose follow-up ended between two times; and
+  limits written as finely as the value pin the fractions near the top of a curve, so that a reader who fits
+  the whole curve at once, supposing a common closing date, got 3 rows lost to follow-up back exactly from
+  three decimals, and from four in the largest groups. The switch is read on numbers the curve writes: read
+  on the rows actually followed, it said by itself that rows were lost before a time (limits at one decimal
+  at the first time of a group of 416 rows: 3 lost). At these decimals, for a reader who allows the rows to
+  be lost at one time or at two, no count from 1 to 9 came back as one value in the cohorts tried (93 to
+  5,000 rows); in groups of about 90 to 150 rows two to six values are left, and a reader who supposes that
+  they were lost at one time can get the count (in 4 of 9 small cohorts with an early loss).
   The result says until when k rows were followed; the median is rounded up to the
   step, its lower limit down and its upper limit up, or said to be later than that time. A group of fewer than k
   rows, events or rows without the event is withheld whole, and with it the smallest groups shown until the
   groups withheld hold k of each together: the number analysed, less the groups shown, gives their sum. The
   log-rank test is shown when every group is;
 - beside a pooled result, its complete-case analysis is shown only when the two are on the same rows, or
-  differ by at least k rows with the event and at least k without it (group by group for curves): they differ
+  differ by at least k rows with the event and at least k without it (for an outcome declared followed to the
+  event, k with it; group by group for curves): they differ
   by the rows that lack a value, and by their outcomes, and rows of which all, or none, had the event are a
   group that would not be shown on its own. The complete cases take the groups the pooled result
   withholds and may withhold more; nothing they need goes back to the result. A pooled result's rows are the
@@ -1802,6 +1807,7 @@ def _disclose_model(
                 continue  # a test of a factor whose level is withheld would speak for that level
             shown.append(_kept(part, _TEST_NUMBERS))
     complete = None
+    complete_lifted = False  # the complete cases are written only because of the declaration
     if record.complete_case is not None:
         inner = _disclose_model(record.complete_case, policy, spec, cover, tabulated=tabulated)
         observed = next((p for p in record.complete_case.parts if p.id == "model"), None)
@@ -1818,8 +1824,11 @@ def _disclose_model(
             complete = inner.record
             withheld += [f"complete-case analysis: {w}" for w in inner.withheld]
             told += [f"complete-case analysis: {t}" for t in inner.told if t not in told]
-    # changed: without the declaration the model as a whole would not be written
-    says = declared.part(changed=not _model_shown(model, kind, policy))
+            complete_lifted = declared.lifted and _differ_by_few(
+                model.support, observed.support, kind, policy
+            )
+    # changed: without the declaration the model as a whole, or its complete cases, would not be written
+    says = declared.part(changed=not _model_shown(model, kind, policy) or complete_lifted)
     if says is not None:
         shown.append(says)
     return DisclosedRecord(
@@ -1844,14 +1853,29 @@ UNIT_CENTILE = 0.05  # the data's own unit: the gap that this part of the gaps b
 # stretch of 30 to 60 rows at risk). Read whole, a curve gives them back early too: before a loss it is a share of
 # its rows, after it a share of the rows left, and limits written as finely as the value pin that share near the
 # top of the curve. Limits coarser than the value are what blurs it; a fourth decimal gave the count back in groups
-# of 2,000 rows and more, where three did not.
+# of 2,000 rows and more, where three did not. The switch between two decimals and one is read on numbers the curve
+# writes, its rows times the value written at that time: read on the rows actually followed, which it does not
+# write, the switch said by itself that rows were lost before a time.
 VALUE_DECIMALS = 2
 LIMIT_DECIMALS_BY_ROWS = ((400, 2), (0, 1))
 
 
 def limit_decimals_at(rows: int) -> int:
-    """The decimals a curve's limits are written to at a time when ``rows`` rows are still followed."""
+    """The decimals a curve's limits are written to at a time where its rows times the value written there come
+    to ``rows`` (the rows still followed, as far as what the curve writes can say it)."""
     return next(places for least, places in LIMIT_DECIMALS_BY_ROWS if rows >= least)
+
+
+def _limit_digits(rows: Any, value: Any) -> int:
+    """The decimals of a curve's limits at a time, read on two numbers the curve writes: its rows (the fewest over
+    the imputed datasets, for a pooled curve) times its value written there; the fewest decimals when either is
+    missing."""
+    fewest = min(places for _, places in LIMIT_DECIMALS_BY_ROWS)
+    if not isinstance(rows, int) or isinstance(rows, bool):
+        return fewest
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
+        return fewest
+    return limit_decimals_at(math.floor(rows * value + 1e-9))
 
 
 def _clean(value: float) -> float:
@@ -2117,11 +2141,11 @@ def _curve(
 
     Its rows, its events and its rows without the event travel with it (the table under a curve), with the step of
     its times, until when k rows were followed (``followed_until``) and every how many events a time is given
-    (``points_every``). Its value is written to two decimals, and its limits to the decimals that the rows still
-    followed at the time allow (:func:`limit_decimals_at`): ``limit_decimals`` says how many, time by time.
-    Where k rows are followed beyond the last time with no event between, one more time is given at
-    ``followed_until``, with the same value and the same limits, written to the decimals of that time's own
-    rows followed (never more than the time before): the curve is flat to there. The median is rounded up to the
+    (``points_every``). Its value is written to two decimals, and its limits to the decimals that its rows times
+    the value written at the time allow (:func:`limit_decimals_at`): ``limit_decimals`` says how many, time by
+    time, and adds nothing a reader cannot work out. Where k rows are followed beyond the last time with no event
+    between, one more time is given at ``followed_until``, with the same value and the same limits, written as at
+    the time before: the curve is flat to there. The median is rounded up to the
     step, its lower limit down and its upper limit up (outwards), each given when k rows are still followed at
     that time; otherwise it is later than ``followed_until`` (``later_than_followed_until`` names those), or not
     reached (no value, and not named there).
@@ -2145,9 +2169,14 @@ def _curve(
         and timeline.last_step(until, step) == places[-1][1]
     ):
         places.append((until, places[-1][1]))
-    # the decimals of the limits at each time, the flat last time included: it repeats the time before to no
-    # more decimals than its own rows followed allow
-    digits = [limit_decimals_at(timeline.at_risk(time, step)) for time, _ in places]
+    # the value at each time, and the decimals of the limits, read on the rows times that value: two numbers the
+    # curve writes (the flat last time repeats the value, and so the decimals, of the time before)
+    values = (
+        [_decimals(held["survival"][j], VALUE_DECIMALS) for _, j in places]
+        if held.get("survival") is not None
+        else [None] * len(places)
+    )
+    digits = [_limit_digits(_count(part.support, "rows"), value) for value in values]
     later: list[str] = []
 
     def quantile(name: str, direction: Callable[[float, float], float]) -> float | None:
@@ -2193,12 +2222,7 @@ def _curve(
     # written.
     if held.get("survival") is not None:
         numbers.append(
-            Number(
-                "survival",
-                [_decimals(held["survival"][j], VALUE_DECIMALS) for _, j in places],
-                ITERATIVE_LOOSE,
-                scale=10.0 ** (3 - VALUE_DECIMALS),
-            )
+            Number("survival", values, ITERATIVE_LOOSE, scale=10.0 ** (3 - VALUE_DECIMALS))
         )
     scale = 10.0 ** (3 - min(digits)) if digits else 1.0
     numbers += [
@@ -2412,34 +2436,8 @@ def _disclose_survival(
     asked = set((cover or {}).get(spec.variables.get("group") or "", ()))
     hidden, small = _withheld_groups(main, policy, asked)
     shown = [i for i in main.curves if i not in hidden]
-    # The complete cases beside a pooled result take its cover, and may withhold more: nothing they need goes back
-    # to the result (it lost groups, and its test, to complete cases that were then not written). Whether they
-    # can be written at all is decided first, on the counts: the rows they left out, and the pair they make with
-    # the result, group by group for the groups both show, and in all.
-    beside: tuple[_Groups, list[str], int] | None = None
-    if record.complete_case is not None and shown:
-        cases = _Groups.of(record.complete_case, lifted)
-        theirs, few = _withheld_groups(cases, policy, asked | {main.label(i) for i in hidden})
-        observed = {cases.label(i): part for i, part in cases.curves.items()}
-        both = {cases.label(i) for i in cases.curves if i not in theirs}
-        pairs = [(main.curves[i], observed[main.label(i)]) for i in shown if main.label(i) in both]
-        every = [part for part in main.curves.values() if part.labels.get("group") in observed]
-        if (
-            both
-            and policy.shows(_left_out(record.complete_case))
-            and not any(
-                _differ_by_few(p.support, o.support, "survival", policy, lifted=lifted)
-                for p, o in pairs
-            )
-            and not _differ_by_few(
-                _together(every, "survival"),
-                _together(list(observed.values()), "survival"),
-                "survival",
-                policy,
-                lifted=lifted,
-            )
-        ):
-            beside = (cases, theirs, few)
+    # The complete cases beside a pooled result take its cover, and may withhold more (:func:`_beside`)
+    beside = _beside(record, main, hidden, asked, policy, lifted)
     # one step for every time of the result, read on the groups that are shown
     timelines = [main.timelines[i] for i in shown]
     if beside is not None:
@@ -2464,9 +2462,14 @@ def _disclose_survival(
                 f"{MOST_WITHOUT_THE_EVENT:.0%} of rows without the event: under the declaration that count "
                 "is written. Join such a group to another, or accept it"
             )
-        # changed: without the declaration another set of groups would be withheld
-        before, _ = _withheld_groups(_Groups.of(record), policy, asked)
-        says = declared.part(changed=set(before) != set(hidden))
+        # changed: without the declaration another set of groups would be withheld, or the complete cases
+        # would be written otherwise
+        plain = _Groups.of(record)
+        before, _ = _withheld_groups(plain, policy, asked)
+        then = _beside(record, plain, before, asked, policy, False)
+        complete_now = None if beside is None else frozenset(beside[1])
+        complete_then = None if then is None else frozenset(then[1])
+        says = declared.part(changed=set(before) != set(hidden) or complete_now != complete_then)
     written = disclosed.record
     if written is not None and says is not None:
         written = ResultRecord(
@@ -2502,6 +2505,49 @@ def _disclose_survival(
         tuple(withheld),
         tuple(told),
     )
+
+
+def _beside(
+    record: ResultRecord,
+    main: _Groups,
+    hidden: Sequence[str],
+    asked: Collection[str],
+    policy: DisclosurePolicy,
+    lifted: bool,
+) -> tuple[_Groups, list[str], int] | None:
+    """
+    The complete cases beside a pooled result's curves, with the groups they withhold, when they can be written
+    at all (None otherwise). They take the result's cover, and may withhold more: nothing they need goes back to
+    the result (it lost groups, and its test, to complete cases that were then not written). Whether they can be
+    written is decided on the counts: the rows they left out, and the pair they make with the result, group by
+    group for the groups both show, and in all. ``lifted``: the outcome is declared followed to the event.
+    """
+    shown = [i for i in main.curves if i not in hidden]
+    if record.complete_case is None or not shown:
+        return None
+    cases = _Groups.of(record.complete_case, lifted)
+    theirs, few = _withheld_groups(cases, policy, set(asked) | {main.label(i) for i in hidden})
+    observed = {cases.label(i): part for i, part in cases.curves.items()}
+    both = {cases.label(i) for i in cases.curves if i not in theirs}
+    pairs = [(main.curves[i], observed[main.label(i)]) for i in shown if main.label(i) in both]
+    every = [part for part in main.curves.values() if part.labels.get("group") in observed]
+    if (
+        both
+        and policy.shows(_left_out(record.complete_case))
+        and not any(
+            _differ_by_few(p.support, o.support, "survival", policy, lifted=lifted)
+            for p, o in pairs
+        )
+        and not _differ_by_few(
+            _together(every, "survival"),
+            _together(list(observed.values()), "survival"),
+            "survival",
+            policy,
+            lifted=lifted,
+        )
+    ):
+        return cases, theirs, few
+    return None
 
 
 def _above_the_cap(group: Part) -> bool:
@@ -2880,12 +2926,12 @@ def nested_by_unwritten(
 
 
 def _decimals_said() -> str:
-    """ "2 decimals where 400 participants or more are still followed at that time, 1 decimal below", from the rule
-    itself."""
+    """ "2 decimals where the curve's participants times its value there come to 400 or more, 1 decimal below",
+    from the rule itself."""
     (least, finest), (_, fewest) = LIMIT_DECIMALS_BY_ROWS
     return (
-        f"{finest} decimals where {least:,} participants or more are still followed at that time, {fewest} decimal "
-        "below"
+        f"{finest} decimals where the curve's participants times its value at that time come to {least:,} or "
+        f"more, {fewest} decimal below"
     )
 
 

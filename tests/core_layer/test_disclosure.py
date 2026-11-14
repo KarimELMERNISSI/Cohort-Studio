@@ -3126,13 +3126,13 @@ def test_the_time_step_is_read_on_the_groups_that_are_shown() -> None:
     assert [p.number("time_step").value for p in both] == [50, 50]
 
 
-def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_followed_allow() -> (
+def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_and_values_allow() -> (
     None
 ):
     """With every digit, a value and its limits give the rows at risk at each time, and so the rows whose
     follow-up ended between two times: 3 of them, in a study with a common closing date. Three decimals still gave
-    them back, and a fourth in large groups. The value takes two decimals at every time; the limits two where 400
-    rows or more are still followed, and one below."""
+    them back, and a fourth in large groups. The value takes two decimals at every time; the limits two where the
+    curve's rows times its value written there come to 400 or more, and one below."""
     from biostats import plan
     from biostats.plan import ITERATIVE_LOOSE
     from biostats.survival import compare_survival
@@ -3156,21 +3156,22 @@ def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_fol
             assert number.cls == ITERATIVE_LOOSE and number.scale == 100.0, name
         full = record.part(part.id).number("survival").value
         assert not all(v == round(v, 3) for v in full)  # the record itself holds every digit
-    # 3,000 rows whose follow-up ends on any day of 2,000: the limits take two decimals while 400 rows are
-    # followed, then one; the curve says which, time by time
+    # 1,000 rows whose follow-up ends on any day of 2,000, nine in ten with the event: the limits take two
+    # decimals while the rows times the value written come to 400, then one; the curve says which, time by time,
+    # and it is a number a reader works out from the rows and the values written
     rng = np.random.default_rng(11)
     long = pd.DataFrame(
         {
-            "days": rng.integers(1, 2001, 3000).astype(float),
-            "died": (rng.random(3000) < 0.5).astype(int),
+            "days": rng.integers(1, 2001, 1000).astype(float),
+            "died": (rng.random(1000) < 0.9).astype(int),
         }
     )
     (curve,) = _curve_shown(long)
     times, digits = curve.number("times").value, curve.number("limit_decimals").value
+    values = curve.number("survival").value
     assert digits == sorted(digits, reverse=True) and set(digits) == {2, 1}
-    followed = [int((long["days"] >= t).sum()) for t in times]
-    assert digits == [limit_decimals_at(rows) for rows in followed]
-    assert followed[digits.index(1) - 1] >= 400 > followed[digits.index(1)]
+    assert digits == [limit_decimals_at(math.floor(1000 * v + 1e-9)) for v in values]
+    assert 1000 * values[digits.index(1) - 1] >= 400 > 1000 * values[digits.index(1)]
     whole = plan.record("survival", compare_survival(long, "days", "died", None))
     steps = whole.part(curve.id).number("times").value
     for name in ("survival", "lower", "upper"):
@@ -3195,8 +3196,9 @@ def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_fol
     assert curve.number("lower").scale == 10.0
     for name in ("survival", "lower", "upper"):
         assert all(v == round(v, 2) for v in curve.number(name).value), name
-    # the flat last time repeats the time before, to the decimals of its own rows followed: 600 rows, 60 events
-    # in the first 50 days, 240 follow-ups ending on day 500 and 300 on day 1000
+    # the flat last time repeats the time before: its value, and so its decimals. 600 rows, 60 events in the first
+    # 50 days, 240 follow-ups ending on day 500 and 300 on day 1000: 300 rows are followed there, and the switch
+    # reads the rows times the value written (540), which a reader has
     fewer = pd.DataFrame(
         {
             "days": np.r_[rng.integers(1, 51, 60), np.full(240, 500), np.full(300, 1000)].astype(
@@ -3207,11 +3209,11 @@ def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_fol
     )
     (curve,) = _curve_shown(fewer)
     digits = curve.number("limit_decimals").value
-    assert curve.number("times").value[-1] == 1000 and digits[-2:] == [2, 1]
-    assert curve.number("survival").value[-1] == curve.number("survival").value[-2]
+    assert curve.number("times").value[-1] == 1000 and digits[-2:] == [2, 2]
+    assert curve.number("survival").value[-1] == curve.number("survival").value[-2] == 0.9
     for name in ("lower", "upper"):
         before, flat = curve.number(name).value[-2:]
-        assert flat == round(before, 1), name
+        assert flat == before, name
 
 
 def _greenwood(value: float, limit: float, z: float) -> float | None:
@@ -3503,6 +3505,105 @@ def test_a_reader_of_the_whole_curve_gets_no_count_of_rows_lost_between_two_time
         assert 3 in blurred[-1] and len(blurred[-1]) >= 4, (title, blurred[-1])
 
 
+def _registry(size: int, seed: int) -> pd.DataFrame:
+    """A study with a common closing date, as the review built it: 30% of ``size`` rows have the event before day
+    6,000, the others are followed to day 8,000."""
+    rng = np.random.default_rng(17 * size + seed)
+    events = round(0.3 * size)
+    days = np.sort(rng.choice(np.arange(1, 6000), events, replace=False))
+    return pd.DataFrame(
+        {
+            "days": np.r_[days, np.full(size - events, 8000)].astype(float),
+            "died": np.r_[np.ones(events), np.zeros(size - events)].astype(int),
+        }
+    )
+
+
+def test_the_switch_of_the_limits_decimals_is_read_on_what_the_curve_writes() -> None:
+    """Read on the rows actually followed, which the curve does not write, the switch of the limits from two
+    decimals to one said by itself that rows were lost: a group of 416 participants, 3 of them lost before the
+    first event, had its first time's limits at one decimal (399 followed where 402 would have been), and a reader
+    of the whole curve, told that, got the 3 back exactly at 11 times. Read on the rows times the value written
+    there, it says nothing a reader cannot work out."""
+    from statistics import NormalDist
+
+    from core.disclosure import limit_decimals_at
+
+    z = NormalDist().inv_cdf(0.975)
+    for size, seed, lost in ((416, 3, 3), (412, 2, 2), (412, 2, 3), (412, 3, 3)):
+        base = _registry(size, seed)
+        first = float(base.loc[base["died"] == 1, "days"].min() - 0.5)
+        gone = pd.DataFrame({"days": [first] * lost, "died": [0] * lost})
+        frame = pd.concat([base.iloc[:-lost], gone], ignore_index=True)
+        (plain,) = _curve_shown(base)
+        curve, exact = _as_a_reader_sees_it(frame)
+        rows, events = curve.support["rows"], curve.support["events"]
+        digits, values = curve.number("limit_decimals").value, curve.number("survival").value
+        # the switch is a number of what the curve writes, and the loss does not move it
+        assert digits == [limit_decimals_at(math.floor(rows * v + 1e-9)) for v in values]
+        assert digits[0] == plain.number("limit_decimals").value[0], (size, seed, lost)
+        # and a reader of the whole curve is left with no count of the rows lost
+        kept = digits[: len(exact)]
+        written = [
+            (round(s, 2), round(low, d), round(high, d))
+            for (s, low, high), d in zip(exact, kept, strict=True)
+        ]
+        halves = [(0.005, 0.5 * 10.0**-d) for d in kept]
+        counts = _lost_before_each_time(rows, events, written, halves, z)
+        assert all(len(c) > 1 or c == [0] for c in counts), (size, seed, lost, counts)
+        assert lost in counts[-1]  # the truth is among the values left
+        # the same reader, given the curve to three decimals, gets the count exactly
+        fine = _lost_before_each_time(
+            rows,
+            events,
+            [(round(s, 3), round(low, 3), round(high, 3)) for s, low, high in exact],
+            [(0.0005, 0.0005)] * len(exact),
+            z,
+        )
+        assert [lost] in fine, (size, seed, lost)
+
+
+def test_a_declaration_that_lets_the_complete_cases_through_says_it_changed_the_result() -> None:
+    """A pooled Cox model by site of 600 rows, age missing for 30 of them, 28 of whom had the event: without the
+    declaration its complete cases are withheld (2 rows without the event between the two); with it they are
+    written, and the part ``declaration`` said that nothing had changed, so that a log of what a declaration changed
+    would have left this result out."""
+    from biostats import plan
+    from biostats.mi import MIData
+    from biostats.plan import specify
+    from core.disclosure import DisclosurePolicy as Policy
+    from core.disclosure import FollowedToTheEvent, disclose_record
+
+    truth = _classes({"A": (200, 4), "B": (200, 4), "C": (200, 4)}, seed=9)
+    truth = truth.rename(columns={"nyha": "site"})
+    rng = np.random.default_rng(9)
+    died, alive = truth.index[truth["died"] == 1], truth.index[truth["died"] == 0]
+    gap = truth.index.isin([*died[:28], *alive[:2]])
+    base = truth.copy()
+    base.loc[gap, "age"] = np.nan
+    completed = []
+    for _ in range(5):
+        one = base.copy()
+        one.loc[gap, "age"] = truth.loc[gap, "age"] + rng.normal(0, 5, gap.sum())
+        completed.append(one)
+    mi = MIData.from_completed(base, completed, methods={"age": "pmm"})
+    done = plan.run(
+        specify("cox", pooled=True, time="days", event="died", compare="site", adjust=["age"]),
+        mi=mi,
+    )
+    record = plan.record("cox_mi", done.result)
+    assert record is not None and record.complete_case is not None
+
+    def shown(policy):
+        return disclose_record(record, policy, spec=done.spec, analysis=_in_the_flow(record))
+
+    plain = shown(K10)
+    assert plain.record is not None and plain.record.complete_case is None
+    declared = shown(Policy(declared=(FollowedToTheEvent("died"),)))
+    assert declared.record is not None and declared.record.complete_case is not None
+    assert declared.record.part("declaration").number("changed").value is True
+
+
 def test_a_pooled_result_is_compared_with_the_rows_its_datasets_read() -> None:
     """400 rows; the event is missing for 20 of them and no imputation fills it. Every dataset's curves and models
     read 380 rows, and the flow said 400 analysed and none missing: a pooled result's rows were not compared with
@@ -3754,8 +3855,8 @@ def test_the_notes_a_package_reads_its_results_with_are_fixed_words() -> None:
     assert "the rarer outcome of a logistic model" in notes[4] and "Below 10 (sparse)" in notes[4]
     # what a time of a curve stands for, and what follows its last time
     assert (
-        "the value to 2 decimals, the limits to 2 decimals where 400 participants or more are still followed at "
-        "that time, 1 decimal below (limit_decimals gives the number at each time"
+        "the value to 2 decimals, the limits to 2 decimals where the curve's participants times its value at that "
+        "time come to 400 or more, 1 decimal below (limit_decimals gives the number at each time"
     ) in notes[5]
     assert "whose follow-up ended between two times" in notes[5] and "is rough" in notes[5]
     assert "log(-log)" in notes[5] and "limits at 1 decimal give none" in notes[5]

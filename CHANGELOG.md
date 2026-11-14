@@ -523,18 +523,21 @@ with its own form and button, the first columns of the file already chosen. They
     one the study declares for the time variable (an hour, a day, a week, a month or a year, with its size in
     the variable's numbers) and of the usual gap between two recorded times, and the curve says which of the
     two set its step: read on the data alone, a few rows recorded finer than the others set it. Its values are
-    written to 2 decimals, and its limits to 2 decimals where 400 rows or more are still followed at the time,
-    to 1 decimal below; the curve says which, time by time. With more digits, a value and its limits count the
-    rows whose follow-up ended between two times: a reader who fits the whole curve at once, supposing a common
-    closing date, got 3 of them back exactly from three decimals in cohorts of 93 to 3,000 rows, and from a
-    fourth decimal in larger ones. Limits coarser than the value are what blurs it (in a group of about 90
-    rows, two to four values can be left). Its median is rounded up to the step,
+    written to 2 decimals, and its limits to 2 decimals where its rows times the value written there come to
+    400 or more, to 1 decimal below; the curve says which, time by time. With more digits, a value and its
+    limits count the rows whose follow-up ended between two times: a reader who fits the whole curve at once,
+    supposing a common closing date, got 3 of them back exactly from three decimals in cohorts of 93 to 3,000
+    rows, and from a fourth decimal in larger ones. Limits coarser than the value are what blurs it, and the
+    switch between 2 decimals and 1 is read on numbers the curve writes: read on the rows actually followed, it
+    said by itself that rows were lost before a time. In groups of about 90 to 150 rows two to six values are
+    left, and a reader who supposes that the rows were lost at one time can get the count. Its median is
+    rounded up to the step,
     its lower limit down and its upper limit up, or said to be later than the follow-up. A group is withheld with
     others until those withheld hold k rows, k events and k rows without the event together; the curves and a
     model of one grouping withhold the same cells, and a result can be given the cells another one withholds. The
     complete cases beside a pooled result take the groups it withholds, and may withhold more; they are
     written only when they are on the pooled result's rows, or lack at least k rows with the event and k
-    without it.
+    without it (k with it, for an outcome declared followed to the event).
   - **No warning's wording travels**: a model's parameters and events per parameter, whether a Poisson model is
     overdispersed (a pooled one, when one of its imputed datasets is), whether a term rests on fewer than 10
     participants, or fewer than 10 with the event (in a logistic model: or without it), a curve's step and its
