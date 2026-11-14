@@ -701,10 +701,10 @@ A_VALUE_OF_TWO = f"one of its values holds fewer than 10 {TWO_SIDES} (cap or gro
 CAP = "cap or group the values of the covariate, and run the analysis again"
 OFF_ITS_VALUE = (
     "the model is withheld: the term of a numeric covariate is withheld, and the rows off its commonest value are "
-    "fewer than 10, or none or all of them had the event, or fewer than 10 rows at a value far from the others "
-    "carry the term, or the term has no maximum: the terms left may be those of the model fitted without those "
-    "rows (cap the values of the covariate, leave it out of the model, or take those rows out of the analysis "
-    "population by a criterion, and run the analysis again)"
+    "fewer than 10, or none or all of them had the event, or fewer than 10 rows far from the others carry half "
+    "of the term's weight, or the term has no maximum: the terms left may be those of the model fitted without "
+    "those rows (cap the values of the covariate, leave it out of the model, or take those rows out of the "
+    "analysis population by a criterion, and run the analysis again)"
 )
 OFF_ITS_VALUE_NONE = OFF_ITS_VALUE.replace("none or all of them", "none of them")
 GROUP_WITHHELD = "1 group withheld: fewer than 10 rows, events or rows without the event"
@@ -1177,7 +1177,7 @@ def test_a_numeric_covariate_that_a_few_rows_carry_is_read_as_cells() -> None:
     # model as a whole, the rows off its commonest value
     assert dose.support == {
         "rows": 1, "events": 1, "non_events": 0, "rows_off": 2, "events_off": 2, "non_events_off": 0,
-        "far_rows": 1, "far_share": 900,
+        "half_rows": 1,
     }  # fmt: skip
     reference = record.part("reference:dose")
     assert reference.labels == {"variable": "dose", "level": "0", "of": "values"}
@@ -1300,19 +1300,38 @@ def test_a_rare_value_of_a_score_withholds_its_slope_and_not_the_model() -> None
     assert term.support["events"] == 0 and term.number("extreme").value is False
     shown = _disclose(record, compare="arm")
     assert [i for i in _ids(shown) if i.startswith("term:")] == ["term:age", "term:arm#1"]
-    # nearly every row at one value: the rows off it are what two models isolate. Ten of them stay in the fit,
-    # nine do not
-    for sizes, whole in (([590, 5, 3, 2], False), ([591, 4, 3, 2], True)):
+    # nearly every row at one value: the rows off it are what two models isolate, and the fewest of them that
+    # carry half of the slope's weight. The two at 2 carry 8 of 26, and only with the eighteen at 1 do the rows
+    # carry half: the model is written. The two at 3 of ten rows at 1, 2 and 3 carry 18 of 35: it is withheld;
+    # and so of nine
+    for sizes, half, whole in (
+        ([580, 18, 2], 18, False),
+        ([590, 5, 3, 2], 2, True),
+        ([591, 4, 3, 2], 2, True),
+    ):
         few = _scored(sizes, seed=33)
         record = plan.record("logistic", logistic_regression(few, "died", covariates))
         assert record is not None
-        assert record.part("term:ecog").support["rows_off"] == sum(sizes[1:])
+        held = record.part("term:ecog").support
+        assert (held["rows_off"], held["half_rows"]) == (sum(sizes[1:]), half), sizes
         shown = _disclose(record, compare="arm")
         assert (shown.record is None) is whole, sizes
         assert not whole or shown.withheld == (OFF_ITS_VALUE,)
-    # twelve rows off the commonest value, none of whom, or all of whom, had the event: a logistic model fitted
+    # twenty-one rows off the commonest value (seventeen of them at 1, which carry half of the slope's weight
+    # alone; the four at 2 carry 16 of 33), none of whom, or all of whom, had the event: a logistic model fitted
     # on them alone has no maximum; a Cox model where all of them had the event has one
-    lone = _scored([588, 7, 5], seed=34)
+    lone = _scored([580, 17, 4], seed=34)
+    assert (
+        plan.record("cox", cox_regression(lone, "days", "died", covariates, diagnostics=False))
+        .part("term:ecog")
+        .support["half_rows"]
+        == 17
+    )
+    # of two values that carry half each, the farther one is counted: sixteen at 1 and four at 2
+    tied = plan.record(
+        "logistic", logistic_regression(_scored([580, 16, 4], seed=34), "died", covariates)
+    )
+    assert tied.part("term:ecog").support["half_rows"] == 4
     for died in (0, 1):
         lone.loc[lone["ecog"] > 0, "died"] = died
         record = plan.record("logistic", logistic_regression(lone, "died", covariates))
@@ -2494,6 +2513,31 @@ def test_a_count_of_nearly_yes_or_no_keeps_three_counts_for_its_levels() -> None
     # where counts are true counts (1 to 6 visits for whoever has any) the cells are judged on two
     _, visits = shown(df, "visits")
     assert {"term:nyha#1", "term:nyha#2", "term:nyha#3"} <= set(_ids(visits))
+    # read level by level: 78 falls among the 30 participants of a site say nothing of the 3 without one, whatever
+    # another site holds. Read on the variable, Alpha's 243 falls for 400 participants put every site on three
+    # counts: Delta was withheld, then Beta as its cover, and the model whole
+    sites = _classes({"Alpha": (400, 157), "Beta": (300, 100), "Delta": (30, 3)})
+    sites["falls"] = sites["died"]
+    fell = sites["died"] == 1
+    for site, counts in (("Beta", [3] * 42 + [2] * 158), ("Delta", [3] * 24 + [2] * 3)):
+        sites.loc[fell & (sites["nyha"] == site), "falls"] = counts
+    record, per_level = shown(sites)
+    delta = record.part("term:nyha#2").support
+    assert (delta["rows"], delta["events"], delta["rows_without_events"]) == (30, 78, 3)
+    assert record.part("reference:nyha").support["events"] == 243
+    assert record.part("term:nyha#1").support["events"] == 442
+    assert {"term:nyha#1", "term:nyha#2"} <= set(_ids(per_level)) and per_level.withheld == ()
+    # Alpha, the reference, holds no more events than participants and keeps its three counts: with 5 of its 400
+    # without a fall, every term of the site goes with it
+    few_without = _classes({"Alpha": (400, 5), "Beta": (300, 100), "Delta": (30, 3)})
+    few_without["falls"] = few_without["died"]
+    fell = few_without["died"] == 1
+    for site, counts in (("Beta", [3] * 42 + [2] * 158), ("Delta", [3] * 24 + [2] * 3)):
+        few_without.loc[fell & (few_without["nyha"] == site), "falls"] = counts
+    record, on_three = shown(few_without)
+    assert record.part("reference:nyha").support["rows_without_events"] == 5
+    assert on_three.record is None
+    assert "no term of its comparison can be shown" in on_three.withheld[0]
 
 
 def test_two_results_that_differ_by_rows_of_whom_all_or_none_had_the_event_are_a_pair() -> None:
@@ -2558,40 +2602,56 @@ def test_two_results_that_differ_by_rows_of_whom_all_or_none_had_the_event_are_a
     assert pooled(12, 12).record.complete_case is not None
 
 
-def test_one_row_far_from_the_others_carries_a_slope_and_withholds_the_model() -> None:
+def test_rows_far_from_the_others_carry_a_slope_and_withhold_the_model() -> None:
     """A dose of 0 for 588 rows, 1 for 11 and 50 for one participant: twelve rows are off the commonest value, so
     the rule read on them wrote the model's other terms. They were those of the model fitted without the
-    participant at 50 (to 3e-4 when that participant died, exactly when not): a slope fits one row exactly when
-    that row carries nearly all of its weight, rows times the squared distance from the commonest value."""
+    participant at 50 (to 3e-4 when that participant died, exactly when not): a slope fits nearly exactly the
+    rows that carry most of its weight, rows times the squared distance from the commonest value. Read on one
+    value at nine tenths of the weight, doses of 40, 45 and 50 for one participant each went through, and so did
+    a dose of 5 for one."""
     from biostats import plan
     from biostats.regression import logistic_regression
 
     df = _cohort(600, 31)
     covariates = ["arm", "age", "dose"]
 
-    def with_dose(far: float, rows_far: int = 1):
+    def with_doses(far: list[float]):
         frame = df.copy()
         frame["dose"] = 0.0
         frame.loc[frame.index[:11], "dose"] = 1.0
-        frame.loc[frame.index[11 : 11 + rows_far], "dose"] = far
+        frame.loc[frame.index[11 : 11 + len(far)], "dose"] = far
         record = plan.record("logistic", logistic_regression(frame, "died", covariates))
         assert record is not None
         return record, _disclose(record, compare="arm")
 
-    record, shown = with_dose(50.0)
+    record, shown = with_doses([50.0])
     held = record.part("term:dose").support
-    assert (held["rows_off"], held["far_rows"], held["far_share"]) == (12, 1, 995)  # 2500 of 2511
+    assert (held["rows_off"], held["half_rows"]) == (12, 1)  # 2500 of 2511
     assert shown.record is None and shown.withheld == (OFF_ITS_VALUE,)
-    # at a dose of 5 the eleven other rows carry a third of the weight: the slope alone is withheld
-    record, shown = with_dose(5.0)
-    assert record.part("term:dose").support["far_share"] == 694  # 25 of 36
-    assert [i for i in _ids(shown) if i.startswith("term:")] == ["term:age", "term:arm#1"]
-    assert shown.withheld[0] == f"1 term of dose withheld: {A_VALUE}"
-    # a far value that ten rows hold is a cell that stays in the fit, as a level of ten rows does
-    record, shown = with_dose(50.0, rows_far=10)
-    held = record.part("term:dose").support
-    assert held["far_rows"] == 10 and held["far_share"] > 990
-    assert [i for i in _ids(shown) if i.startswith("term:")] == ["term:age", "term:arm#1"]
+    # the participant at a dose of 5 still carries 25 of 36; the two at 45 and 50 carry 74% beside one at 40
+    for far, half in (([5.0], 1), ([40.0, 45.0, 50.0], 2)):
+        record, shown = with_doses(far)
+        assert record.part("term:dose").support["half_rows"] == half, far
+        assert shown.record is None and shown.withheld == (OFF_ITS_VALUE,), far
+    # a few far rows beside a heavy value near the commonest one, which the heaviest value taken first hid: the
+    # three at 4 and 5 beside 40 at 1 (59% of the weight), the three at 6 and 7 beside 50 at 1 and 7 at 2, the
+    # five at 3 to 5 beside 45 at 1
+    for doses, half in (
+        ([1.0] * 29 + [4.0, 4.0, 5.0], 3),
+        ([1.0] * 39 + [2.0] * 7 + [6.0, 6.0, 7.0], 3),
+        ([1.0] * 34 + [3.0, 3.0, 4.0, 4.0, 5.0], 5),
+    ):
+        record, shown = with_doses(doses)
+        assert record.part("term:dose").support["half_rows"] == half, doses[-3:]
+        assert shown.record is None and shown.withheld == (OFF_ITS_VALUE,), doses[-3:]
+    # a far value that ten rows hold is a cell that stays in the fit, as a level of ten rows does; and beside a
+    # dose of 2 for one participant the eleven at 1 carry half of the weight (11 of 15): the slope alone is
+    # withheld
+    for far, half in (([50.0] * 10, 10), ([2.0], 11)):
+        record, shown = with_doses(far)
+        assert record.part("term:dose").support["half_rows"] == half, far
+        assert [i for i in _ids(shown) if i.startswith("term:")] == ["term:age", "term:arm#1"], far
+        assert shown.withheld[0] == f"1 term of dose withheld: {A_VALUE}", far
 
 
 def test_a_declared_outcome_says_whether_it_changed_a_result_and_where_a_group_lies_above_the_cap() -> (
@@ -3178,7 +3238,13 @@ def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_and
         full = dict(zip(steps, whole.part(curve.id).number(name).value, strict=True))
         for t, value, places in zip(times, curve.number(name).value, digits, strict=True):
             at = full[max(s for s in steps if s <= t)]
-            assert value == round(at, 2 if name == "survival" else places), name
+            # the value to the nearest, the limits outwards: the interval written holds the one computed
+            expected = (
+                round(at, 2) if name == "survival" else _outward(at, places, down=name == "lower")
+            )
+            assert value == expected, name
+            assert name != "lower" or value <= at
+            assert name != "upper" or value >= at
     assert curve.number("survival").scale == 10.0
     assert curve.number("lower").scale == 100.0  # one unit of the fewest decimals written
     # 5,000 rows, 500 of them with the event in the first 100 days and the others followed to day 1000: no third
@@ -3214,6 +3280,22 @@ def test_a_curve_is_written_to_two_decimals_and_its_limits_to_those_its_rows_and
     for name in ("lower", "upper"):
         before, flat = curve.number(name).value[-2:]
         assert flat == before, name
+
+
+def _outward(value: float, places: int, *, down: bool) -> float:
+    """A limit of a curve as the layer writes it: rounded outwards to ``places`` decimals, the lower limit down and
+    the upper up."""
+    shifted = value * 10**places
+    edge = math.floor(shifted + 1e-9) if down else math.ceil(shifted - 1e-9)
+    return round(edge / 10**places, places)
+
+
+def _limits_read(low: float, high: float, places: int) -> tuple[float, float]:
+    """What a reader takes from two limits written outwards to ``places`` decimals: the lower lies at or above what
+    is written, within one unit, and the upper at or below. Given as the middle of that unit, so that half a unit
+    either side is the window a reader allows, as for a number rounded to the nearest."""
+    half = 0.5 * 10.0**-places
+    return _outward(low, places, down=True) + half, _outward(high, places, down=False) - half
 
 
 def _greenwood(value: float, limit: float, z: float) -> float | None:
@@ -3444,11 +3526,23 @@ def test_three_rows_lost_late_in_a_curve_do_not_come_back_from_its_digits() -> N
         assert third_from_the_end in times and set(digits) == {1}, seed
         where = times.index(third_from_the_end)
 
-        def read(value: int, limits: list[int], exact=exact, where=where, rows=len(frame)):
+        def read(
+            value: int,
+            limits: list[int],
+            *,
+            outwards: bool = False,
+            exact=exact,
+            where=where,
+            rows=len(frame),
+        ):
             """The counts of rows lost after the stretch that ends at ``where``, as the reader gets them from the
-            curve written to these decimals."""
+            curve written to these decimals (``outwards``: its limits rounded outwards, as the layer writes them;
+            otherwise to the nearest)."""
             written = [(1.0, 1.0, 1.0)] + [
-                (round(s, value), round(low, d), round(high, d))
+                (
+                    round(s, value),
+                    *(_limits_read(low, high, d) if outwards else (round(low, d), round(high, d))),
+                )
                 for (s, low, high), d in zip(exact, limits, strict=False)
             ]
             halves = [(0.0, 0.0)] + [(0.5 * 10.0**-value, 0.5 * 10.0**-d) for d in limits]
@@ -3458,13 +3552,14 @@ def test_three_rows_lost_late_in_a_curve_do_not_come_back_from_its_digits() -> N
             assert first and second
             return _lost_between(first, second)
 
-        # the values the layer writes are those of the record, to the decimals it says
+        # the values the layer writes are those of the record, to the decimals it says: the value to the
+        # nearest, the limits outwards
         for place, (value, low, high) in enumerate(exact):
             assert curve.number("survival").value[place] == round(value, 2)
-            assert curve.number("lower").value[place] == round(low, digits[place])
-            assert curve.number("upper").value[place] == round(high, digits[place])
+            assert curve.number("lower").value[place] == _outward(low, digits[place], down=True)
+            assert curve.number("upper").value[place] == _outward(high, digits[place], down=False)
         assert read(3, [3] * len(exact)) == [3], seed  # what three decimals gave back
-        as_written = read(2, digits)
+        as_written = read(2, digits, outwards=True)
         assert 3 in as_written and len(as_written) >= 20, (seed, as_written)
 
 
@@ -3487,9 +3582,20 @@ def test_a_reader_of_the_whole_curve_gets_no_count_of_rows_lost_between_two_time
         assert (rows, rows - events) == (len(frame), int((frame["died"] == 0).sum())), title
         digits = curve.number("limit_decimals").value[: len(exact)]
 
-        def read(value: int, limits: list[int], exact=exact, rows=rows, events=events):
+        def read(
+            value: int,
+            limits: list[int],
+            *,
+            outwards: bool = False,
+            exact=exact,
+            rows=rows,
+            events=events,
+        ):
             written = [
-                (round(s, value), round(low, d), round(high, d))
+                (
+                    round(s, value),
+                    *(_limits_read(low, high, d) if outwards else (round(low, d), round(high, d))),
+                )
                 for (s, low, high), d in zip(exact, limits, strict=True)
             ]
             halves = [(0.5 * 10.0**-value, 0.5 * 10.0**-d) for d in limits]
@@ -3499,10 +3605,11 @@ def test_a_reader_of_the_whole_curve_gets_no_count_of_rows_lost_between_two_time
         fine = read(3, [3] * len(exact))
         assert [3] in fine and all(len(counts) > 1 or counts[0] in (0, 3) for counts in fine), title
         # as the layer writes the curve: before no time is the count of rows lost one value from 1 to 9
-        blurred = read(2, digits)
+        blurred = read(2, digits, outwards=True)
         assert all(len(counts) > 1 or counts == [0] for counts in blurred), (title, blurred)
-        # the truth is one of several values: four of them in the group of 93 rows (2 to 5)
-        assert 3 in blurred[-1] and len(blurred[-1]) >= 4, (title, blurred[-1])
+        # the truth is one of several values: three of them in the group of 93 rows (2 to 4; four, 2 to 5, with
+        # the limits rounded to the nearest: a window of one unit either way, placed otherwise)
+        assert 3 in blurred[-1] and len(blurred[-1]) >= 3, (title, blurred[-1])
 
 
 def _registry(size: int, seed: int) -> pd.DataFrame:
@@ -3545,7 +3652,7 @@ def test_the_switch_of_the_limits_decimals_is_read_on_what_the_curve_writes() ->
         # and a reader of the whole curve is left with no count of the rows lost
         kept = digits[: len(exact)]
         written = [
-            (round(s, 2), round(low, d), round(high, d))
+            (round(s, 2), *_limits_read(low, high, d))
             for (s, low, high), d in zip(exact, kept, strict=True)
         ]
         halves = [(0.005, 0.5 * 10.0**-d) for d in kept]
@@ -3843,11 +3950,13 @@ def test_the_notes_a_package_reads_its_results_with_are_fixed_words() -> None:
     assert (
         "adjusted for every variable and every level" in notes[2] and "withheld whole" in notes[2]
     )
-    # a rare value of a score withholds its slope, not the model; and where a term is asked three counts
+    # a rare value of a score withholds its slope, not the model, unless the rows off its commonest value, or those
+    # that carry half of its weight, are few; and where a term is asked three counts
     assert (
-        "A rare value of a numeric covariate of a few values withholds its own term only"
-        in notes[2]
-    )
+        "A rare value of a numeric covariate of a few values withholds its own term only, unless fewer than 12 "
+        "participants are off its commonest value"
+    ) in notes[2]
+    assert "fewer than 12 far from the others carry half of the slope's weight" in notes[2]
     assert "no more events than participants" in notes[1]
     assert "is not marked: it rests on every value" in notes[4]
     assert "A negative binomial model is never marked" in notes[9]
@@ -3856,10 +3965,13 @@ def test_the_notes_a_package_reads_its_results_with_are_fixed_words() -> None:
     # what a time of a curve stands for, and what follows its last time
     assert (
         "the value to 2 decimals, the limits to 2 decimals where the curve's participants times its value at that "
-        "time come to 400 or more, 1 decimal below (limit_decimals gives the number at each time"
+        "time come to 400 or more, 1 decimal below, rounded outwards, so that the interval written holds the "
+        "interval computed (limit_decimals gives the number at each time"
     ) in notes[5]
-    assert "whose follow-up ended between two times" in notes[5] and "is rough" in notes[5]
-    assert "log(-log)" in notes[5] and "limits at 1 decimal give none" in notes[5]
+    assert "whose follow-up ended between two times" in notes[5]
+    assert "off by about 3 to 11%" in notes[5] and "0.01 squared over 12" in notes[5]
+    assert "log(-log)" in notes[5] and "Limits at 1 decimal give none" in notes[5]
+    assert "the square root of S(1 - S)/N" in notes[5]
     assert "between 1 and the first value" in notes[5]
     assert "followed_until" in notes[6] and "12 events or more follow" in notes[6]
     assert "stays flat" not in " ".join(

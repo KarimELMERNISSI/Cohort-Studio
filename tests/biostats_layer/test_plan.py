@@ -876,9 +876,8 @@ def test_a_covariate_of_a_few_values_has_the_counts_of_each_value() -> None:
         "rows_off": 2,
         "events_off": sum(died),
         "non_events_off": 2 - sum(died),
-        # the value that carries the most of the slope's weight: the dose of 3, one row, nine tenths of it
-        "far_rows": 1,
-        "far_share": 900,
+        # the fewest rows that carry half of the slope's weight: the dose of 3, one row, 9 of 10
+        "half_rows": 1,
     }
     # the other cell says what it is: every value of the covariate is a cell, and the term is no contrast with it
     reference = record.part("reference:dose")

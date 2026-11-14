@@ -527,13 +527,16 @@ with its own form and button, the first columns of the file already chosen. They
     term, so nothing written shows its rows without the event, and counted they withheld the ratios of the very
     levels with the most events (a level where everybody had the event has its term written). A count model of
     a yes/no outcome keeps the three counts, since it is a logistic model fitted another way; so does, in any
-    count model, a variable one of whose levels holds no more events than participants (read on the whole
-    model, one participant with a count of 2 lifted the rule for every level). So do the cells of a variable
+    count model, a level that holds no more events than participants, read level by level (read on the whole
+    model, one participant with a count of 2 lifted the rule for every level; read on a variable, a site of 78
+    falls among 30 participants was withheld for the 3 without one, which its term does not show). Cells
+    withheld together are judged on the three counts when one of them is. So do the cells of a variable
     of which the package writes a count per level elsewhere. A count model as a whole no longer writes its
     rows with an event and without one beside its terms.
   - **An outcome the study declares its participants are followed to** (the event of a time-to-event analysis
     that nearly everybody has in the end; never a yes/no outcome): the groups of its curves and its Cox and
-    count models then need k rows and k with the event, and the count without the event is written exactly.
+    count models then need k rows and k with the event, and the count without the event is written exactly
+    (a pooled count model writes only its share, the largest over its imputed datasets).
     The declaration does not hold for a result of which more than 5% of the rows are without the event, unless
     it carries an explicit override, which is off unless asked for and has no ceiling: the person who shares
     is then warned, and the policy records the override. Each result the declaration holds for says so: its
@@ -561,11 +564,16 @@ with its own form and button, the first columns of the file already chosen. They
     of k rows with few events withholds its term only. So does a rare value of a numeric covariate of three to
     twenty values, whose term is a slope: its rows stay in the fit (a count of hospital visits with one rare
     value withheld every model it adjusted). Such a model is withheld when fewer than k rows are off the
-    covariate's commonest value; when none of them, or in a logistic model all of them, had the event; when a
-    value held by fewer than k rows, far from the others, carries nine tenths of the slope's weight (a dose of
-    0, 1 and 50: the model written was the model without the participant at 50); when the slope has no
+    covariate's commonest value; when none of them, or in a logistic model all of them, had the event; when
+    the values that carry half of the slope's weight, taken from the farthest down, hold fewer than k rows (a
+    dose of 0, 1 and 50: the model written was the model without the participant at 50; doses of 40, 45 and
+    50 for one participant each, of whom none carries nine tenths; or 4, 4 and 5 beside 40 participants at
+    1, whom the heaviest value taken first hid); when the slope has no
     maximum; and, as for any term, when every term written would compare categories. The message says what to
-    do: join a small level to another, cap or group the values of such a covariate, or take the rows out of
+    do: join a small level to another, cap or group the values of such a covariate (in a study of 100 to 150
+    participants a skewed count is often carried by fewer than k of them: a negative binomial count of
+    visits withheld most of the models it adjusted at 100 rows, a fifth at 300; cap it at 1 or 2), or take
+    the rows out of
     the analysis population by a criterion, and run the analysis again.
   - **A Kaplan-Meier curve** is given at multiples of one time step for the whole result (a hundredth of the
     follow-up shown, and five times the unit its times are recorded in, as far as a tenth of the follow-up
@@ -575,14 +583,23 @@ with its own form and button, the first columns of the file already chosen. They
     the variable's numbers) and of the usual gap between two recorded times, and the curve says which of the
     two set its step: read on the data alone, a few rows recorded finer than the others set it. Its values are
     written to 2 decimals, and its limits to 2 decimals where its rows times the value written there come to
-    400 or more, to 1 decimal below; the curve says which, time by time. With more digits, a value and its
+    400 or more, to 1 decimal below; the curve says which, time by time. The limits are rounded outwards, so
+    that the interval written holds the interval computed: rounded to the nearest, a band narrower than a
+    tenth read "0.92, limits 0.9 to 0.9". Each limit then lies within one unit of its last decimal inside
+    what is written, which the reading notes say: a standard error worked out from limits at 2 decimals, each
+    taken half a unit inwards, is off by about 3 to 11%, and taken as written 15 to 30% too large. With more
+    digits, a value and its
     limits count the rows whose follow-up ended between two times: a reader who fits the whole curve at once,
     supposing a common closing date, got 3 of them back exactly from three decimals in cohorts of 93 to 3,000
     rows, and from a fourth decimal in larger ones. Limits coarser than the value are what blurs it, and the
     switch between 2 decimals and 1 is read on numbers the curve writes: read on the rows actually followed, it
-    said by itself that rows were lost before a time. In groups of about 90 to 150 rows two to six values are
-    left, and a reader who supposes that the rows were lost at one time can get the count. Its median is
-    rounded up to the step,
+    said by itself that rows were lost before a time. In groups of about 90 to 150 participants, a reader who
+    supposes a common closing date and a single time of loss can read, in some of them, the number of
+    participants lost to follow-up, and a second time leaves two or three values. That residue is accepted:
+    the count is of participants whose
+    follow-up ended without the event, not of an outcome; it comes back only under an assumption that a
+    reader cannot test; and the numbers at risk under a curve and the losses in a flow diagram give it
+    exactly. Its median is rounded up to the step,
     its lower limit down and its upper limit up, or said to be later than the follow-up. A group is withheld with
     others until those withheld hold k rows, k events and k rows without the event together; the curves and a
     model of one grouping withhold the same cells, and a result can be given the cells another one withholds. The
@@ -598,7 +615,9 @@ with its own form and button, the first columns of the file already chosen. They
     that the results before it named, and names its own with the reason. Of two results of one outcome
     computed on different rows, one is written when the rows between them give back what a group would not be
     shown for (fewer than k of them with the event, or fewer than k without it: all of them, or none,
-    included): by default the one on more rows. One of two models that differ only by variables of which no
+    included): by default the one on more rows. Two results of one variable that count different levels as
+    the event (death from the disease, death from any cause) must differ by none of the rows at the levels
+    only one of them counts, or by at least k. One of two models that differ only by variables of which no
     term is written. The variables of which the package writes a count per level are named to the rules. And
     what a result tells the person who shares is shown to them and kept in the export log.
   - The study definition travels without the rows a rule lists and without notes.

@@ -1086,9 +1086,9 @@ class _Term:
     # parameter for every value: the rows at a rare value stay in the fit, and what would leave it with a
     # cell's own parameter (a level, an indicator) leaves it here only when nearly every row holds one value
     off: Sequence[int] | None = None
-    # and the value that carries the most of the slope's weight: its rows, and its share of the weight in
-    # thousandths (one row far from the others is fitted exactly by the slope, as a lone row by a level)
-    far: tuple[int, int] | None = None
+    # and the fewest rows that carry half of the slope's weight (rows far from the others are fitted nearly
+    # exactly by the slope, as a lone row by a level)
+    half: int | None = None
 
 
 def _off_commonest(cells: Sequence[Sequence[int]]) -> tuple[int, int, int, int]:
@@ -1109,13 +1109,21 @@ def _off_commonest(cells: Sequence[Sequence[int]]) -> tuple[int, int, int, int]:
     )
 
 
-def _far_value(cells: Mapping[str, Sequence[int]]) -> tuple[int, int] | None:
+def _half_rows(cells: Mapping[str, Sequence[int]]) -> int | None:
     """
-    Of the cells of a covariate's values: the rows at the value that carries the most of its slope's weight,
-    and that share of the weight in thousandths (rounded down). A value's weight is its rows times the square
-    of its distance from the commonest value: a dose of 0 for 588 rows, 1 for 11 and 50 for one puts 99.6% of
-    it on the participant at 50, whom the slope then fits exactly. None when a value does not read as a
-    number, or when every row holds one value.
+    Of the cells of a covariate's values: the fewest rows that carry half of its slope's weight or more. A
+    value's weight is its rows times the square of its distance from the commonest value, so that each of its
+    rows weighs that square: the values are taken from the farthest down (of two as far, the one of fewer rows
+    first), and from the heaviest down, and the smaller count is kept (one value that carries half alone can
+    hold fewer rows than the farthest ones together). A dose of 0 for 588 rows, 1 for 11 and 50 for one puts
+    99.6% of the weight on the participant at 50, whom the slope then fits nearly exactly; doses of 40, 45 and
+    50 for one row each put 74% of it on two of them, though none carries nine tenths; beside 40 participants
+    at 1, doses of 4, 4 and 5 put 59% of it on three, whom the heaviest value taken first hid. At 600 and
+    2,000 rows, half of the weight is carried by 13 rows or more in the usual covariates tried (counts,
+    scores, Likert items, bands of age), and by 149 in the tutorial file's hospital visits (130 in the tutorial
+    chapter's analysis population); in a study of 100 to 150 participants a skewed count is often carried by
+    fewer than 10 (a negative binomial count of visits: 97% of draws at 100 rows, 83% at 150, 18% at 300). None
+    when a value does not read as a number, or when every row holds one value.
     """
     try:
         held = [(float(value), int(cell[0])) for value, cell in cells.items()]
@@ -1129,23 +1137,36 @@ def _far_value(cells: Mapping[str, Sequence[int]]) -> tuple[int, int] | None:
     total = sum(weights)
     if not total > 0:
         return None
-    far = max(range(len(held)), key=lambda place: (weights[place], -place))
-    return held[far][1], int(1000 * weights[far] / total)
+
+    def rows_to_half(order: Sequence[int]) -> int:
+        carried, rows = 0.0, 0
+        for place in order:
+            carried += weights[place]
+            rows += held[place][1]
+            if carried >= total / 2:
+                break
+        return rows
+
+    places = range(len(held))
+    farthest = sorted(
+        places, key=lambda place: (-((held[place][0] - centre) ** 2), held[place][1], place)
+    )
+    heaviest = sorted(places, key=lambda place: (-weights[place], place))
+    return min(rows_to_half(farthest), rows_to_half(heaviest))
 
 
 def _term_support(term: _Term, whole: Mapping[str, int], kind: str) -> dict[str, int]:
     """The counts behind a term's part: the model's for a numeric term without cells, its cell's otherwise; and,
     for a covariate of a few values, those of the rows off its commonest value under names that end in
-    ``_off``, and the rows at the value that carries the most of the slope's weight with that share in
-    thousandths (``far_rows``, ``far_share``). They are not a cell of the term: a rule that reads them asks
-    for them by name."""
+    ``_off``, and the fewest rows that carry half of the slope's weight (``half_rows``). They are not a cell
+    of the term: a rule that reads them asks for them by name."""
     if term.cell is None:
         return dict(whole)
     found = _cell_support(term.cell, kind)
     if term.off is not None:
         found.update({f"{name}_off": n for name, n in _cell_support(term.off, kind).items()})
-    if term.far is not None:
-        found.update({"far_rows": int(term.far[0]), "far_share": int(term.far[1])})
+    if term.half is not None:
+        found["half_rows"] = int(term.half)
     return found
 
 
@@ -1229,7 +1250,7 @@ def _terms_of(
                     slope,
                     _least(cells_of[1:]),
                     _off_commonest(cells_of),
-                    _far_value(few),
+                    _half_rows(few),
                 )
             )
         elif apart:
