@@ -358,3 +358,178 @@ def test_an_expression_nested_too_deep_is_refused(df: pd.DataFrame) -> None:
     with pytest.raises(UnsafeExpressionError, match="too complex"):
         evaluate(chained, df)
     assert evaluate("df['age']" + ".abs()" * 20, df).tolist()[:3] == [10.0, 25.0, 70.0]
+
+
+# --- what an expression builds, however its sizes are written: each size passed on its own, and their product too ---
+
+
+@pytest.fixture
+def sites() -> pd.DataFrame:
+    """Sixty rows, as a small registry: the expressions below are refused before what they ask for is built."""
+    return pd.DataFrame(
+        {
+            "site": ["Luxembourg", "Esch", "Metz"] * 20,
+            "age": list(range(40, 100)),
+            "n": [1, 2, 3] * 20,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        # two products that each pass: sixty names 2,000 times, then 2,000 times again
+        ("(df['site'] * 2000) * 2000", "builds more than"),
+        ("df['site'].str.pad(10000) * 10000", "builds more than"),
+        ("df['site'].mul(2000).mul(2000)", "builds more than"),
+        ("np.multiply(df['site'] * 2000, 2000)", "builds more than"),
+        ("df['site'].mul(100000000)", "A text repeated more than 10,000 times"),
+        ("np.multiply(df['site'], 100000000)", "A text repeated more than 10,000 times"),
+        ("df[['site']] * 100000", "A text repeated more than 10,000 times"),
+        # a list, a list of columns, a list of lists
+        ("[0] * 10 ** 12", "builds more than"),
+        ("np.array([df['age']] * 10 ** 9)", "builds more than"),
+        ("[[0] * 5000] * 5000", "builds more than"),
+        # a size read from the data
+        ("np.ones(len(df) ** 5)", "An array of more than 10,000,000 values"),
+        ("np.zeros((len(df) ** 3, len(df) ** 3))", "An array of more than 10,000,000 values"),
+        ("np.full((len(df), len(df) ** 4), 1)", "An array of more than 10,000,000 values"),
+        ("np.full(shape=len(df) ** 5, fill_value=1)", "An array of more than 10,000,000 values"),
+        ("df['site'].str.pad(len(df) ** 4)", "A width larger than 10,000 characters"),
+        ("df['site'].str.pad(width=len(df) ** 4)", "A width larger than 10,000 characters"),
+        ("df['site'].str.zfill(len(df) ** 4)", "A width larger than 10,000 characters"),
+        ("pd.cut(df['age'], 10 ** 12)", "More than 10,000 intervals"),
+        ("pd.cut(df['age'], bins=len(df) ** 6)", "More than 10,000 intervals"),
+        ("pd.qcut(df['age'], len(df) ** 6)", "More than 10,000 intervals"),
+        # a whole number raised until it has millions of digits
+        ("len(df) ** len(df) ** len(df)", "A number this large"),
+        ("(len(df) ** 1000) ** 1000", "A number this large"),
+        ("int('9' * 4000) ** 1000", "A number this large"),
+        ("df['age'].astype('object') ** 1000", "A number this large"),
+        ("df['age'].astype('object').pow(1000)", "A number this large"),
+        ("np.power(df['age'].astype('object'), 1000)", "A number this large"),
+        # a text put between every character of a text, twice
+        (
+            "df['site'].str.replace('', 'x' * 1000).str.replace('', 'x' * 10000)",
+            "builds more than",
+        ),
+        (
+            "df['site'].str.replace('.', 'x' * 1000, regex=True).str.replace('x', 'y' * 10000)",
+            "builds more than",
+        ),
+    ],
+)
+def test_what_an_expression_builds_is_bounded(
+    sites: pd.DataFrame, expression: str, message: str
+) -> None:
+    """``(df['site'] * 10000) * 10000`` passed, each product on its own; ``np.ones(len(df) ** 4)`` passed, its size
+    being no number written in the expression; and the same sizes passed through ``mul``, ``np.multiply``, a list,
+    ``pd.cut`` or a power of whole numbers. What is bounded is what the expression builds, when it is computed."""
+    with pytest.raises(UnsafeExpressionError, match=message):
+        evaluate(expression, sites)
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    [
+        # a width, a text or a prefix kept for every row of a large table
+        ("df['site'].str.pad(10000)", "builds more than"),
+        ("np.where(df['age'] > 50, 'x' * 10000, '')", "builds more than"),
+        ("np.select([df['age'] > 50], ['x' * 10000], 'y')", "builds more than"),
+        ("np.full(len(df), 'x' * 10000)", "builds more than"),
+        ("df['site'].cumsum()", "builds more than"),
+        ("np.cumsum(df['site'])", "builds more than"),
+        ("df['site'] * 500", "builds more than"),
+    ],
+)
+def test_what_is_built_for_every_row_of_a_large_table_is_bounded(
+    expression: str, message: str
+) -> None:
+    """A width of 10,000 characters is little for sixty rows and two thousand million characters for 200,000."""
+    large = pd.DataFrame(
+        {
+            "site": ["Luxembourg", "Esch", "Metz", "Arlon"] * 50_000,
+            "age": list(range(40, 80)) * 5_000,
+        }
+    )
+    with pytest.raises(UnsafeExpressionError, match=message):
+        evaluate(expression, large)
+
+
+def test_ordinary_use_on_a_large_table_is_not_refused() -> None:
+    """Codes padded, a label for every row, a text doubled, a column of zeros: what a formula does."""
+    large = pd.DataFrame(
+        {
+            "site": ["Luxembourg", "Esch", "Metz", "Arlon"] * 50_000,
+            "age": list(range(40, 80)) * 5_000,
+        }
+    )
+    assert evaluate("df['site'].str.zfill(12)", large).str.len().eq(12).all()
+    assert evaluate("df['site'].str.pad(40)", large).str.len().eq(40).all()
+    labels = evaluate("np.where(df['age'] > 50, 'older', 'younger')", large)
+    assert set(labels) == {"older", "younger"}
+    assert evaluate("df['site'] * 2", large).iloc[1] == "EschEsch"
+    assert evaluate("df['site'].str.replace('e', 'ee')", large).iloc[1] == "Esch"
+    assert evaluate("np.zeros(len(df))", large).shape == (200_000,)
+    assert evaluate("np.full(len(df), 'unknown')", large).shape == (200_000,)
+    assert evaluate("df['age'].cumsum()", large).iloc[-1] == sum(range(40, 80)) * 5_000
+
+
+def test_ordinary_expressions_compute_as_they_did(sites: pd.DataFrame) -> None:
+    """Each operation that is now checked when it is computed gives what pandas and numpy give."""
+    same = {
+        "df['site'] * 2": sites["site"] * 2,
+        "df['site'].mul(2)": sites["site"].mul(2),
+        "df['age'].mul(df['n'], fill_value=0)": sites["age"].mul(sites["n"], fill_value=0),
+        "df['site'] * df['n']": sites["site"] * sites["n"],
+        "np.multiply(df['age'], 2)": np.multiply(sites["age"], 2),
+        "df['age'].cumsum()": sites["age"].cumsum(),
+        "np.cumsum(df['age'])": np.cumsum(sites["age"]),
+        "df['site'].str.replace('e', 'E')": sites["site"].str.replace("e", "E"),
+        "df['site'].str.replace('[aeu]', '-', regex=True)": sites["site"].str.replace(
+            "[aeu]", "-", regex=True
+        ),
+        "df['site'].str.replace(pat='z', repl='ts')": sites["site"].str.replace("z", "ts"),
+        "df['site'].str.pad(12)": sites["site"].str.pad(12),
+        "df['site'].str.pad(12, side='right', fillchar='.')": sites["site"].str.pad(
+            12, side="right", fillchar="."
+        ),
+        "df['site'].str.zfill(8)": sites["site"].str.zfill(8),
+        "df['age'].pow(2)": sites["age"].pow(2),
+        "df['age'] ** 2": sites["age"] ** 2,
+        "2 ** (df['age'] / 10)": 2 ** (sites["age"] / 10),
+        "np.power(df['age'], 2)": np.power(sites["age"], 2),
+        "df['age'].replace(40, 41)": sites["age"].replace(40, 41),
+        "pd.cut(df['age'], 4)": pd.cut(sites["age"], 4),
+        "pd.cut(df['age'], [0, 60, 100])": pd.cut(sites["age"], [0, 60, 100]),
+        "pd.cut(df['age'], bins=3, labels=False)": pd.cut(sites["age"], bins=3, labels=False),
+        "pd.qcut(df['age'], 4)": pd.qcut(sites["age"], 4),
+        "np.where(df['age'] > 60, 'older', 'younger')": np.where(
+            sites["age"] > 60, "older", "younger"
+        ),
+        "np.select([df['age'] > 80, df['age'] > 60], ['a', 'b'], 'c')": np.select(
+            [sites["age"] > 80, sites["age"] > 60], ["a", "b"], "c"
+        ),
+        "np.zeros(len(df))": np.zeros(60),
+        "np.ones((2, 3))": np.ones((2, 3)),
+        "np.full(len(df), 'unknown')": np.full(60, "unknown"),
+        "np.full(shape=3, fill_value=1.5)": np.full(3, 1.5),
+        "np.array([1, 2] * 3)": np.array([1, 2] * 3),
+    }
+    for expression, expected in same.items():
+        found = evaluate(expression, sites)
+        if isinstance(expected, pd.Series):
+            pd.testing.assert_series_equal(found, expected)
+        else:
+            assert np.array_equal(np.asarray(found), np.asarray(expected)), expression
+    assert evaluate("len(df) ** 2", sites) == 3600 and evaluate("[0] * 5", sites) == [0] * 5
+    assert evaluate("2 ** 10", sites) == 1024 and evaluate("len(df) ** 100", sites) == 60**100
+    assert evaluate("(-2) ** len(df)", sites) == 2**60
+    assert evaluate("len(df) ** -1", sites) == 1 / 60
+    # a frame of numbers, and the caller's tree left as it was
+    doubled = evaluate("df[['age', 'n']] * 2", sites)
+    assert doubled["age"].tolist() == [2 * age for age in range(40, 100)]
+    tree = ast.parse("df['site'].str.pad(12).mul(2)", mode="eval")
+    as_given = ast.dump(tree)
+    assert evaluate_tree(tree, sites).str.len().eq(24).all()
+    assert ast.dump(tree) == as_given

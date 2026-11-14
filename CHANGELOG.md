@@ -331,7 +331,11 @@ with its own form and button, the first columns of the file already chosen. They
   number it is (`str.pad(int(1e8))` and `np.ones(int(1e12))` were accepted). A column of texts repeated more than
   10,000 times is refused when it is computed (`df['site'] * 100000000`): only a text written in the expression was
   counted. An expression nested too deep to be read (240 methods called one after the other) is refused as too
-  complex, where the application stopped on it.
+  complex, where the application stopped on it. What an expression builds is bounded when it is computed, not
+  only the sizes written in it: at most 10,000,000 values or characters, or 100 per row of a larger table.
+  `(df['site'] * 10000) * 10000`, `df['site'].str.pad(10000) * 10000`, `[0] * 10**12`, `np.ones(len(df) ** 4)`
+  and a cumulative sum of a column of texts were accepted, each step passing on its own; a power of whole
+  numbers of more than 1,024 bits is refused too. The time a pattern takes is not bounded.
 
 ### Privacy: what today's documents leave out (M8, first steps)
 
