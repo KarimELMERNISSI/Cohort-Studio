@@ -172,9 +172,18 @@ DOSSIER_MIN_N = 10
 SMALL = f"not shown: fewer than {DOSSIER_MIN_N}"
 
 
+def dossier_min_n() -> int:
+    """
+    The fewest participants whose values the dossier writes: a group's median, its interval and its curve; a cut-off
+    found on the data, its range and the measures at it. One number for every rule of the dossier, so that it can be
+    the study's own (the privacy rules set in one place) where it is ``DOSSIER_MIN_N`` today.
+    """
+    return DOSSIER_MIN_N
+
+
 def _shown(n: Any) -> bool:
     """Whether a group's median goes into the dossier (a result pooled before the sizes were kept: as it was)."""
-    return n is None or n >= DOSSIER_MIN_N
+    return n is None or n >= dossier_min_n()
 
 
 def _survival_blocks(res: Any) -> ResultBlocks:
@@ -209,9 +218,71 @@ def _survival_blocks(res: Any) -> ResultBlocks:
 
 def _not_drawn(count: int) -> str:
     return (
-        f"{count} group{'s' if count != 1 else ''} of fewer than {DOSSIER_MIN_N} "
+        f"{count} group{'s' if count != 1 else ''} of fewer than {dossier_min_n()} "
         f"{'are' if count != 1 else 'is'} not drawn."
     )
+
+
+def _few_called(acc: Any, least: int) -> str:
+    """
+    The side a cut-off calls fewer than ``least`` participants to ("positive", "negative"; "" when it calls enough to
+    each). Found on the data, such a cut-off is the score of the participant who holds it, or of a few: at the largest
+    score, the score of the one called positive, and every measure at it (sensitivity, the predictive values, the
+    likelihood ratios) reads the small row of the 2x2 table, so that with the outcome's two totals it gives whether
+    they had the condition.
+    """
+    positive, negative = acc.tp + acc.fp, acc.fn + acc.tn
+    if positive < least:
+        return "positive"
+    return "negative" if negative < least else ""
+
+
+def _thin_side(auc: dict, least: int) -> str:
+    """
+    The side of the reference standard that holds fewer than ``least`` participants ("have the condition", "are
+    without the condition"; "" when both hold enough, or for a result kept before its sizes). The AUC ranks each of
+    them among the others, and the measures at any cut-off read them one by one: with one participant with the
+    condition among 400, "AUC 1 (1 to 1)" said that the largest score was theirs.
+    """
+    for name, side in (("n_positive", "have the condition"), ("n_negative", "are without the condition")):
+        held = auc.get(name)
+        if held is None or isinstance(held, bool):
+            continue
+        try:
+            count = int(held)
+        except (TypeError, ValueError):
+            continue
+        if count < least:
+            return side
+    return ""
+
+
+def _youden_range(youden: dict, least: int) -> str:
+    """
+    The sentence of the range of a cut-off found on the data: the middle 95% of the cut-offs found in resamples. Each
+    end is a score found in a resample, a participant's own when few lie beyond it: it is written only when ``least``
+    participants or more lie on each side of it, and otherwise named by where it lies.
+    """
+    ci = youden["ci"]
+    resamples = youden.get("resamples")
+    among = f"In {resamples:,} bootstrap resamples" if resamples else "In the bootstrap resamples"
+    sides = youden.get("ci_sides")
+    if not sides:  # a result kept before its ends were counted: the page shows its range
+        return (
+            f"Cut-off chosen by Youden's J. {among}, the cut-offs found have a range the page shows; it is not "
+            "written here."
+        )
+    ends, hidden = [], False
+    for end, (below, above) in zip((ci.lower, ci.upper), sides, strict=True):
+        if min(below, above) >= least:
+            ends.append(_num(end))
+            continue
+        hidden = True
+        ends.append("the smallest observed scores" if below < least else "the largest observed scores")
+    said = f"Cut-off chosen by Youden's J. {among}, 95% of the cut-offs found lie between {ends[0]} and {ends[1]}"
+    if hidden:
+        said += f" (an end with fewer than {least} participants beyond it is not written)"
+    return said + "."
 
 
 def _pooled_frame(result: Any) -> pd.DataFrame:
@@ -623,8 +694,21 @@ def result_blocks(value: Any) -> ResultBlocks:
         if "acc" in value and "auc" in value:
             acc, auc = value["acc"], value["auc"]
             lower = value.get("direction") == "lower"
-            rows = [("AUC (DeLong)", _num(auc.get("auc")), _ci(auc.get("ci")))]
-            if acc is not None:
+            least = dossier_min_n()
+            found = str(value.get("mode") or "").startswith("Youden")
+            # a side of the reference standard of fewer than ``least`` participants: the AUC and the measures at a
+            # cut-off rank them one by one, and stay on the page
+            thin = _thin_side(auc, least)
+            # a cut-off found on these data that calls fewer than ``least`` participants to one side: its value, its
+            # range and the measures at it stay on the page (a typed cut-off is no participant's value)
+            few = _few_called(acc, least) if found and acc is not None and not thin else ""
+            held_back = bool(thin or few)
+            rows = [
+                ("AUC (DeLong)", f"not shown: fewer than {least}", "")
+                if thin
+                else ("AUC (DeLong)", _num(auc.get("auc")), _ci(auc.get("ci")))
+            ]
+            if acc is not None and not held_back:
                 share = f"{_num(100 * acc.prevalence_observed)}%"
                 rows += [
                     ("Sensitivity", _num(acc.sensitivity), _ci(acc.sensitivity_ci)),
@@ -651,30 +735,41 @@ def result_blocks(value: Any) -> ResultBlocks:
                 title += ", lower values pointing to the condition"
             if acc is None:
                 title += " (no cut-off)"
+            elif found and held_back:
+                title += " (a cut-off found on these data, not written)"
             else:
                 title += f" (positive at {'most' if lower else 'least'} {_num(value.get('cutoff'))})"
             blocks = ResultBlocks(
                 tables=[(title, table)],
-                references=([] if acc is None else list(acc.references))
-                + list(auc.get("references") or []),
+                references=([] if acc is None or held_back else list(acc.references))
+                + ([] if thin else list(auc.get("references") or [])),
             )
             youden = value.get("youden") or {}
-            if str(value.get("mode") or "").startswith("Youden"):
+            if thin:
+                blocks.lines.append(
+                    f"Fewer than {least} participants {thin}: the AUC and the measures at a cut-off rank their "
+                    "scores among the others one by one, and are not written in the dossier; the page shows them."
+                )
+            elif found and few:
+                # the engine's caution ("1 of 928 is called positive") gives the count: it is not copied either
+                blocks.lines.append(
+                    f"The cut-off found on these data calls fewer than {least} participants {few}: its value, its "
+                    "range and the measures at it are not written in the dossier; the page shows them."
+                )
+            elif found:
                 # the cut-off was chosen on these data: its range (drawn at random; the settings give the draws) and
                 # the caution that goes with it
                 if youden.get("ci") is not None:
-                    resamples = youden.get("resamples")
-                    among = f"In {resamples:,} bootstrap resamples" if resamples else "In the bootstrap resamples"
-                    blocks.lines.append(
-                        f"Cut-off chosen by Youden's J. {among}, 95% of the cut-offs found lie in {_ci(youden['ci'])}."
-                    )
+                    blocks.lines.append(_youden_range(youden, least))
                 if youden.get("note"):
                     blocks.lines.append(str(youden["note"]))
                 if "cautions" not in value and youden.get("caution"):  # a result kept before its own words
                     blocks.warnings.append(str(youden["caution"]))
-            # in the words of the direction asked on the page (the engine's are of the marker it was given)
-            blocks.warnings.extend(str(text) for text in value.get("cautions") or ())
-            if acc is not None:
+            # in the words of the direction asked on the page (the engine's are of the marker it was given); they give
+            # the AUC, which is not written beside a side too small
+            if not thin:
+                blocks.warnings.extend(str(text) for text in value.get("cautions") or ())
+            if acc is not None and not held_back:
                 blocks.warnings.extend(acc.warnings)
             return blocks
         if "res" in value and "table" in value:
@@ -688,4 +783,4 @@ def result_blocks(value: Any) -> ResultBlocks:
     return ResultBlocks(lines=[f"{type(value).__name__} (no report layout)"])
 
 
-__all__ = ["DOSSIER_MIN_N", "ResultBlocks", "km_png", "result_blocks"]
+__all__ = ["DOSSIER_MIN_N", "ResultBlocks", "dossier_min_n", "km_png", "result_blocks"]

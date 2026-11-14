@@ -71,6 +71,23 @@ def _as_measured(found: dict) -> dict:
     return shown
 
 
+def _sides_of(ci: Any, scores: pd.Series, lower: bool) -> tuple[tuple[int, int], ...] | None:
+    """
+    The participants on each side of each end of a cut-off's range (below it, then above it, on the marker's own
+    scale; an end itself counted on the side it would call positive). An end is a score found in a resample, a
+    participant's own when few lie beyond it: the dossier writes an end only when enough lie on each side.
+    """
+    if ci is None:
+        return None
+    values = scores.to_numpy(dtype=float)
+    sides = []
+    for end in (float(ci.lower), float(ci.upper)):
+        # positive at or above the end for a rising marker, at or below it for a falling one
+        below = int((values <= end).sum()) if lower else int((values < end).sum())
+        sides.append((below, int(len(values) - below)))
+    return tuple(sides)
+
+
 def accuracy_of(
     df: pd.DataFrame,
     outcome: str,
@@ -114,6 +131,7 @@ def accuracy_of(
         )
         at = float(found["cutoff"])
         youden = _as_measured(found) if lower else found
+        youden = {**youden, "ci_sides": _sides_of(youden.get("ci"), clean[score], lower)}
     elif mode == m.FIXED:
         if cutoff is None:
             raise ValueError("a cut-off fixed beforehand is a number to type")

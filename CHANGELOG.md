@@ -26,6 +26,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   longer break a line of the log: every character that is not printable is written as its escape (a line separator,
   a terminal's escape), and an answer that is no readable address names its recipient "an address that cannot be
   read", still to be confirmed (a "[" in it stopped Settings' AI card with an error).
+- **The Word dossier keeps a cut-off found on the data to the page when it calls fewer than 10 participants to one
+  side.** Found by Youden's J, such a cut-off is the score of the participant it calls positive, or of a few, and
+  the measures at it read them one by one: the dossier wrote "positive at least 412", with its sensitivity and its
+  predictive values. Its value, its range and its measures are now left out, with a line that says so, and an end
+  of its range with fewer than 10 participants beyond it is named by where it lies. The same holds for a side of the
+  reference standard: with fewer than 10 participants with the condition, or without it, the AUC and the measures
+  at any cut-off rank them one by one (the dossier wrote "AUC 1 (1 to 1)" beside one participant with the
+  condition, who had the largest score). A cut-off typed beforehand is written as before, and the page shows
+  everything, as it did.
 
 ### Hypothesis tests & epidemiology: two tabs, one analysis at a time
 
