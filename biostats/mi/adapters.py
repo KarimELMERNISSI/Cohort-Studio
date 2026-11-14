@@ -142,6 +142,11 @@ def _model_sizes(extracts: list[Extract]) -> dict[str, Any]:
     with_events = [e.extra.get("rows_with_events") for e in extracts]
     if all(v is not None for v in with_events):
         out["rows_with_events"] = (int(min(with_events)), int(max(with_events)))
+    # a count model's dispersion in each dataset, as the smallest and the largest: a Poisson model above 1.5 has
+    # standard errors that are too small, which a pooled model said of no dataset
+    spread = [e.extra.get("dispersion") for e in extracts]
+    if spread and all(isinstance(v, int | float) and math.isfinite(v) for v in spread):
+        out["dispersion"] = (float(min(spread)), float(max(spread)))
     residual = [e.dfcom for e in extracts if math.isfinite(e.dfcom)]
     if residual:
         out["df_resid"] = int(min(residual))
@@ -192,6 +197,7 @@ class RegressionAdapter(Adapter):
                 "n": result.n,
                 "events": result.events,
                 "rows_with_events": getattr(result, "rows_with_events", None),
+                "dispersion": getattr(result, "dispersion", None),
                 "level_counts": dict(getattr(result, "level_counts", {})),
                 "indicator_counts": dict(getattr(result, "indicator_counts", {})),
                 "converged": getattr(result, "converged", True),

@@ -460,15 +460,29 @@ with its own form and button, the first columns of the file already chosen. They
   than 10" (the larger of what the study asks for and of the installation's number). The participant flow is shown
   so that no withheld count comes back by subtraction, and a result is shown with the analysis the flow shows for
   it, or withheld with it.
-  - **Every kind counts both outcomes.** A model as a whole, each cell behind a term and each group of curves must
-    hold k rows, k with the event and k without (a count model: k rows with an event and k without one): a cell
-    where nobody, or everybody, had the event says so of each of its participants.
+  - **What each kind counts.** A model as a whole and each group of curves must hold k rows, k with the event and
+    k without (a count model: k rows with an event and k without one). So must each cell behind a term of a
+    logistic model: a cell where nobody, or everybody, had the event says so of each of its participants. A cell
+    behind a term of a Cox or a count model must hold k rows and k with the event: no count stands beside a
+    term, so nothing written shows its rows without the event, and counted they withheld the ratios of the very
+    levels with the most events (a level where everybody had the event has its term written). A count model of
+    a yes/no outcome keeps the three counts, since it is a logistic model fitted another way, and so do the
+    cells of a variable of which the package writes a count per level elsewhere. A count model as a whole no
+    longer writes its rows with an event and without one beside its terms.
+  - **An outcome the study declares its participants are followed to** (the event of a time-to-event analysis
+    that nearly everybody has in the end; never a yes/no outcome): the groups of its curves and its Cox and
+    count models then need k rows and k with the event, and the count without the event is written exactly.
+    The declaration does not hold for a result of which more than 5% of the rows are without the event, unless
+    it carries an explicit override, which is off unless asked for: the person who shares is then warned, the
+    policy records the override, and each result it changes says so with its actual share of rows without the
+    event.
   - **A model's term** is shown only when the cells behind it each hold those counts (a factor's level or a
     covariate coded with two values, and the reference; every value of a numeric covariate of three to twenty
     values; the rows on and off the commonest value of one of more values that half of the rows hold at one
     value), and not when its estimate has no maximum. No count travels beside a term. In a model of categories
     alone a coefficient and its standard error are its cells' counts in another form, so the cells withheld of a
-    variable hold k of each count together, the cell shown that holds the fewest rows being withheld with them
+    variable hold together k of each count a cell is judged on, the cell shown that holds the fewest rows being
+    withheld with them
     otherwise; when that cell is the reference, every term of the variable is withheld. The numbers of the fit
     as a whole (likelihood, AIC, pseudo-R2, AUC, concordance, whether it converged) are written only when no term
     is withheld: with its only term withheld, a model's AUC gave the cell back.
@@ -477,20 +491,36 @@ with its own form and button, the first columns of the file already chosen. They
     without a maximum (the terms left would be those of the model fitted without those rows: beside the same
     model without the variable, they gave the outcome, the arm and the age of a participant alone in a cell); and
     when a term is withheld while every term written would compare categories (such a model is a table). A cell
-    of k rows with few events withholds its term only. The message says what to do: join a small level to
-    another, or take its rows out of the analysis population by a criterion, and run the analysis again.
+    of k rows with few events withholds its term only. So does a rare value of a numeric covariate of three to
+    twenty values, whose term is a slope: its rows stay in the fit (a count of hospital visits with one rare
+    value withheld every model it adjusted), and the model is withheld only when fewer than k rows are off the
+    covariate's commonest value, or when none of them, or in a logistic model all of them, had the event. The
+    message says what to do: join a small level to another, cap or group the values of such a covariate, or
+    take the rows out of the analysis population by a criterion, and run the analysis again.
   - **A Kaplan-Meier curve** is given at multiples of one time step for the whole result (a hundredth of the
-    follow-up shown, and five times the usual gap between two recorded times, as far as a tenth of the follow-up
-    allows: a follow-up in whole years keeps its four points, and one row recorded finer than the others changes
-    nothing), with at least k events between two times and none or at least k after the last, to the time until
-    which k rows were followed. Its values are written to three decimals. Its median is rounded up to the step,
+    follow-up shown, and five times the unit its times are recorded in, as far as a tenth of the follow-up
+    allows: a follow-up in whole years keeps its four points), with at least k events between two times and none
+    or at least k after the last, to the time until which k rows were followed. The unit is the larger of the
+    one the study declares for the time variable (an hour, a day, a week, a month or a year, with its size in
+    the variable's numbers) and of the usual gap between two recorded times, and the curve says which of the
+    two set its step: read on the data alone, a few rows recorded finer than the others set it. Its values and
+    limits are written to 2 decimals where fewer than 400 rows are still followed at the time, to 3 from 400
+    and to 4 from 2,000, and the curve says which, time by time: late in a curve, three decimals gave back the
+    rows whose follow-up ended between two times (3 of them, among 30 to 60 at risk). Its median is rounded up
+    to the step,
     its lower limit down and its upper limit up, or said to be later than the follow-up. A group is withheld with
     others until those withheld hold k rows, k events and k rows without the event together; the curves and a
     model of one grouping withhold the same cells, and a result can be given the cells another one withholds. The
     complete cases beside a pooled result take the groups it withholds, and may withhold more.
   - **No warning's wording travels**: a model's parameters and events per parameter, whether a Poisson model is
-    overdispersed, whether a term rests on fewer than 10 participants with the event or without it, a curve's
-    step and its follow-up are written as numbers, with fixed sentences to read them by.
+    overdispersed (a pooled one, when one of its imputed datasets is), whether a term rests on fewer than 10
+    participants with the event or without it, a curve's step and its follow-up are written as numbers, with
+    fixed sentences to read them by.
+  - **What the writer of a package must still do** is listed with the rules, with a function for each duty
+    that needs one. One set of withheld cells per grouping across the results: each result is given the cells
+    that the results before it named, and names its own with the reason. One of two results of one outcome
+    computed on different rows, which differ by the rows that lack a value and by their outcomes: by default
+    the one on more rows. And one of two models that differ only by variables of which no term is written.
   - The study definition travels without the rows a rule lists and without notes.
   - **Before a package is offered**, the texts that come from its user and from the data are read for a value that
     fewer than k rows hold (a criterion that names a site, a column named after a level, a code, a date,
@@ -498,8 +528,9 @@ with its own form and button, the first columns of the file already chosen. They
     hit names its place and its column, never the value, and a column named after a level by its position. A
     threshold is no level, written `>= 8`, `≥ 8` or `8+`. A pattern is run by an engine that cannot backtrack,
     whatever the data hold; a test that cannot be run safely (a look-around, flags, a pattern inside the text that
-    is tested) and a text too deep to be read are reported as not checked, and the datasets given to the scan are
-    never changed.
+    is tested), a pattern that this engine and pandas would not count alike (a class such as `\w` on values
+    with accents) and a text too deep to be read are reported as not checked, and the datasets given to the scan
+    are never changed.
 
 ### Documentation: the architecture scheme
 

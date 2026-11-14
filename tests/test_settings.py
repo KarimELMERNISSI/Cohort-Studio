@@ -59,7 +59,7 @@ def test_an_administrator_can_lower_the_smallest_count_shared_to_five(
     assert floor == 5 and DisclosurePolicy.for_study(5, floor=floor).k == 5
     env.setenv("CMP_DISCLOSURE_MIN", "20")
     policy = DisclosurePolicy.for_study(None, floor=cfg.get_settings().sharing.disclosure_min)
-    assert policy.to_dict() == {"k": 20, "asked": 10, "floor": 20, "version": 1}
+    assert policy.to_dict() == {"k": 20, "asked": 10, "floor": 20, "version": 2}
 
 
 def test_values_are_read_as_their_readers_read_them(env: pytest.MonkeyPatch) -> None:

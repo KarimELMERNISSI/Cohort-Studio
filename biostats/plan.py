@@ -1082,6 +1082,40 @@ class _Term:
     id: str
     labels: dict[str, str]
     cell: Sequence[int] | None
+    # for a covariate of a few values: the counts of the rows off its commonest value. Its term is a slope, one
+    # parameter for every value: the rows at a rare value stay in the fit, and what would leave it with a
+    # cell's own parameter (a level, an indicator) leaves it here only when nearly every row holds one value
+    off: Sequence[int] | None = None
+
+
+def _off_commonest(cells: Sequence[Sequence[int]]) -> tuple[int, int, int, int]:
+    """The counts of the rows off the commonest value, of the cells of a covariate's values (rows, events, rows
+    with an event, rows without one): every cell but the one that holds the most rows (the first, of two that
+    hold as many), added up."""
+    whole = [
+        (int(c[0]), int(c[1]), int(c[2]), int(c[3]) if len(c) > 3 else int(c[0]) - int(c[2]))
+        for c in cells
+    ]
+    commonest = max(range(len(whole)), key=lambda place: (whole[place][0], -place))
+    others = [cell for place, cell in enumerate(whole) if place != commonest]
+    return (
+        sum(c[0] for c in others),
+        sum(c[1] for c in others),
+        sum(c[2] for c in others),
+        sum(c[3] for c in others),
+    )
+
+
+def _term_support(term: _Term, whole: Mapping[str, int], kind: str) -> dict[str, int]:
+    """The counts behind a term's part: the model's for a numeric term without cells, its cell's otherwise; and,
+    for a covariate of a few values, those of the rows off its commonest value under names that end in
+    ``_off`` (they are not a cell of the term: a rule that reads them asks for them by that name)."""
+    if term.cell is None:
+        return dict(whole)
+    found = _cell_support(term.cell, kind)
+    if term.off is not None:
+        found.update({f"{name}_off": n for name, n in _cell_support(term.off, kind).items()})
+    return found
 
 
 def _least(cells: Sequence[Sequence[int]]) -> tuple[int, int, int, int]:
@@ -1155,8 +1189,10 @@ def _terms_of(
                 _Term(str(name), contrast if _one_unit_apart(list(cells)) else slope, cells[high])
             )
         elif few:
-            # a few values: each is a cell, and the term is shown when the smallest of them can be
-            numeric.append(_Term(str(name), slope, _least(list(few.values())[1:])))
+            # a few values: each is a cell, and the term is shown when the smallest of them can be; the rows off
+            # the commonest value say whether the others stay in the fit
+            cells_of = list(few.values())
+            numeric.append(_Term(str(name), slope, _least(cells_of[1:]), _off_commonest(cells_of)))
         elif apart:
             # one value for at least half of the rows: the term is carried by the rows off it
             numeric.append(_Term(str(name), slope, apart[list(apart)[1]]))
@@ -1226,7 +1262,7 @@ def _model_terms(
             Part(
                 id=f"term:{term.id}",
                 labels=term.labels,
-                support=dict(whole) if term.cell is None else _cell_support(term.cell, kind),
+                support=_term_support(term, whole, kind),
                 numbers=(
                     Number(estimate, row[estimate], cls, scale=_finite(se)),
                     Number("se", se, cls),
@@ -1501,7 +1537,7 @@ def _pooled_terms(
             Part(
                 id=f"term:{plan.id}",
                 labels=plan.labels,
-                support=dict(whole) if plan.cell is None else _cell_support(plan.cell, kind),
+                support=_term_support(plan, whole, kind),
                 numbers=tuple(numbers),
             )
         )
@@ -1612,6 +1648,16 @@ def _pooled_model(kind: str) -> Callable[[Any], tuple[list[Part], ResultRecord |
                     *sizes,
                     # the datasets whose fit reached a maximum: a term of a fit that did not is not compared
                     Number("converged_in", extra.get("converged_in", result.m), EXACT),
+                    # a count model's dispersion, the smallest and the largest over the datasets: a pooled Poisson
+                    # model recorded none, and so could not say that its standard errors are too small
+                    *(
+                        [
+                            Number("dispersion_min", extra["dispersion"][0], ITERATIVE),
+                            Number("dispersion_max", extra["dispersion"][1], ITERATIVE),
+                        ]
+                        if kind == "count" and extra.get("dispersion") is not None
+                        else []
+                    ),
                 ),
             ),
             *_reference_parts(levels, indicators, kind, dominant, values),

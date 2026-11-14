@@ -862,10 +862,19 @@ def test_a_covariate_of_a_few_values_has_the_counts_of_each_value() -> None:
     assert cells["score"]["8"] == (2, sum(died), sum(died))
     record = plan.record("logistic", logistic_regression(df, "died", ["dose", "age"]))
     assert record is not None
-    # a slope: a ratio per unit, with the smallest of each count over its values behind it
+    # a slope: a ratio per unit, with the smallest of each count over its values behind it; and, under names that
+    # end in _off, the counts of the rows off its commonest value (a slope has one parameter for every value:
+    # what leaves the fit with a rare value's rows is read on these, not on the rarest value)
     term = record.part("term:dose")
     assert term.labels == {"variable": "dose", "per": "unit"}
-    assert term.support == {"rows": 1, "events": min(died), "non_events": 1 - max(died)}
+    assert term.support == {
+        "rows": 1,
+        "events": min(died),
+        "non_events": 1 - max(died),
+        "rows_off": 2,
+        "events_off": sum(died),
+        "non_events_off": 2 - sum(died),
+    }
     # the other cell says what it is: every value of the covariate is a cell, and the term is no contrast with it
     reference = record.part("reference:dose")
     assert reference.labels == {"variable": "dose", "level": "0", "of": "values"}
@@ -877,13 +886,32 @@ def test_a_covariate_of_a_few_values_has_the_counts_of_each_value() -> None:
         "level": "0",
         "of": "values",
     }
-    for key, result in (
-        ("cox", cox_regression(df, "days", "died", ["dose", "age"], diagnostics=False)),
-        ("count", count_regression(df, "admissions", ["dose", "age"], exposure_col="years")),
+    # the commonest of nine values that as many rows hold: the first of them, and every other row is off it
+    held = df["score"].value_counts()
+    assert by_score.part("term:score").support["rows_off"] == len(df) - int(held.max())
+    for key, result, names in (
+        (
+            "cox",
+            cox_regression(df, "days", "died", ["dose", "age"], diagnostics=False),
+            ("rows_off", "events_off", "censored_off"),
+        ),
+        (
+            "count",
+            count_regression(df, "admissions", ["dose", "age"], exposure_col="years"),
+            ("rows_off", "events_off", "rows_with_events_off", "rows_without_events_off"),
+        ),
     ):
         other = plan.record(key, result)
         assert other is not None and other.part("term:dose").support["rows"] == 1, key
         assert other.part("reference:dose").support["rows"] == len(df) - 2, key
+        off = {name: n for name, n in other.part("term:dose").support.items() if "_off" in name}
+        assert tuple(off) == names and off["rows_off"] == 2, key
+    # no other term holds such counts: a level, an indicator and a covariate of many values have none
+    flagged = plan.record(
+        "logistic", logistic_regression(df, "died", ["transplanted", "arm", "age"])
+    )
+    assert flagged is not None
+    assert not [name for part in flagged.parts for name in part.support if name.endswith("_off")]
 
 
 def test_a_covariate_that_most_rows_hold_at_one_value_has_the_counts_on_and_off_it() -> None:
