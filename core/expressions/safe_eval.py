@@ -26,19 +26,23 @@ anyone reads it (``9 ** 9 ** 8`` would keep the server busy for minutes), in two
   column of texts that is repeated (``*``, ``mul``, ``np.multiply``), joined to another (``+``, ``add``,
   ``np.add``), padded, accumulated or rewritten (``str.replace``); a text written into every row (``replace``,
   ``where``, ``mask``, ``fillna``); the values of an array, with the width a text or a fixed-width text type gives
-  each of them (``np.full``, ``np.ones``, ``np.zeros``, ``np.where``, ``np.select``, ``np.array``, ``astype``); the
-  elements of a repeated list; the columns of a table asked for by a computed list (``df[['age'] * 10000]``); the
-  intervals asked of ``pd.cut`` and ``pd.qcut`` as a number; the digits of a whole number raised to a power; the
-  order of ``np.diff``, which is a pass over its values each. Each size passing on its own bounds nothing: two
+  each of them, an array of such a type included (``np.full``, ``np.ones``, ``np.zeros``, ``np.where``,
+  ``np.select``, ``np.array``, ``astype``, ``+``); the elements of a repeated list; what a selection by a computed
+  list of labels selects, a label held several times counted each time (``df[['age'] * 10000]``,
+  ``df['age'][[0] * 3500][[0] * 3500]``); the intervals asked of ``pd.cut`` and ``pd.qcut`` as a number; the digits
+  of a whole number raised to a power; the order of ``np.diff``, which is a pass over its values each. A sum of
+  texts (``sum``, ``np.sum``, ``np.nansum``) is refused: it has no use in a formula, and numpy joins texts one by
+  one, in a time that grows as the square of their length. Each size passing on its own bounds nothing: two
   products of 10,000 build a hundred million copies, twenty padded columns added are twenty times the column, and
   ``np.ones(len(df) ** 4)`` asks for a size that is no number written in the expression. One budget holds for a
   step: ``MAX_ELEMENTS`` values or characters, or ``MAX_PER_ROW`` characters a row in a table of more rows (codes
   padded to twelve characters are not refused in a table of a million rows).
 
-What is not bounded: the time a pattern takes (pandas runs it with an engine that backtracks), and what several
-steps hold together (each step has the budget: an expression of a few steps holds a few times as much). The budget
-stops what one line can ask of the server; it is no memory limit and no time limit, which a process has only from
-outside. An expression nested too deep to be walked is refused as too complex.
+What is not bounded: the time a pattern takes (pandas runs it with an engine that backtracks), what several steps
+hold together (each step has the budget: an expression of a few steps holds a few times as much), and what a step
+builds by a way these checks do not see. The budget refuses what the checks see before it is built; it is no
+memory limit and no time limit, which a process has only from outside (a worker with both is planned). An
+expression nested too deep to be walked is refused as too complex.
 """
 
 from __future__ import annotations
@@ -770,12 +774,37 @@ def _times(left: Any, right: Any) -> Any:
     return left * right
 
 
+def _array_width(value: Any) -> int:
+    """The characters each value of an array of a fixed-width text type holds (``'U100000'``), whatever it holds:
+    numpy gives every value of what is built from it at least that width. 0 for anything else."""
+    if isinstance(value, np.ndarray):
+        return _text_width(value.dtype)
+    return 0
+
+
+def _side_width(side: Any) -> int:
+    """The characters a side of a sum gives each value of the result: a text's, an array's fixed width, a column's
+    longest text."""
+    if isinstance(side, str):
+        return len(side)
+    width = _array_width(side)
+    if width:
+        return width
+    return _characters(side)[1] if _holds_text(side) else 0
+
+
 def _check_plus(left: Any, right: Any) -> None:
     """What a sum builds when it joins: two texts, or two columns of texts, row by row (twenty padded columns
-    added are twenty times the column, each passing on its own), and two lists end to end. Numbers add as they
-    did."""
+    added are twenty times the column, each passing on its own), two lists end to end, and an array of a
+    fixed-width text type, whose width every value of the result takes. Numbers add as they did."""
     if isinstance(left, list | tuple) and isinstance(right, list | tuple):
         _over(_weight(left) + _weight(right), 0, "values")
+        return
+    if _array_width(left) or _array_width(right):
+        rows = max(
+            (int(np.size(side)) for side in (left, right) if not isinstance(side, str)), default=1
+        )
+        _over(rows * (_side_width(left) + _side_width(right)), rows)
         return
     if not (_holds_text(left) and _holds_text(right)):
         return
@@ -794,20 +823,41 @@ def _plus(left: Any, right: Any) -> Any:
     return left + right
 
 
+def _selected(axis: pd.Index, key: Any) -> int | None:
+    """How many entries of ``axis`` a list of labels selects, a label that ``axis`` holds several times counted
+    each time it is asked for; None for a key that is no list of labels (a mask, a slice, a single label)."""
+    if isinstance(key, np.ndarray | pd.Index | pd.Series):
+        if key.dtype == bool:
+            return None
+        labels = key.tolist()
+    elif isinstance(key, list | tuple):
+        labels = list(key)
+    else:
+        return None
+    if not labels or all(isinstance(one, bool | np.bool_) for one in labels):
+        return None  # a mask written as a list
+    if axis.is_unique:
+        return len(labels)  # each label found once, or pandas says it is missing
+    counts = axis.value_counts(dropna=False)
+    try:
+        return sum(int(counts.get(label, 0)) for label in labels)
+    except TypeError:  # a label that is no key: pandas says what is wrong with it
+        return None
+
+
 def _item(receiver: Any, key: Any) -> Any:
-    """``receiver[key]``, the key being computed. A table asked for more columns than it holds is asked for some
-    of them many times: ``df[['age'] * 10000]`` is ten thousand copies of a column, the list itself being ten
-    thousand names."""
+    """``receiver[key]``, the key being computed, counted by what it selects. A table asked for more columns than
+    it holds is asked for some of them many times (``df[['age'] * 10000]`` is ten thousand copies of a column),
+    and a label held several times is selected each time: ``df['age'][[0] * 3500]`` holds 3,500 rows labelled 0,
+    and the same selection made of it again holds 12,250,000."""
     if isinstance(receiver, pd.DataFrame):
-        names = None
-        if (
-            isinstance(key, list | tuple)
-            or isinstance(key, np.ndarray | pd.Index)
-            and key.dtype != bool
-        ):
-            names = len(key)
-        if names is not None and names > receiver.shape[1]:
-            _over(len(receiver) * names, len(receiver), "values")
+        chosen = _selected(receiver.columns, key)
+        if chosen is not None and chosen > receiver.shape[1]:
+            _over(len(receiver) * chosen, len(receiver), "values")
+    elif isinstance(receiver, pd.Series):
+        chosen = _selected(receiver.index, key)
+        if chosen is not None and chosen > len(receiver):
+            _over(chosen, len(receiver), "values")
     return receiver[key]
 
 
@@ -824,6 +874,45 @@ def _widest_text(value: Any, depth: int = 0) -> int:
     if isinstance(value, list | tuple):
         return max((_widest_text(one, depth + 1) for one in value[:MAX_WIDTH]), default=0)
     return 0
+
+
+_TEXT_SUM = "A sum of texts is not allowed in a formula: join texts with +."
+
+
+def _strings_in(value: Any, depth: int = 0) -> bool:
+    """Whether a value holds a text: a text, a column, an array or a table holding one, or a list of them (read
+    once each, a list repeated holding one column many times)."""
+    if isinstance(value, str | bytes):
+        return True
+    if isinstance(value, pd.DataFrame):
+        return any(_strings_in(value.iloc[:, place], depth + 1) for place in range(value.shape[1]))
+    if isinstance(value, pd.Series | pd.Index | np.ndarray):
+        kind = value.dtype
+        if getattr(kind, "kind", "") in "US" or isinstance(kind, pd.StringDtype):
+            return True
+        if not pd.api.types.is_object_dtype(kind):
+            return False
+        found = pd.api.types.infer_dtype(np.asarray(value, dtype=object).ravel(), skipna=True)
+        return found in ("string", "bytes", "mixed", "mixed-integer")
+    if isinstance(value, list | tuple) and depth < 4:
+        seen: set[int] = set()
+        for item in value[:MAX_WIDTH]:
+            if id(item) in seen:
+                continue
+            seen.add(id(item))
+            if _strings_in(item, depth + 1):
+                return True
+    return False
+
+
+def _check_sum(receiver: Any, kwargs: dict) -> None:
+    """A sum of texts joins them: it has no use in a formula, and numpy joins texts one by one, in a time that
+    grows as the square of their length (a list of 1,100 padded columns of ten rows took 40 seconds). A table's
+    sum of its numbers only is a sum of numbers."""
+    if isinstance(receiver, pd.DataFrame) and kwargs.get("numeric_only") is True:
+        return
+    if _strings_in(receiver):
+        raise UnsafeExpressionError(_TEXT_SUM)
 
 
 def _check_filled(receiver: Any, args: tuple, kwargs: dict) -> None:
@@ -967,6 +1056,8 @@ def _method(receiver: Any, name: str, *args: Any, **kwargs: Any) -> Any:
         _check_filled(receiver, args, kwargs)
     elif name == "astype":
         _check_astype(receiver, args, kwargs)
+    elif name == "sum":
+        _check_sum(receiver, kwargs)
     target = receiver
     *through, last = name.split(".")
     for part in through:
@@ -976,7 +1067,7 @@ def _method(receiver: Any, name: str, *args: Any, **kwargs: Any) -> Any:
 
 _FILLED = frozenset({"replace", "where", "mask", "fillna"})  # a value written into the rows
 # of a column, an array or a table
-_GUARDED_METHODS = frozenset({"mul", "pow", "cumsum", "add", "astype"}) | _FILLED
+_GUARDED_METHODS = frozenset({"mul", "pow", "cumsum", "add", "astype", "sum"}) | _FILLED
 _GUARDED_STR_METHODS = frozenset({"pad", "zfill", "replace"})  # of its texts
 
 
@@ -1010,6 +1101,10 @@ def _array_of(function: Callable[..., Any], rows: int) -> Callable[..., Any]:
         fill = args[1] if len(args) > 1 else kwargs.get("fill_value")
         if isinstance(fill, str):  # every value as wide as the text
             _over(asked * max(len(fill), 1), asked)
+        if (
+            _array_width(fill) > MAX_PER_ROW
+        ):  # or as an array of a wide text type, spread over every value
+            _over(asked * _array_width(fill), asked)
         # or as wide as a fixed-width text type says (the third argument of np.full, the second of the others)
         place = 2 if function is np.full else 1
         width = _text_width(kwargs.get("dtype", args[place] if len(args) > place else None))
@@ -1024,7 +1119,16 @@ def _chosen(function: Callable[..., Any]) -> Callable[..., Any]:
     """``np.where`` and ``np.select``: a text given as a single value is the width of every value of the result."""
 
     def chosen(*args: Any, **kwargs: Any) -> Any:
-        widest = max((_fixed_text(one) for one in (*args[1:], *kwargs.values())), default=0)
+        given = [*args[1:], *kwargs.values()]
+        # an array of a wide text type, given as it is or in np.select's list of choices, is spread too
+        arrays = [
+            *given,
+            *(item for one in given if isinstance(one, list | tuple) for item in one[:MAX_WIDTH]),
+        ]
+        widest = max(
+            [*(_fixed_text(one) for one in given), *(_array_width(one) for one in arrays)],
+            default=0,
+        )
         if widest > MAX_PER_ROW:
             first = args[0] if args else None
             if isinstance(first, list | tuple) and first:  # np.select: a list of conditions
@@ -1085,6 +1189,17 @@ def _summed(function: Callable[..., Any]) -> Callable[..., Any]:
     return summed
 
 
+def _no_text_sum(function: Callable[..., Any]) -> Callable[..., Any]:
+    """``np.sum`` and ``np.nansum``: a sum of texts is refused (:func:`_check_sum`)."""
+
+    def reduced(*args: Any, **kwargs: Any) -> Any:
+        if args and _strings_in(args[0]):
+            raise UnsafeExpressionError(_TEXT_SUM)
+        return function(*args, **kwargs)
+
+    return reduced
+
+
 def _differenced(function: Callable[..., Any]) -> Callable[..., Any]:
     """``np.diff``: each order is a pass over the values, and an order is a number an expression may write up to
     10^15 (``n=10**9`` would run for minutes on ten rows). The passes are counted with the values."""
@@ -1140,6 +1255,8 @@ _NP_GUARDS: dict[str, Callable[[Callable[..., Any]], Callable[..., Any]]] = {
     "cumsum": _accumulated,
     "add": _summed,
     "diff": _differenced,
+    "sum": _no_text_sum,
+    "nansum": _no_text_sum,
 }
 _BINNED = frozenset({"cut", "qcut"})
 

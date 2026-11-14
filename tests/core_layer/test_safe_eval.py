@@ -615,3 +615,71 @@ def test_ordinary_sums_selections_and_labels_are_not_refused() -> None:
     assert evaluate("np.diff(df['age'], n=2)", large).shape == (rows - 2,)
     assert evaluate("[1, 2] + [3]", large) == [1, 2, 3]
     assert evaluate("'a' + 'b'") == "ab"
+
+
+# --- what the re-read of the round found: a sum of texts, a selection made twice, an array of a wide text type ---
+
+_WIDE = "np.array(['x'], dtype='U100000')"
+
+
+@pytest.mark.parametrize(
+    ("expression", "rows", "message"),
+    [
+        # a sum of texts joins them, one by one: 1,100 padded columns of ten rows took 40 seconds
+        ("np.sum([df['site'].str.pad(1000)] * 1100)", 10, "A sum of texts"),
+        ("np.nansum([df['site'].str.pad(1000)] * 1100)", 10, "A sum of texts"),
+        ("np.sum(df['site'])", 10, "A sum of texts"),
+        ("df['site'].sum()", 10, "A sum of texts"),
+        ("df['site'].astype('object').sum()", 10, "A sum of texts"),
+        ("df.sum()", 10, "A sum of texts"),
+        # a label held several times is selected each time: 3,500 rows labelled 0, selected 3,500 times
+        ("df['age'][[0] * 3500][[0] * 3500]", 10, "builds more than"),
+        ("df[['age'] * 400][['age'] * 400]", 100, "builds more than"),
+        # an array of a wide text type, spread over every row
+        (f"np.full(len(df), {_WIDE})", 200, "builds more than"),
+        (f"np.where(df['age'] > 1000, 'y', {_WIDE})", 200, "builds more than"),
+        (f"np.select([df['age'] > 1000], [{_WIDE}], 'y')", 200, "builds more than"),
+        (f"{_WIDE} + np.array(df['site'], dtype=str)", 200, "builds more than"),
+        (f"np.add({_WIDE}, np.array(df['site'], dtype=str))", 200, "builds more than"),
+        (
+            "np.array(['x'], dtype='U' + str(10 ** 5)) + np.array(df['site'], dtype=str)",
+            200,
+            "builds more than",
+        ),
+    ],
+)
+def test_the_routes_the_re_read_found_are_closed(expression: str, rows: int, message: str) -> None:
+    """Each was accepted beyond the budget, and grows without limit: ``[0] * 30000`` selected twice is 900 million
+    values, and a width of a million characters spread over a thousand rows four gigabytes."""
+    rng = np.random.default_rng(1)
+    df = pd.DataFrame(
+        {"site": rng.choice(["Alpha", "Beta"], rows), "age": rng.normal(60, 9, rows).round(1)}
+    )
+    with pytest.raises(UnsafeExpressionError, match=message):
+        evaluate(expression, df)
+
+
+def test_sums_of_numbers_and_selections_compute_as_before() -> None:
+    """A sum of numbers, a table's sum of its numbers, a selection by a mask or by a few labels."""
+    df = pd.DataFrame(
+        {
+            "site": ["Luxembourg", "Esch", "Metz", "Arlon"] * 50,
+            "age": list(range(40, 80)) * 5,
+            "flag": [True, False] * 100,
+        }
+    )
+    assert evaluate("df['age'].sum()", df) == sum(range(40, 80)) * 5
+    assert evaluate("np.sum(df['age'])", df) == sum(range(40, 80)) * 5
+    assert evaluate("np.nansum(df['age'])", df) == sum(range(40, 80)) * 5
+    assert evaluate("np.sum([df['age'], df['age']])", df) == 2 * sum(range(40, 80)) * 5
+    assert evaluate("df['flag'].sum()", df) == 100
+    assert evaluate("df.sum(numeric_only=True)", df)["age"] == sum(range(40, 80)) * 5
+    assert evaluate("df[['age', 'flag']].sum(axis=1)", df).iloc[0] == 41
+    assert evaluate("df['age'][[0, 1, 2]]", df).tolist() == [40, 41, 42]
+    assert evaluate("df['age'][df['age'] > 78]", df).tolist() == [79] * 5
+    assert evaluate("df[df['site'] == 'Esch']", df).shape == (50, 3)
+    assert evaluate("df[['age'] * 2]", df).shape == (200, 2)
+    assert evaluate("np.where(df['age'] > 50, 'older', 'younger')", df)[0] == "younger"
+    assert evaluate("np.full(len(df), np.array(['n/a'], dtype='U3'))", df)[0] == "n/a"
+    labelled = evaluate("np.array(['site '], dtype='U5') + np.array(df['site'], dtype=str)", df)
+    assert labelled[1] == "site Esch"
