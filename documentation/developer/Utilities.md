@@ -1081,7 +1081,21 @@ the credentials of an address (``http://user:password@host``), and the value of 
 
 - **Returns**: `str`
 
-``value`` on one line, for a log entry: a typed name, path or formula cannot forge another entry.
+``value`` on one line, for a log entry: a typed name, path or formula cannot forge another entry. Each
+character that is not printable is written as its escape (``\n``, ``\x1b``, ``\u2028``): a line break
+of another kind (U+2028, U+0085) breaks a line in many log viewers, and a terminal's escape rewrites the
+screen of whoever reads the log.
+
+### def `audit_logger` (logging_config.py)
+
+- **Arguments**: ``
+
+- **Returns**: `logging.Logger`
+
+The logger of the record an organisation answers from: who confirmed that study data may go to an AI
+recipient, who withdrew it, the confirmations a sign-out ended, and the engines started under one. At INFO
+whatever ``CMP_LOG_LEVEL`` says: that setting quiets the rest of the log, and must not silence this record.
+The record is the server's log, kept as long as the log is (``.env.example`` says how).
 
 ### def `without_values` (logging_config.py)
 

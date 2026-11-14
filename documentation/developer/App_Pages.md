@@ -93,6 +93,16 @@ No description available.
 
 A cut-off found on the reversed marker (lower values pointing to the condition), on the marker's own scale.
 
+### def `_sides_of` (analysis_diagnostic.py)
+
+- **Arguments**: `ci: Any, scores: pd.Series, lower: bool`
+
+- **Returns**: `ComplexType`
+
+The participants on each side of each end of a cut-off's range (below it, then above it, on the marker's own
+scale; an end itself counted on the side it would call positive). An end is a score found in a resample, a
+participant's own when few lie beyond it: the dossier writes an end only when enough lie on each side.
+
 ### def `accuracy_of` (analysis_diagnostic.py)
 
 - **Arguments**: `df: pd.DataFrame, outcome: str, present: Any, score: str, direction: str, mode: str, cutoff: ComplexType, prevalence: ComplexType`
@@ -3616,6 +3626,16 @@ ANCOVA results (biostats.linear): Type II table, interpretation, adjusted means,
 
 No description available.
 
+### def `zscore_file` (epidemiology.py)
+
+- **Arguments**: `z_df: pd.DataFrame, target_vars: list[str], z_cols: list[str], group_col: ComplexType`
+
+- **Returns**: `pd.DataFrame`
+
+What the z-score file holds: what was asked, and no other column of the data. The row number, each variable
+standardised beside its z-score, and the reference grouping when one was chosen: the file held every column of
+every row (an identifier, initials, a birth date) for the z-score of one variable.
+
 ### def `run_zscore_analysis` (epidemiology.py)
 
 - **Arguments**: `df, analyzer`
@@ -4995,7 +5015,7 @@ _Variable map page: taxonomy of variables, formulas, clustering and the knowledg
 _No module description._
 
 **Imports**:
-`functools`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `ui.components.no_dataset`, `ui.components.text.plain`, `ui.state.get_state`
+`functools`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `plotly.subplots.make_subplots`, `scipy.stats`, `utils.export_utils`, `utils.visualization_utils`, `app_pages.data_monitoring`, `ui.components.no_dataset`, `ui.components.text.plain`, `ui.state.get_state`
 
 ### def `hover_columns_input` (visualization.py)
 
@@ -5006,6 +5026,17 @@ _No module description._
 Extra columns for the tooltip of each point, passed to Plotly Express (``hover_data``), which matches them to the
 points of every trace. Offered where each mark is one row (scatter, line without aggregation): on a bar or a
 box, a row's value has no point to show it.
+
+### def `density_curves` (visualization.py)
+
+- **Arguments**: `samples: list, labels: list[str], colors: list[str]`
+
+- **Returns**: `go.Figure`
+
+The smooth density of each group, one curve each: a Gaussian kernel density with Scott's bandwidth, as
+figure_factory's distplot drew it before Plotly 7.1 removed it (the mode raised an error). Each curve runs
+from three bandwidths below its group's smallest value to three above its largest, where it falls to about
+nothing, as seaborn draws one; a group of one distinct value has no density, and is left out.
 
 ### def `app` (visualization.py)
 

@@ -216,6 +216,17 @@ server's answer ("ollama@<the host that runs it>"); or an Ollama outside the pri
 None for an Ollama that runs its model on this machine or the private network. The model is always given, so
 that no caller forgets it (``server_recipient`` names the Ollama server itself).
 
+### def `answered_host` (ai_payload.py)
+
+- **Arguments**: `remote_host: str`
+
+- **Returns**: `str`
+
+The host an Ollama server answers that it runs a model at, as a recipient names it: the host of an address
+read as Settings reads one (``utils.settings.server_address``), else :data:`UNREADABLE_ADDRESS`, still a
+recipient that needs the confirmation. An answer is no address the server chose: a "[" in it stopped the
+AI card with an error, and a line separator or a terminal's escape reached the record's line.
+
 ### def `server_recipient` (ai_payload.py)
 
 - **Arguments**: `provider: ComplexType, base_url: ComplexType`
@@ -3298,7 +3309,7 @@ The mixin pattern allows splitting a large class into focused modules
 while maintaining a single class interface for existing code._
 
 **Imports**:
-`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `core.workspace.UserScope`, `manage.ai_payload.OLLAMA`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `manage.server_addresses.ADDRESS_REMOVED`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.redact_secrets`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
+`json`, `logging`, `os`, `re`, `pathlib.Path`, `pandas`, `rapidfuzz.process`, `core.workspace.UserScope`, `manage.ai_payload.OLLAMA`, `manage.ai_payload.column_profile`, `manage.ai_payload.document_name`, `manage.ai_payload.frequent_values`, `manage.ai_payload.local_providers`, `manage.ai_payload.provider_label`, `manage.ai_payload.recipient`, `manage.ai_payload.safe_stats`, `manage.ai_payload.server_recipient`, `manage.ai_payload.store_recipient`, `manage.ai_payload.taxonomy_for_prompt`, `manage.rag.providers.AI_PROVIDERS`, `manage.rag.providers.cloud_providers`, `manage.rag.providers.declared`, `manage.rag.providers.default_models`, `manage.rag.providers.default_provider`, `manage.rag.providers.embedding_providers`, `manage.rag.providers.server_key`, `manage.server_addresses.ADDRESS_REMOVED`, `prompts.anomaly_criteria_prompt`, `prompts.context_analysis`, `prompts.refine_taxonomy`, `prompts.wise_enrichment`, `utils.llm_utils.ProviderError`, `utils.llm_utils.StructuredOutputHelper`, `utils.llm_utils.clean_json_response`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.logging_config.audit_logger`, `utils.logging_config.redact_secrets`, `utils.logging_config.single_line`, `rag_computed_vars.ComputedVarsMixin`, `rag_documents.DocumentsMixin`, `rag_taxonomy.TaxonomyMixin`
 
 ### class `RAGManager` (rag_manager.py)
 
@@ -3368,8 +3379,15 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **uses_cloud**(`self`) -> `bool`
   > Whether data leaves this machine and the private network.
 
+- **_account**(`self, account: ComplexType`) -> `str`
+  > The account a confirmation is recorded under: the signed-in name the page passes, else the workspace's.
+
 - **confirm**(`self`) -> `None`
-  > The user confirms that data may be sent to these recipients together (one box of Settings).
+  > The user confirms that data may be sent to these recipients together (one box of Settings). The server log
+  > keeps a line for each confirmation: the account, the recipients and the time, never what is sent, so that an
+  > organisation asked whether study data went to a cloud provider on a given day, and by whom, has an answer
+  > (the confirmation itself lives in one browser tab). ``again``: the box was ticked earlier in the session, and
+  > its line written then (an engine manager rebuilt since).
 
 - **is_confirmed**(`self, recipients: frozenset[str]`) -> `bool`
   > No description available.
@@ -3401,8 +3419,15 @@ Computed Variable Methods (from ComputedVarsMixin):
 
 - **withdraw_consent**(`self`) -> `bool`
   > The user withdraws the confirmation of ``recipients`` (all of them when none is named): every confirmation
-  > that names one of them goes. An engine that sends data to one of them stops at once: the confirmation used
-  > to be checked only when the engine started, so it kept answering. Returns whether it stopped.
+  > that names one of them goes, and the server log keeps a line for each (the account, the recipients and the
+  > time). An engine that sends data to one of them stops at once: the confirmation used to be checked only when
+  > the engine started, so it kept answering. Returns whether it stopped.
+
+- **end_confirmations**(`self`) -> `None`
+  > The session ends (a sign-out, or another user signed in to it): every confirmation it held ends with it,
+  > and the record keeps a line for each, under the account that gave it. Without it the record said when a
+  > confirmation began and not when it ended. A closed tab or a server stopped writes nothing: a confirmation
+  > is read as held until a withdrawal, a sign-out or the end of that session, at the latest.
 
 - **is_available**(`self`) -> `None`
   > Check if RAG dependencies are available.
@@ -3431,7 +3456,7 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **_analyze_global_context**(`self, texts, dataset_columns`) -> `None`
   > Analyzes a sample of the documents and dataset columns to determine the global context.
 
-- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files, embedding_model, provider, base_url, vector_engine, qdrant_url, qdrant_api_key, embedding_provider, embedding_api_key, embedding_base_url`) -> `None`
+- **initialize_system**(`self, model_name, adherence_score, temperature, dataset_columns, use_existing_db, progress_callback, selected_files, embedding_model, provider, base_url, vector_engine, qdrant_url, qdrant_api_key, embedding_provider, embedding_api_key, embedding_base_url, account`) -> `None`
   > Initialize the RAG system with documents, embeddings, the vector database and the LLM.
   >
   > ``embedding_provider`` embeds the documents when it differs from the answering ``provider``; Claude
@@ -3442,7 +3467,9 @@ Computed Variable Methods (from ComputedVarsMixin):
   > the embedded mode (default ``CMP_QDRANT_URL``).
   >
   > Without a ``provider``, the engine's own (the server's ``CMP_AI_PROVIDER``, local Ollama by default); without
-  > a model, the first its provider declares.
+  > a model, the first its provider declares. An engine whose recipients need the confirmation writes a line in
+  > the record as it starts (``account``: the signed-in name, else the workspace's): a confirmation is a
+  > permission, and the line of the start says that data could then be sent.
 
 - **update_adherence_score**(`self, adherence_score`) -> `None`
   > Updates the adherence score and rebuilds the chain without full re-initialization.
@@ -3461,6 +3488,15 @@ Computed Variable Methods (from ComputedVarsMixin):
 - **suggest_anomaly_criteria**(`self, description, columns, sample_data, mode`) -> `None`
   > Suggests plausibility rules or inclusion criteria based on natural language description.
   > Returns a list of criteria dictionaries.
+
+### def `_record` (rag_manager.py)
+
+- **Arguments**: `message: str, account: str, recipients: frozenset[str]`
+
+- **Returns**: `None`
+
+One line of the record of the AI confirmations (``utils.logging_config.audit_logger``): the account and the
+recipients, each on one line, never what is sent; the time is the log's own.
 
 ### def `_passages` (rag_manager.py)
 
@@ -3715,6 +3751,16 @@ midpoint ends in .5: 1,119.5, which three figures rounded to 1,120).
 
 The median's interval: "not reached" alone when neither end is reached (the lower one is reached first).
 
+### def `dossier_min_n` (report_tables.py)
+
+- **Arguments**: ``
+
+- **Returns**: `int`
+
+The fewest participants whose values the dossier writes: a group's median, its interval and its curve; a cut-off
+found on the data, its range and the measures at it. One number for every rule of the dossier, so that it can be
+the study's own (the privacy rules set in one place) where it is ``DOSSIER_MIN_N`` today.
+
 ### def `_shown` (report_tables.py)
 
 - **Arguments**: `n: Any`
@@ -3738,6 +3784,39 @@ No description available.
 - **Returns**: `str`
 
 No description available.
+
+### def `_few_called` (report_tables.py)
+
+- **Arguments**: `acc: Any, least: int`
+
+- **Returns**: `str`
+
+The side a cut-off calls fewer than ``least`` participants to ("positive", "negative"; "" when it calls enough to
+each). Found on the data, such a cut-off is the score of the participant who holds it, or of a few: at the largest
+score, the score of the one called positive, and every measure at it (sensitivity, the predictive values, the
+likelihood ratios) reads the small row of the 2x2 table, so that with the outcome's two totals it gives whether
+they had the condition.
+
+### def `_thin_side` (report_tables.py)
+
+- **Arguments**: `auc: dict, least: int`
+
+- **Returns**: `str`
+
+The side of the reference standard that holds fewer than ``least`` participants ("have the condition", "are
+without the condition"; "" when both hold enough, or for a result kept before its sizes). The AUC ranks each of
+them among the others, and the measures at any cut-off read them one by one: with one participant with the
+condition among 400, "AUC 1 (1 to 1)" said that the largest score was theirs.
+
+### def `_youden_range` (report_tables.py)
+
+- **Arguments**: `youden: dict, least: int`
+
+- **Returns**: `str`
+
+The sentence of the range of a cut-off found on the data: the middle 95% of the cut-offs found in resamples. Each
+end is a score found in a resample, a participant's own when few lie beyond it: it is written only when ``least``
+participants or more lie on each side of it, and otherwise named by where it lies.
 
 ### def `_pooled_frame` (report_tables.py)
 
