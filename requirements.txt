@@ -76,7 +76,7 @@ formulaic==1.2.2
     #   statsmodels
 google-auth==2.62.0
     # via google-genai
-google-genai==3.0.0
+google-genai==3.2.0
     # via cohortstudio
 grpcio==1.84.0
     # via qdrant-client
