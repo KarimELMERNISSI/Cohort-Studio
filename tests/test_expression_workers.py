@@ -73,6 +73,18 @@ def _run(pool: ExpressionWorkers, expression: str, frame: pd.DataFrame | None) -
     return pool(_tree(expression), frame, policy=DEFAULT_POLICY, extra_locals={})
 
 
+def _warm_replacement(pool: ExpressionWorkers, before: list[int], seconds: float = 60.0) -> None:
+    """Waits until a worker that is not one of ``before`` is idle in the pool: the replacement the pool starts in the
+    background after a worker is ended."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        with pool._changed:
+            if any(w.process.pid not in before and w.alive() for w in pool._idle):
+                return
+        time.sleep(0.1)
+    raise AssertionError("no replacement worker was started")
+
+
 def test_a_worker_computes_what_this_process_computes(pool: ExpressionWorkers) -> None:
     frame = pd.DataFrame(
         {
@@ -110,12 +122,7 @@ def test_a_pattern_that_backtracks_is_stopped_by_the_time_limit(pool: Expression
     assert time.monotonic() - started < 6
     assert caught.value.reason == "time" and "repeats a repetition" in str(caught.value)
     assert _gone(before)
-    replaced = time.monotonic() + 60
-    while (
-        not [pid for pid in pool.processes() if pid not in before] and time.monotonic() < replaced
-    ):
-        time.sleep(0.2)  # no call made: the pool starts the replacement itself
-    assert [pid for pid in pool.processes() if pid not in before], "no replacement was started"
+    _warm_replacement(pool, before)  # no call made: the pool starts the replacement itself
     started = time.monotonic()
     with pytest.raises(ExpressionStopped) as again:
         _run(pool, "df['code'].str.contains('(a+)+$')", frame)
@@ -211,15 +218,13 @@ def test_a_call_that_waited_tells_the_page_once_when_it_ends(pool: ExpressionWor
     told: list[bool] = []
     frame = pd.DataFrame({"code": pd.Series(["a" * 40 + "b"], dtype=object)})
     _run(pool, "len(df)", frame)
+    before = pool.processes()
     with waiting(told.append), pytest.raises(ExpressionStopped):
         _run(pool, "df['code'].str.contains('(aa+)+$')", frame)
     assert told and all(told[:-1]) and told[-1] is False and told.count(False) == 1
-    told.clear()
-    with waiting(told.append):
-        _run(
-            pool, "len(df)", frame
-        )  # the stop ended the worker: this call waits for one to start, and says so
-    assert told and told[-1] is False and told.count(False) == 1
+    # the stop ended the worker and its replacement starts in the background: whether the next call waits for it
+    # depends on how fast a process starts here (under a second on Linux), so it is waited for first
+    _warm_replacement(pool, before)
     told.clear()
     with waiting(told.append):
         _run(pool, "len(df)", frame)  # a quick call on a warm worker says nothing
