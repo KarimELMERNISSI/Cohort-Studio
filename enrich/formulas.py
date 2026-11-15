@@ -7,7 +7,6 @@ it as well, so a derived variable is recomputed exactly as it was created.
 """
 
 import ast
-import datetime as dt
 import logging
 import re
 from collections.abc import Iterable
@@ -18,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from core.expressions import DEFAULT_POLICY, evaluate_tree
+from core.expressions.runner import HELPERS, SAFE_SUB
 from ingest.analyzer import DataAnalyzer
 from ingest.dates import smart_parse_dates
 from utils.logging_config import single_line
@@ -458,30 +458,13 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
     except Exception as e:
         logger.debug("Date conversion failed: %s", e)
 
-    # Helper for robust subtraction (handles Date-Date -> Days automatically)
-    def safe_sub(a, b):
-        try:
-            res = a - b
-            # If result is a Series with timedelta dtype
-            if hasattr(res, 'dtype') and pd.api.types.is_timedelta64_dtype(res.dtype):
-                return res.dt.days
-            # If result is a scalar Timedelta
-            elif isinstance(res, (pd.Timedelta, dt.timedelta)):
-                return res.days
-            return res
-        except Exception:
-            return a - b
-
-    # AST Transformer to rewrite Subtraction: A - B  -->  safe_sub(A, B)
+    # A - B is read in days when it is a difference of two dates: __safe_sub__(A - B), the subtraction itself the
+    # evaluator's, with its checks (core.expressions.runner.in_days, a helper registered by its name)
     class DateSubRewriter(ast.NodeTransformer):
         def visit_BinOp(self, node):
             self.generic_visit(node)
             if isinstance(node.op, ast.Sub):
-                return ast.Call(
-                    func=ast.Name(id='__safe_sub__', ctx=ast.Load()),
-                    args=[node.left, node.right],
-                    keywords=[]
-                )
+                return ast.Call(func=ast.Name(id=SAFE_SUB, ctx=ast.Load()), args=[node], keywords=[])
             return node
 
     # The columns are renamed in the formula's tree, never in its text: a text literal that holds a column's name
@@ -500,7 +483,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
             return ast.copy_location(ast.Name(id=name, ctx=node.ctx), node) if name else node
 
     local_vars: dict[str, Any] = {columns[name]: dataset[name] for name in identified_columns}
-    local_vars['__safe_sub__'] = safe_sub
+    local_vars[SAFE_SUB] = HELPERS[SAFE_SUB]
     logger.debug("evaluate_formula: %d variables available; formula=%s", len(columns), single_line(formula))
 
     try:

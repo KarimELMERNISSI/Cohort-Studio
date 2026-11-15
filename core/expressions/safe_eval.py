@@ -64,10 +64,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-
-class UnsafeExpressionError(ValueError):
-    """The expression uses a construct that is not allowed."""
-
+from core.expressions.errors import UnsafeExpressionError
+from core.expressions.runner import installed
 
 # what an expression may ask for (far beyond any clinical formula, far below what keeps a server busy)
 MAX_CONSTANT = 1e15  # a constant, or a power of constants
@@ -1556,7 +1554,26 @@ def evaluate_tree(
     policy: ExpressionPolicy = DEFAULT_POLICY,
     extra_locals: Mapping[str, Any] | None = None,
 ) -> Any:
-    """Validate and evaluate a tree with empty builtins and restricted ``np`` / ``pd`` facades."""
+    """
+    Validate and evaluate a tree, through the runner installed (:mod:`core.expressions.runner`): in this process
+    when none is (:func:`compute_here`), as always; in the application, in a worker process with a time limit and
+    a memory limit. Every computation of an expression comes here.
+    """
+    runner = installed()
+    if runner is None:
+        return compute_here(tree, df, policy=policy, extra_locals=extra_locals)
+    return runner(tree, df, policy=policy, extra_locals=dict(extra_locals or {}))
+
+
+def compute_here(
+    tree: ast.Expression,
+    df: pd.DataFrame | None = None,
+    *,
+    policy: ExpressionPolicy = DEFAULT_POLICY,
+    extra_locals: Mapping[str, Any] | None = None,
+) -> Any:
+    """Validate and evaluate a tree in this process, with empty builtins and restricted ``np`` / ``pd``
+    facades: what a runner, and a worker, compute with."""
     extra_locals = dict(extra_locals or {})
     validate_tree(tree, policy=policy, extra_names=frozenset(extra_locals))
     try:
