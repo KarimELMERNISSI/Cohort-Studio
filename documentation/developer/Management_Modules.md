@@ -3884,6 +3884,15 @@ No description available.
 
 No description available.
 
+### def `_points` (report_tables.py)
+
+- **Arguments**: `share: float`
+
+- **Returns**: `str`
+
+A difference of two shares in percentage points, one decimal, a half rounded away from zero, as the page
+writes it (ui.guidance.numbers.fixed): "-10.6", never "-0.0".
+
 ### def `_p` (report_tables.py)
 
 - **Arguments**: `value: Any`

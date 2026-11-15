@@ -304,7 +304,7 @@ what it was computed on. The calculators read the numbers typed: their fields st
 their result says where its numbers came from._
 
 **Imports**:
-`__future__.annotations`, `types.SimpleNamespace`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.standardised_ratio`, `biostats.reliability.category`, `biostats.reliability.category_order`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `types.SimpleNamespace`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.reference_risks`, `biostats.rates.standardised_ratio`, `biostats.rates.stratum_differences`, `biostats.reliability.category`, `biostats.reliability.category_order`, `biostats.study_designs.DESIGNS`, `biostats.study_designs.DIFFERENCE`, `biostats.study_designs.NOT_STATED`, `biostats.study_designs.OFFERED`, `biostats.study_designs.design_named`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_not_pooled` (analysis_extras.py)
 
@@ -444,7 +444,8 @@ them before Run, and the variable to adjust for is left to choose.
 
 Each is carried only when this analysis offers it on ``df`` (the panel can compare two groups of a variable
 that holds more: such a variable is not offered here); what is not carried is left empty. ``stratum``: the
-variable to adjust for kept from an earlier use, let go when it is now the outcome or the groups.
+variable to adjust for kept from an earlier use, let go when it is now the outcome or the groups. ``design``:
+how the panel was told the participants entered the study, carried with its outcome.
 
 ### def `_strata` (analysis_extras.py)
 
@@ -472,6 +473,70 @@ one it is read against ("Unadjusted 0.7 and 0.804").
 A ratio to three significant figures: at two decimals, a lower bound of 0.996 read "1.00" beside p = 0.051.
 
 ### def `_show_strata` (analysis_extras.py)
+
+- **Arguments**: `res: Any, outcome: str, event: str, compare: str, exposed: str, reference: str, stratum: str, total: int`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_difference_line` (analysis_extras.py)
+
+- **Arguments**: `res: Any, prevalence: bool, ratio: str`
+
+- **Returns**: `str`
+
+The adjusted risk (prevalence) difference in percentage points, and the strata's own beside it: with a common
+ratio and baseline risks that differ, the differences differ by construction (13.0 points for strata of 5.0
+and 20.0), and the page's one test of homogeneity is the ratio's.
+
+### def `_span` (analysis_extras.py)
+
+- **Arguments**: `values: np.ndarray, measure: str, of: str`
+
+- **Returns**: `str`
+
+The span of a measure over the strata ("run from 0.458 to 0.861"), or "are all 2.000" when they are one
+value (they "ran from 2.000 to 2.000").
+
+### def `strata_homogeneity` (analysis_extras.py)
+
+- **Arguments**: `res: Any, ratio: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+Whether the strata differ, in the lines under the headline, and the chip beside its first measure: each test
+beside its own measure, Woolf's for the design's ratio, Breslow-Day's for the odds ratio. ``ratio``: the
+design's ("risk ratio", "prevalence ratio"), "" when it reads the odds ratio only.
+
+Woolf's test reads the strata with an event in both groups. One with events in one group only has a ratio of 0,
+or without an upper bound, and is counted (the risk ratios "do not differ" was said beside a stratum of 0
+against 2.0 in the others). When the test cannot run, Breslow-Day's line stands in, beside the odds ratio, and
+the chip follows it ("strata not tested" stood over strata of opposite directions, Breslow-Day p < 0.001); so
+it does when Breslow-Day reads strata the test of the ratios cannot and finds that they differ. The line that
+explains the two tests' parting by a common outcome stands only when they read the same strata and the outcome
+is common somewhere (10% or more of a group in a stratum), and each direction of the parting is said.
+
+### def `_odds_homogeneity` (analysis_extras.py)
+
+- **Arguments**: `res: Any, p: float, words: str`
+
+- **Returns**: `list[str]`
+
+The Breslow-Day line: the odds ratios of the strata alike, or not, or not tested. ``words``: what to report
+of each stratum (the odds ratio; "ratio" for a result kept before the design was asked).
+
+### def `_strata_table` (analysis_extras.py)
+
+- **Arguments**: `res: Any, design: str, ratio: str, outcome: str, exposed: str, reference: str, event: str`
+
+- **Returns**: `None`
+
+The strata, by design: events among participants for a cohort or a trial; with the outcome for a
+cross-sectional sample or a design not stated; by outcome, cases and controls, for a case-control sample (its
+share with the outcome is the sampling's); each with the ratios its design supports.
+
+### def `_show_strata_before` (analysis_extras.py)
 
 - **Arguments**: `res: Any, outcome: str, event: str, compare: str, exposed: str, reference: str, stratum: str, total: int`
 
@@ -889,7 +954,7 @@ Group comparison, per variable:
 Rank tests and Fisher's exact test have no pooling rule: the page gives the reason and the alternative._
 
 **Imports**:
-`__future__.annotations`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `streamlit`, `app_pages.clean_dialog.group_warning`, `biostats.contingency.TwoByTwo`, `biostats.contingency.analyze_twobytwo`, `biostats.contingency.chi_square_independence`, `biostats.contingency.detect_event_level`, `biostats.contingency.detect_reference_level`, `biostats.inference.compare_groups`, `biostats.linear.ancova`, `biostats.linear.welch_means`, `biostats.mi.analyze_mi`, `biostats.mi.not_poolable`, `biostats.multiplicity.UI_OPTIONS`, `biostats.multiplicity.adjust`, `ui.components.error_card`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `dataclasses.dataclass`, `typing.Any`, `pandas`, `streamlit`, `app_pages.clean_dialog.group_warning`, `biostats.contingency.TwoByTwo`, `biostats.contingency.analyze_twobytwo`, `biostats.contingency.chi_square_independence`, `biostats.contingency.detect_event_level`, `biostats.contingency.detect_reference_level`, `biostats.inference.compare_groups`, `biostats.linear.ancova`, `biostats.linear.welch_means`, `biostats.mi.analyze_mi`, `biostats.mi.not_poolable`, `biostats.multiplicity.UI_OPTIONS`, `biostats.multiplicity.adjust`, `biostats.study_designs.DIFFERENCE`, `biostats.study_designs.NOT_STATED`, `biostats.study_designs.OFFERED`, `biostats.study_designs.RATIO`, `biostats.study_designs.design_named`, `ui.components.error_card`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.mi_mode.show_pooled_terms`, `ui.components.mi_mode.show_tests`, `ui.guidance.measures`, `ui.guidance.numbers.fixed`, `ui.guidance.numbers.p_text`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.state.get_state`
 
 ### class `Pooled` (analysis_pooled.py)
 
@@ -957,17 +1022,28 @@ No description available.
 
 No description available.
 
+### def `_twobytwo_measures` (analysis_pooled.py)
+
+- **Arguments**: `design: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+The pooled terms a design supports, with their names: the odds ratio always; the risk (prevalence) ratio and
+difference for a cohort, a trial and a cross-sectional sample (biostats.study_designs).
+
 ### def `_twobytwo_frame` (analysis_pooled.py)
 
-- **Arguments**: `res`
+- **Arguments**: `res, design: str`
 
 - **Returns**: `pd.DataFrame`
 
-No description available.
+The pooled measures the design supports, written as the page writes them: the ratios to three decimals, the
+difference in percentage points to one, as the 2x2 panel and the stratified analysis (it read "-0.107" beside
+the panel's "-10.7 points"), and p as the house writes it ("< 0.001" where "0.0000" stood).
 
 ### def `_show_complete_twobytwo` (analysis_pooled.py)
 
-- **Arguments**: `cc`
+- **Arguments**: `cc, design: str`
 
 - **Returns**: `None`
 
@@ -3497,7 +3573,7 @@ No description available.
 _No module description._
 
 **Imports**:
-`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.QUESTION_KEY`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.QUESTION_KEY`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.strata_choices`, `app_pages.analysis_guidance_ui.MAP_KEY`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.analysis_layout.p_text`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
+`matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.graph_objects`, `streamlit`, `scipy.stats`, `scipy.stats.t`, `statsmodels.stats.power.TTestIndPower`, `app_pages.group_figures`, `utils.analysis_utils`, `utils.visualization_utils`, `app_pages.analysis_config.render_analysis_configuration`, `app_pages.analysis_diagnostic.QUESTION_KEY`, `app_pages.analysis_diagnostic.run_diagnostic_accuracy`, `app_pages.analysis_extras.QUESTION_KEY`, `app_pages.analysis_extras.run_paired_and_rates`, `app_pages.analysis_extras.strata_choices`, `app_pages.analysis_guidance_ui.MAP_KEY`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_guidance_ui.guidance_toggle`, `app_pages.analysis_guidance_ui.render_ancova_check`, `app_pages.analysis_guidance_ui.render_orientation`, `app_pages.analysis_guidance_ui.render_plan`, `app_pages.analysis_guidance_ui.render_test_note`, `app_pages.analysis_layout.p_text`, `app_pages.clean_dialog.group_warning`, `biostats.multiplicity.adjust`, `biostats.power.ARE_NORMAL`, `biostats.power.ARE_WORST_CASE`, `biostats.power.anova_power`, `biostats.power.anova_sample_size`, `biostats.power.chi2_independence_power`, `biostats.power.chi2_independence_sample_size`, `biostats.power.kruskal_power`, `biostats.power.kruskal_sample_size`, `biostats.study_designs.DIFFERENCE`, `biostats.study_designs.NNT`, `biostats.study_designs.NOT_STATED`, `biostats.study_designs.OFFERED`, `biostats.study_designs.RATIO`, `biostats.study_designs.design_named`, `biostats.zscores.reference_zscores`, `core.fingerprint.frame_fingerprint`, `ui.components.error_card`, `ui.components.linked_tabs`, `ui.components.no_dataset`, `ui.components.result_card`, `ui.components.levels.show_level`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.analysis.HELP`, `ui.guidance.analysis.ancova_check`, `ui.guidance.analysis.cohens_d_from_means`, `ui.guidance.analysis.cohens_f_from_means`, `ui.guidance.analysis.cohens_w_from_proportions`, `ui.guidance.analysis.p_superiority_from_d`, `ui.guidance.analysis.parse_numbers`, `ui.guidance.analysis.plan_group_comparison`, `ui.guidance.analysis.power_sentence`, `ui.guidance.analysis.sample_size_sentence`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.recall`, `ui.results.remember`, `ui.results.status`, `ui.state.get_state`, `utils.export_utils.to_excel`
 
 ### def `_effect_ok` (epidemiology.py)
 
