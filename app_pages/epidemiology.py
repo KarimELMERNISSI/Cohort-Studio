@@ -39,6 +39,7 @@ from biostats.power import (
     kruskal_power,
     kruskal_sample_size,
 )
+from biostats.study_designs import DIFFERENCE, NNT, NOT_STATED, OFFERED, RATIO, design_named
 from biostats.zscores import reference_zscores
 from core.fingerprint import frame_fingerprint
 from ui.components import error_card, linked_tabs, no_dataset, result_card
@@ -97,7 +98,7 @@ def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
     levels_out = sorted(df[outcome_col].dropna().unique().tolist(), key=str)
     if len(levels_group) != 2 or len(levels_out) != 2:
         return default_epi
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     default_ref = default_epi.get("reference_level")
     ref_index = next((i for i, lvl in enumerate(levels_group) if str(lvl) == str(default_ref)), 0)
     reference = c1.selectbox(
@@ -110,9 +111,15 @@ def _render_twobytwo_controls(df, group_col, outcome_col, default_epi):
         "Event level", levels_out, index=event_index, persist_state="page", key=f"event_{outcome_col}", format_func=str,
         help="Which value of the outcome counts as the event (for example Yes, 1 or Dead).",
     )
-    design = c3.selectbox(
-        "Study design", ["unknown", "cohort", "rct", "cross-sectional", "case-control"], persist_state="page", key=f"design_{outcome_col}",
-        help="Determines which measures are interpretable: only the odds ratio in case-control designs.",
+    # a row of its own, two thirds wide: third of a row, the trial's label was cut where it differs from the cohort's
+    d1, _ = st.columns([2, 1])
+    design = d1.selectbox(
+        measures.DESIGN_QUESTION,
+        list(OFFERED),
+        format_func=measures.DESIGN_LABELS.__getitem__,
+        persist_state="page",
+        key=f"design_{outcome_col}",
+        help=measures.HELP["design"],
     )
     try:
         table = TwoByTwo.from_crosstab(df, group_col, outcome_col, exposure_ref=reference, event_level=event)
@@ -126,8 +133,12 @@ def _render_twobytwo_panel(epi, carried=None):
     """Labelled 2x2 table, measures of association (comparison vs reference) and guidance. ``carried``: the
     choices of the panel as the stratified analysis takes them (``strata_choices``), for its button."""
     col_tbl, col_metrics = st.columns([1, 1])
+    design = design_named(epi.get("design") or NOT_STATED)
+    shown = set(epi.get("measures") or ())
+    ratio = "Prevalence ratio (PR)" if design.shares == "prevalence" else "Risk ratio (RR)"
+    difference = "Prevalence difference (PD)" if design.shares == "prevalence" else "Risk difference (RD)"
     with col_tbl:
-        st.markdown("##### 2x2 Contingency Table")
+        st.markdown("##### The 2x2 table")
         tbl_df = pd.DataFrame(
             [
                 [epi["a"], epi["b"], epi["a"] + epi["b"]],
@@ -138,38 +149,57 @@ def _render_twobytwo_panel(epi, carried=None):
             columns=[f"{epi['event_level']} (event)", f"{epi['nonevent_level']}", "Total"],
         )
         st.table(tbl_df)
-        st.caption(
-            f"Risk of '{epi['event_level']}': {epi['risk_exposed'] * 100:.1f}% in {epi['exposure_level']} vs "
-            f"{epi['risk_reference'] * 100:.1f}% in {epi['reference_level']}."
-        )
-        if epi.get("haldane_applied"):
-            st.caption("Haldane-Anscombe continuity correction (+0.5) applied to OR and RR because of a zero cell.")
+        # the share with the outcome means what the sampling lets it mean: a risk, a prevalence, or nothing (its
+        # share among the cases and among the controls is then what is read)
+        if design.shares:
+            share = "Prevalence" if design.shares == "prevalence" else "Risk"
+            st.caption(
+                f"{share} of '{epi['event_level']}': {epi['risk_exposed'] * 100:.1f}% in {epi['exposure_level']} vs "
+                f"{epi['risk_reference'] * 100:.1f}% in {epi['reference_level']}."
+            )
+        elif design.id == "case-control":
+            cases, controls = epi["a"] + epi["c"], epi["b"] + epi["d"]
+            if cases and controls:
+                st.caption(
+                    f"'{epi['exposure_level']}' among the cases ('{epi['event_level']}'): "
+                    f"{epi['a'] / cases * 100:.1f}%; among the controls: {epi['b'] / controls * 100:.1f}%."
+                )
+        # a zero cell: said once, under "Reading these measures", in the words of the design
 
     with col_metrics:
-        st.markdown("##### Risk & Association Estimates (comparison vs reference)")
-        c_or, c_rr = st.columns(2)
+        st.markdown("##### Association estimates (comparison vs reference)")
+        # only the measures the design supports (biostats.study_designs): a case-control sample, or a design not
+        # stated, shows the odds ratio alone; a design with a ratio shows it first, as the stratified analysis does
+        first, second = st.columns(2)
+        c_rr, c_or = (first, second) if RATIO in shown else (second, first)
         with c_or:
             ci = epi["odds_ratio_ci"]
-            st.metric("Odds Ratio (OR)", f"{epi['odds_ratio']:.2f}")
+            st.metric("Odds ratio (OR)", f"{epi['odds_ratio']:.2f}")
             st.caption(f"95% CI {ci['lower']:.2f} to {ci['upper']:.2f} ({ci.get('method', '')})")
-        with c_rr:
-            ci = epi["relative_risk_ci"]
-            st.metric("Risk Ratio (RR)", f"{epi['relative_risk']:.2f}")
-            st.caption(f"95% CI {ci['lower']:.2f} to {ci['upper']:.2f} ({ci.get('method', '')})")
-
-        c_rd, c_nnt = st.columns(2)
-        with c_rd:
-            ci = epi["risk_difference_ci"]
-            st.metric("Risk Difference (RD)", f"{epi['risk_difference'] * 100:.1f}%")
-            st.caption(f"95% CI {ci['lower'] * 100:.1f}% to {ci['upper'] * 100:.1f}% ({ci.get('method', '')})")
-        with c_nnt:
-            nnt_val = epi.get("nnt")
-            nnt_ci = epi.get("nnt_ci")
-            st.metric(epi.get("nnt_label") or "NNT / NNH", f"{nnt_val:.1f}" if nnt_val is not None else "N/A")
-            if nnt_ci:
-                st.caption(f"95% CI {nnt_ci['lower']:.1f} to {nnt_ci['upper']:.1f}")
-            elif nnt_val is not None:
-                st.caption("95% CI not bounded (the risk-difference interval includes 0)")
+        if RATIO in shown:
+            with c_rr:
+                ci = epi["relative_risk_ci"]
+                st.metric(ratio, f"{epi['relative_risk']:.2f}")
+                st.caption(f"95% CI {ci['lower']:.2f} to {ci['upper']:.2f} ({ci.get('method', '')})")
+        if DIFFERENCE in shown:
+            c_rd, c_nnt = st.columns(2)
+            with c_rd:
+                # in percentage points, as the stratified analysis and the tutorial write it: "-9.8%" read as a
+                # relative change
+                ci = epi["risk_difference_ci"]
+                st.metric(difference, f"{epi['risk_difference'] * 100:.1f} points")
+                st.caption(
+                    f"95% CI {ci['lower'] * 100:.1f} to {ci['upper'] * 100:.1f} points ({ci.get('method', '')})"
+                )
+            if NNT in shown:
+                with c_nnt:
+                    nnt_val = epi.get("nnt")
+                    nnt_ci = epi.get("nnt_ci")
+                    st.metric(epi.get("nnt_label") or "NNT / NNH", f"{nnt_val:.1f}" if nnt_val is not None else "N/A")
+                    if nnt_ci:
+                        st.caption(f"95% CI {nnt_ci['lower']:.1f} to {nnt_ci['upper']:.1f}")
+                    elif nnt_val is not None:
+                        st.caption("95% CI not bounded (the risk-difference interval includes 0)")
         # p as the page's other results write it: with ":.4g" a small one read "1.5e-43"
         st.caption(
             f"Primary test: {epi['primary_test']}, p {p_text(epi['primary_pvalue'])} "
@@ -188,8 +218,8 @@ def _render_twobytwo_panel(epi, carried=None):
         key="epi_open_strata",
         on_click=open_analysis,
         args=(TABS[2], {PAIRED_QUESTION: measures.STRATA, **(carried or {})}),
-        help="Opens Paired, rates & stratified on the stratified analysis, with the outcome, its event, the groups "
-        "and the reference group chosen here: the same odds and risk ratios within the groups of a third variable, "
+        help="Opens Paired, rates & stratified on the stratified analysis, with the outcome, its event, the groups, "
+        "the reference group and the study design chosen here: the same ratios within the groups of a third variable, "
         "and combined over them.",
     )
 
@@ -757,7 +787,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
 
         # Epidemiological 2x2 Risk & Association Panel (explicit orientation, audit S1)
         if is_categorical and "epi_2x2" in detail_res:
-            st.subheader("Epidemiological Risk & Association Analysis (2x2)")
+            st.subheader("2x2 table: measures of association")
             epi = _render_twobytwo_controls(df_analysis_filtered, group_col, selected_detail, detail_res["epi_2x2"])
             if epi is not None:
                 # the panel's own choices go with its button: the stratified analysis opened with every field empty
@@ -768,6 +798,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
                     compare=group_col,
                     reference=epi.get("reference_level"),
                     stratum=st.session_state.get("mh_stratum"),
+                    design=epi.get("design"),
                 )
                 _render_twobytwo_panel(epi, carried)
 

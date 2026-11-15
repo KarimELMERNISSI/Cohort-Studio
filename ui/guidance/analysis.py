@@ -266,7 +266,7 @@ def _categorical_test(df: pd.DataFrame, group_col: str, target: str) -> tuple[st
     if small and table.shape == (2, 2):
         return (
             "Fisher's exact test",
-            f"{small} expected count(s) below 5; risk ratio, odds ratio and NNT in the detail",
+            f"{small} expected count(s) below 5; the odds ratio and what the design supports, in the detail",
         )
     if small:
         return (
@@ -276,7 +276,7 @@ def _categorical_test(df: pd.DataFrame, group_col: str, target: str) -> tuple[st
     if table.shape == (2, 2):
         return (
             "Chi-square",
-            "2x2 table; risk ratio, odds ratio, risk difference and NNT in the detail",
+            "2x2 table; the odds ratio and what the design supports, in the detail",
         )
     return "Chi-square", f"{table.shape[0]}x{table.shape[1]} table, all expected counts at least 5"
 

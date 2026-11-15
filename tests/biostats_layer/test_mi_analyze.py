@@ -357,9 +357,7 @@ def test_a_zero_cell_in_some_imputed_datasets_leaves_the_ratios_unpooled() -> No
     result = analyze_mi(arm_table, zero_cell_mi(), complete_case=False)
     assert result.table is not None and result.table.names == ["risk_difference"]
     assert any(
-        w.startswith(
-            "Odds ratio and risk ratio not pooled: a cell is zero in 2 of 5 imputed datasets"
-        )
+        w.startswith("The ratios are not pooled: a cell is zero in 2 of 5 imputed datasets")
         for w in result.warnings
     )
     assert not any("because at least one cell is zero" in w for w in result.warnings)

@@ -36,9 +36,12 @@ from biostats.linear import ancova, welch_means
 from biostats.mi import analyze_mi, not_poolable
 from biostats.multiplicity import UI_OPTIONS as CORRECTION_OPTIONS
 from biostats.multiplicity import adjust as adjust_pvalues
+from biostats.study_designs import DIFFERENCE, NOT_STATED, OFFERED, RATIO, design_named
 from ui.components import error_card, result_card
 from ui.components.levels import show_level
 from ui.components.mi_mode import mi_token, show_mi_notes, show_pooled_terms, show_tests
+from ui.guidance import measures as m
+from ui.guidance.numbers import fixed, p_text
 from ui.progress import mark_step
 from ui.results import provenance, recall, remember
 from ui.state import get_state
@@ -242,17 +245,14 @@ def _summary_row(target: str, item: Pooled, group: str) -> dict[str, Any]:
             "p": term.p_value,
             "fmi": term.fmi,
         }
-    elif item.kind == "twobytwo":  # a zero cell in some imputed datasets: only the risk difference is pooled
-        term = res.term("risk_difference")
+    elif item.kind == "twobytwo":
+        # a zero cell in some imputed datasets: the odds ratio is not pooled. The pooled chi-square test stands in,
+        # which every study design supports (a risk difference is no measure of a case-control sample)
+        d2 = res.tests["chi_square"]
         row |= {
-            "analysis": "2x2: risk difference (odds ratio not pooled: a zero cell)",
-            "estimate_label": f"risk difference of {item.event} ({item.comparison} - {item.reference})",
-            "estimate": term.estimate,
-            "ci_low": term.ci.lower,
-            "ci_high": term.ci.upper,
-            "test": f"z = {term.statistic:.2f}, df = {term.df:.1f}",
-            "p": term.p_value,
-            "fmi": term.fmi,
+            "analysis": "2x2: chi-square test (D2; odds ratio not pooled: a zero cell)",
+            "test": f"F({d2.df1:.0f}, {d2.df2:.1f}) = {d2.statistic:.2f}",
+            "p": d2.p_value,
         }
     else:
         d2 = res.tests["chi_square"]
@@ -290,26 +290,45 @@ def _show_summary(results: dict[str, Pooled], errors: dict[str, str], group: str
         st.caption(f"Multiple testing: {correction}, over the variables tested in this run.")
 
 
-def _twobytwo_frame(res) -> pd.DataFrame:
+def _twobytwo_measures(design: str) -> tuple[tuple[str, str], ...]:
+    """The pooled terms a design supports, with their names: the odds ratio always; the risk (prevalence) ratio and
+    difference for a cohort, a trial and a cross-sectional sample (biostats.study_designs)."""
+    sampling = design_named(design)
+    prevalence = sampling.shares == "prevalence"
+    measures = [("odds_ratio", "Odds ratio")]
+    if sampling.supports(RATIO):
+        measures.append(("relative_risk", "Prevalence ratio" if prevalence else "Risk ratio"))
+    if sampling.supports(DIFFERENCE):
+        measures.append(("risk_difference", "Prevalence difference" if prevalence else "Risk difference"))
+    return tuple(measures)
+
+
+def _twobytwo_frame(res, design: str = NOT_STATED) -> pd.DataFrame:
+    """The pooled measures the design supports, written as the page writes them: the ratios to three decimals, the
+    difference in percentage points to one, as the 2x2 panel and the stratified analysis (it read "-0.107" beside
+    the panel's "-10.7 points"), and p as the house writes it ("< 0.001" where "0.0000" stood)."""
     frame = res.to_frame().set_index("term")
     rows = []
-    for name, label in (
-        ("odds_ratio", "Odds ratio"),
-        ("relative_risk", "Risk ratio"),
-        ("risk_difference", "Risk difference"),
-    ):
+    for name, label in _twobytwo_measures(design):
         if name not in frame.index:  # not pooled: the warning below the table says why
             rows.append({"measure": f"{label}: not pooled (a zero cell)"})
             continue
         t = frame.loc[name]
         log = t["scale"] == "log"
+        values = (
+            (t["natural_estimate"], t["natural_ci_low"], t["natural_ci_high"])
+            if log
+            else (t["estimate"], t["ci_low"], t["ci_high"])
+        )
+        points = name == "risk_difference"
+        shown = [fixed(100 * value, 1) if points else fixed(value, 3) for value in values]
         rows.append(
             {
-                "measure": label,
-                "estimate": t["natural_estimate"] if log else t["estimate"],
-                "ci_low": t["natural_ci_low"] if log else t["ci_low"],
-                "ci_high": t["natural_ci_high"] if log else t["ci_high"],
-                "p": t["p_value"],
+                "measure": f"{label} (percentage points)" if points else label,
+                "estimate": shown[0],
+                "ci_low": shown[1],
+                "ci_high": shown[2],
+                "p": p_text(t["p_value"]).removeprefix("= "),
                 "df": t["df"],
                 "fmi": t["fmi"],
             }
@@ -317,18 +336,19 @@ def _twobytwo_frame(res) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _show_complete_twobytwo(cc) -> None:
+def _show_complete_twobytwo(cc, design: str = NOT_STATED) -> None:
+    fields = {"odds_ratio": "odds_ratio", "relative_risk": "relative_risk", "risk_difference": "risk_difference"}
+    rows = [
+        {
+            "measure": label,
+            "estimate": getattr(cc, fields[name]),
+            "ci_low": getattr(cc, f"{fields[name]}_ci").lower,
+            "ci_high": getattr(cc, f"{fields[name]}_ci").upper,
+        }
+        for name, label in _twobytwo_measures(design)
+    ]
     st.dataframe(
-        pd.DataFrame(
-            [
-                {"measure": "Odds ratio", "estimate": cc.odds_ratio, "ci_low": cc.odds_ratio_ci.lower,
-                 "ci_high": cc.odds_ratio_ci.upper},
-                {"measure": "Risk ratio", "estimate": cc.relative_risk, "ci_low": cc.relative_risk_ci.lower,
-                 "ci_high": cc.relative_risk_ci.upper},
-                {"measure": "Risk difference", "estimate": cc.risk_difference,
-                 "ci_low": cc.risk_difference_ci.lower, "ci_high": cc.risk_difference_ci.upper},
-            ]
-        ).style.format({"estimate": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}"}),
+        pd.DataFrame(rows).style.format({"estimate": "{:.3f}", "ci_low": "{:.3f}", "ci_high": "{:.3f}"}),
         hide_index=True,
     )
     st.caption(f"n = {cc.n_total}; {cc.primary_test}, p = {cc.primary_pvalue:.4g}")
@@ -393,23 +413,35 @@ def _show_detail(target: str, item: Pooled, group: str) -> None:
         show_mi_notes(res, complete_case=lambda cc: _show_complete_groups(cc, target, group))
     elif item.kind == "twobytwo":
         st.markdown(f"**{item.comparison} compared with {item.reference}; event: {target} = {item.event}**")
+        # the question of the 2x2 panel, under its key for this outcome: said once, read by both
+        design = st.selectbox(
+            m.DESIGN_QUESTION,
+            list(OFFERED),
+            format_func=m.DESIGN_LABELS.__getitem__,
+            persist_state="page",
+            key=f"design_{target}",
+            help=m.HELP["design"],
+        ) or NOT_STATED
+        if not design_named(design).supports(RATIO):
+            st.info(m.DESIGN_NOT_STATED if design == NOT_STATED else m.DESIGN_SENTENCE[design])
         number = st.column_config.NumberColumn
+        text = st.column_config.TextColumn  # written by the frame, each row with its own decimals
         st.dataframe(
-            _twobytwo_frame(res),
+            _twobytwo_frame(res, design),
             hide_index=True,
             column_config={
                 "measure": "Measure",
-                "estimate": number("Estimate", format="%.3f"),
-                "ci_low": number("95% CI low", format="%.3f"),
-                "ci_high": number("95% CI high", format="%.3f"),
-                "p": number("p", format="%.4f"),
+                "estimate": text("Estimate", alignment="right"),
+                "ci_low": text("95% CI low", alignment="right"),
+                "ci_high": text("95% CI high", alignment="right"),
+                "p": text("p", alignment="right"),
                 "df": number("df", format="%.1f"),
                 "fmi": number("FMI", format="%.3f"),
             },
             alt="Pooled measures of association",
         )
         show_tests(res, title="Chi-square test (D2)")
-        show_mi_notes(res, complete_case=_show_complete_twobytwo)
+        show_mi_notes(res, complete_case=lambda cc: _show_complete_twobytwo(cc, design))
     else:
         show_tests(res, title=f"Chi-square test of independence of {group} and {target} (D2)")
         show_mi_notes(
@@ -456,9 +488,10 @@ def run_pooled_comparison(mi, analyzer) -> None:
             if c2.checkbox(
                 "Zero cells: add 0.5 to every cell of every 2x2 table (sensitivity analysis)",
                 persist_state="page", key="mi_cmp_haldane",
-                help="A zero cell gets the +0.5 correction in its own imputed dataset only, so by default the odds "
-                "and risk ratios are then not pooled (the risk difference is). Adding 0.5 everywhere keeps one "
-                "estimator across the imputed datasets; report it as a sensitivity analysis.",
+                help="A zero cell gets the +0.5 correction in its own imputed dataset only, so by default the "
+                "ratios are then not pooled (the chi-square test is, and the risk difference where the study design "
+                "supports one). Adding 0.5 everywhere keeps one estimator across the imputed datasets; report it as "
+                "a sensitivity analysis.",
             )
             else "if_zero"
         )

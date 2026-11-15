@@ -60,7 +60,8 @@ def test_two_groups_plan_tests_and_advice() -> None:
     tests = {p.variable: p for p in plan.tests}
     assert plan.group_sizes == {"A": 30, "B": 30}
     assert tests["x"].test == "Welch's t-test" and "Welch" in tests["x"].reason
-    assert tests["event"].test == "Chi-square" and "risk ratio" in tests["event"].reason
+    # the detail shows the measures of the study design asked there: the plan promises no risk ratio
+    assert tests["event"].test == "Chi-square" and "what the design supports" in tests["event"].reason
     assert tests["constant"].kind == "skipped" and tests["note"].kind == "skipped"
     assert tests["lab"].missing_share == pytest.approx(20 / 60)
     texts = " ".join(a.text for a in plan.advice)

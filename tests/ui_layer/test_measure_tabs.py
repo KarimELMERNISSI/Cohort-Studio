@@ -10,6 +10,7 @@ its own test.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 from typing import Any
@@ -19,6 +20,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import utils.data_paths as dp
+from biostats.study_designs import OFFERED
 from ui import nav
 from ui.components.population import _family_key
 from ui.guidance import measures as m
@@ -651,19 +653,46 @@ def test_a_share_against_a_reference_read_from_the_dataset(app: AppTest) -> None
 # ----------------------------------------------------------------------------- an association within strata
 
 
-def _strata(app: AppTest, stratum: str) -> Any:
+def _strata(app: AppTest, stratum: str, design: str | None = None) -> Any:
+    """The stratified analysis of the tutorial's trial, adjusted for ``stratum``; ``design``: how the participants
+    entered the study, left at "Not stated" when None."""
     _open(app, PAIRED, m.STRATA)
     _pick(app, "mh_outcome", "hf_hospitalisation")
     assert app.selectbox(key="mh_ev_level").value == "Yes"
     _pick(app, "mh_exposure", "arm")
     _pick(app, "mh_reference", "Control")
     _pick(app, "mh_stratum", stratum)
+    # the design is kept for the same outcome (it is a statement about it): set here, "Not stated" by default
+    app.radio(key="mh_design").set_value(design or "unknown").run()
+    _ok(app)
     _run(app, "mh_run")
     return _stored(app, "mantel_haenszel")
 
 
+def test_the_study_design_is_asked_once_the_outcome_is_chosen_and_again_for_another(
+    app: AppTest,
+) -> None:
+    """Not offered before the outcome (it is a statement about it); a new outcome starts again at "Not stated",
+    which preselects no design and shows the odds ratio only."""
+    _open(app, PAIRED, m.STRATA)
+    app.selectbox(key="mh_outcome").set_value(None).run()
+    radio = app.radio(key="mh_design")
+    assert radio.disabled and radio.value == "unknown"
+    _pick(app, "mh_outcome", "hf_hospitalisation")
+    assert not app.radio(key="mh_design").disabled
+    app.radio(key="mh_design").set_value("case-control").run()
+    _pick(app, "mh_outcome", "diabetes")
+    assert app.radio(key="mh_design").value == "unknown"
+    assert list(app.radio(key="mh_design").options) == [m.DESIGN_LABELS[d] for d in OFFERED]
+
+
 def test_an_association_within_strata_whose_ratios_are_alike(app: AppTest) -> None:
-    res = _strata(app, "nyha_class")
+    """The tutorial is a randomised trial: its risk ratio first, beside its own test of homogeneity (Woolf)."""
+    res = _strata(app, "nyha_class", "rct")
+    assert res.design == "rct" and res.n_woolf == 3
+    assert (res.woolf_statistic, res.woolf_p) == pytest.approx(
+        (3.806979450863194, 0.14904757548693312), **TIGHT
+    )
     assert res.n_strata == 3
     assert res.or_mh == pytest.approx(0.6278365838812753, **TIGHT)
     assert (res.or_mh_ci.lower, res.or_mh_ci.upper) == pytest.approx(
@@ -687,20 +716,39 @@ def test_an_association_within_strata_whose_ratios_are_alike(app: AppTest) -> No
     ]
     text = _texts(app)
     assert "no evidence that they differ" in text and "no proof that they are alike" in text
+    assert "Woolf's test" in text
     assert (
         "Computed on" in text
     )  # the line of what the result was computed on: this analysis had none
-    assert _metrics(app)["Odds ratio, adjusted for nyha_class"] == "0.628"
+    shown = _metrics(app)
+    assert shown["Risk ratio, adjusted for nyha_class"] == "0.735"
+    assert shown["Odds ratio, adjusted"] == "0.628"
+    assert "randomised trial" in text
+    # the settings name the design in words (the dossier's line, "Last result here"), never its stored id
+    from ui.results import describe_settings
+
+    stored = app.session_state["_results"]["mantel_haenszel"]
+    assert describe_settings(stored.config).endswith("Intervention, Yes, randomised trial")
 
 
 def test_an_association_within_strata_whose_ratios_differ(app: AppTest) -> None:
+    """The design not stated: the odds ratio only, which every sampling supports; no risk ratio anywhere (the
+    result, its table, its words)."""
     res = _strata(app, "diabetes")
-    assert res.n_strata == 2
+    assert res.n_strata == 2 and res.design == "unknown" and res.measures == ("odds_ratio",)
     assert res.or_mh == pytest.approx(0.6438268815584676, **TIGHT)
-    assert res.rr_mh == pytest.approx(0.7423136160876451, **TIGHT)
+    assert math.isnan(res.rr_mh) and "risk_ratio" not in res.per_stratum
     assert res.breslow_day_p == pytest.approx(0.043600686623524454, **TIGHT)
     assert res.mh_test_p == pytest.approx(0.002154080463419472, **TIGHT)
-    assert "Report the ratio of each stratum" in _texts(app)
+    text = _texts(app)
+    assert "Report the odds ratio of each stratum" in text and "Study design not stated" in text
+    # the result itself: its metrics, its table, its sentences (the glossary still defines the risk ratio)
+    assert "Risk ratio, adjusted" not in text and not [
+        label for label in _metrics(app) if "isk" in label
+    ]
+    assert not [
+        column for frame in app.dataframe for column in frame.value.columns if "isk" in str(column)
+    ]
 
 
 def test_strata_without_information_are_left_out_of_the_tests_and_cleaned_from_the_plan(

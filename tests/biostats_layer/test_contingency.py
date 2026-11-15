@@ -75,7 +75,8 @@ class TestOrientation:
 class TestMeasures:
     def test_reference_values(self, trial_df: pd.DataFrame) -> None:
         res = analyze_twobytwo(
-            TwoByTwo.from_crosstab(trial_df, "arm", "event", exposure_level="Placebo")
+            TwoByTwo.from_crosstab(trial_df, "arm", "event", exposure_level="Placebo"),
+            design="rct",
         )
         assert res.relative_risk == pytest.approx(2.6667, abs=1e-4)
         assert (res.relative_risk_ci.lower, res.relative_risk_ci.upper) == pytest.approx(
@@ -143,13 +144,13 @@ class TestMeasures:
         assert any("expected count" in g for g in res.guidance)
 
     def test_unbounded_nnt_when_rd_interval_includes_zero(self) -> None:
-        res = analyze_twobytwo(TwoByTwo(a=6, b=14, c=5, d=15))
+        res = analyze_twobytwo(TwoByTwo(a=6, b=14, c=5, d=15), design="rct")
         assert res.nnt is not None and res.nnt_ci is None
         assert any("not bounded" in g for g in res.guidance)
 
     def test_case_control_guidance(self) -> None:
         res = analyze_twobytwo(TwoByTwo(a=30, b=70, c=10, d=90), design="case-control")
-        assert any("Case-control design" in g for g in res.guidance)
+        assert any("Case-control sample" in g for g in res.guidance)
 
     def test_empty_group_rejected(self) -> None:
         with pytest.raises(ValueError):

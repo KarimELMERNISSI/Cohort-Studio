@@ -27,6 +27,7 @@ from scipy import stats
 from scipy.stats import norm
 
 from biostats._types import CI, TestResult
+from biostats.study_designs import NNT, RATIO, design_named
 
 Design = Literal["unknown", "cohort", "rct", "case-control", "cross-sectional"]
 
@@ -250,8 +251,10 @@ class TwoByTwoResult(BaseModel):
     references: list[str] = Field(default_factory=list)
 
     def legacy_dict(self) -> dict[str, Any]:
-        """Dictionary in the shape the pages consumed before the audit (plus the new keys)."""
+        """Dictionary in the shape the pages consumed before the audit (plus the new keys): ``measures`` lists what
+        the design supports (biostats.study_designs), which the page draws, and nothing else."""
         payload = self.model_dump()
+        payload["measures"] = list(design_named(self.design).measures)
         for key in (
             "odds_ratio_ci",
             "relative_risk_ci",
@@ -295,7 +298,7 @@ def analyze_twobytwo(
     table: TwoByTwo,
     *,
     alpha: float = 0.05,
-    design: Design = "unknown",
+    design: Design | Literal[""] = "unknown",
     rd_ci: Literal["newcombe", "wald"] = "newcombe",
     haldane: Literal["if_zero", "always"] = "if_zero",
 ) -> TwoByTwoResult:
@@ -317,15 +320,23 @@ def analyze_twobytwo(
 
     corrected = haldane == "always" or any(cell == 0 for cell in (a, b, c, d))
     a_, b_, c_, d_ = (x + 0.5 if corrected else float(x) for x in (a, b, c, d))
+    sampling = design_named(design)
+    # the ratios the correction reaches, as the design reads them: never a risk ratio where it reads none
+    if not sampling.supports(RATIO):
+        corrected_ratios, them = "the odds ratio", "it"
+    elif sampling.shares == "prevalence":
+        corrected_ratios, them = "the odds ratio and the prevalence ratio", "them"
+    else:
+        corrected_ratios, them = "the odds ratio and the risk ratio", "them"
     if haldane == "always":
         guidance.append(
-            "Sensitivity analysis: the Haldane-Anscombe correction (+0.5 to each cell) was applied to the odds "
-            "ratio and risk ratio of every table, whether or not a cell is zero."
+            f"Sensitivity analysis: the Haldane-Anscombe correction (+0.5 to each cell) was applied to "
+            f"{corrected_ratios} of every table, whether or not a cell is zero."
         )
     elif corrected:
         guidance.append(
-            "Haldane-Anscombe correction (+0.5 to each cell) was applied to the odds ratio and risk ratio "
-            "because at least one cell is zero; interpret those estimates with caution."
+            f"Haldane-Anscombe correction (+0.5 to each cell) was applied to {corrected_ratios} because a cell is "
+            f"zero: read {them} with caution."
         )
 
     # Risks (raw) and risk difference
@@ -358,11 +369,8 @@ def analyze_twobytwo(
     nnt_label = ""
     if abs(rd) > 1e-12:
         nnt = 1.0 / abs(rd)
-        nnt_label = (
-            "NNH (more events in the comparison group)"
-            if rd > 0
-            else "NNT (fewer events in the comparison group)"
-        )
+        # short: a narrow column cut "NNT (fewer events in the comparis..."; the sentence names the groups
+        nnt_label = "NNH (more events)" if rd > 0 else "NNT (fewer events)"
         if rd_low > 0 or rd_upp < 0:
             bounds = sorted((1.0 / abs(rd_low), 1.0 / abs(rd_upp)))
             nnt_ci = CI(
@@ -409,30 +417,46 @@ def analyze_twobytwo(
         primary_test, primary_p = "Pearson chi-square test", float(chi2_p)
 
     prevalence = (a + c) / n
+    if not sampling.supports(
+        NNT
+    ):  # the number needed to treat reads as the effect of an intervention: a trial's
+        nnt, nnt_ci, nnt_label = None, None, ""
+        guidance[:] = [line for line in guidance if "number needed to treat" not in line]
     if design == "case-control":
         guidance.append(
-            "Case-control design: only the odds ratio is interpretable as a measure of association; risks, the risk "
-            "ratio, the risk difference and NNT are not estimable because the outcome frequency was fixed by sampling."
+            "Case-control sample: the share with the outcome was set by the sampling, so risks, their ratio and "
+            "difference and the number needed to treat cannot be estimated; the odds ratio can."
+        )
+    elif not sampling.supports(RATIO):
+        guidance.append(
+            "Study design not stated: the odds ratio only, which every design supports. Say how the participants "
+            "entered the study to read risks (followed over time) or prevalences (at one point in time)."
         )
     else:
+        ratio = "prevalence ratio" if sampling.shares == "prevalence" else "risk ratio"
+        difference = (
+            "prevalence difference" if sampling.shares == "prevalence" else "risk difference"
+        )
         if prevalence < 0.10:
             guidance.append(
                 f"The outcome is uncommon in this sample ({prevalence * 100:.1f}% overall), so the odds ratio "
-                f"({odds_ratio:.2f}) approximates the risk ratio ({relative_risk:.2f})."
+                f"({odds_ratio:.2f}) approximates the {ratio} ({relative_risk:.2f})."
             )
         else:
             guidance.append(
-                f"The outcome is common ({prevalence * 100:.1f}% overall): the odds ratio ({odds_ratio:.2f}) is further from 1 "
-                f"than the risk ratio ({relative_risk:.2f}). Report the risk ratio or risk difference for cohort, trial "
-                "and cross-sectional designs."
+                f"The outcome is common ({prevalence * 100:.1f}% overall): the odds ratio ({odds_ratio:.2f}) is further "
+                f"from 1 than the {ratio} ({relative_risk:.2f}). Report the {ratio} or the {difference}."
             )
     if nnt is not None:
         ci_text = (
             f" (95% CI {nnt_ci.lower:.1f} to {nnt_ci.upper:.1f})" if nnt_ci is not None else ""
         )
+        # the words follow the sign of the difference: "per one additional event" was said of an intervention
+        # that prevents one (27.7% against 37.4%)
+        every = "each participant" if f"{nnt:.0f}" == "1" else f"about every {nnt:.0f} participants"
         guidance.append(
-            f"{nnt_label.split(' (')[0]} = {nnt:.1f}{ci_text}: about {nnt:.0f} people in the "
-            f"'{table.exposure_level}' group per one additional event compared with '{table.reference_level}'."
+            f"{nnt_label.split(' (')[0]} = {nnt:.1f}{ci_text}: for {every} in '{table.exposure_level}' rather than "
+            f"'{table.reference_level}', one event {'more' if rd > 0 else 'fewer'}."
         )
 
     return TwoByTwoResult(

@@ -314,15 +314,23 @@ time; each keeps its choices and its result while another is open.
 | **Paired measurements**, yes or no | two columns holding the same two values; the value whose share is counted | the change in that share, in points, with its interval; who changed, and which way; McNemar's exact test on the pairs that changed |
 | **One group against a reference**, a mean | the measurement; a reference value fixed beforehand; the summary | the mean (or typical value) with its interval, and its difference from the reference: one-sample t-test or Wilcoxon signed-rank |
 | **One group against a reference**, a share | a yes/no variable and the value counted, read from the dataset, or two numbers you type; the reference share | the share with its Wilson interval and the exact binomial test |
-| **Stratified (Mantel-Haenszel)** | a yes/no outcome and its event; what is compared and its **reference group**; one variable of 2 to 8 groups to adjust for | odds ratio (Robins-Breslow-Greenland interval) and risk ratio (Greenland-Robins) adjusted for that variable, beside the unadjusted ones; each stratum's table and ratios; whether the strata differ (Breslow-Day) |
+| **Stratified (Mantel-Haenszel)** | a yes/no outcome and its event; what is compared and its **reference group**; one variable of 2 to 8 groups to adjust for; **how the participants entered the study** | the odds ratio (Robins-Breslow-Greenland interval) adjusted for that variable and, when the design allows, the risk or prevalence ratio (Greenland-Robins) and difference (Sato's variance), beside the unadjusted ones; each stratum's table and ratios; whether the strata differ (Woolf for the risk or prevalence ratios, Breslow-Day for the odds ratios) |
 | **Rates (from counts)** | one rate, two rates, or observed against expected events; the numbers | events per person-time with exact Poisson intervals; the rate ratio with the exact conditional interval (Clopper-Pearson, the interval of R's `poisson.test`) and a test that agrees with it (twice the smaller tail; R's own p-value is computed another way and can differ): the interval excludes 1 exactly when p < 0.05; the standardised ratio (SMR or SIR) with its exact Poisson interval |
 
 - **Rates is a calculator.** It reads the numbers you type, not the dataset: its fields start empty, it has no Run
   button, and its result follows the numbers and says where they came from. The analysis population and the
   imputation do not apply to it. The typed share of *One group against a reference* works the same way.
+- **How the participants entered the study.** The stratified analysis and the 2x2 panel ask it, once the outcome
+  is chosen, and show only what the design supports. *Not stated* (where they start) gives the odds ratio only:
+  it means the same whatever the sampling. *Followed over time* (a cohort, or a randomised trial whose groups were
+  formed by chance) gives risks, their ratio and their difference, and the number needed to treat for a trial
+  only. *At one point in time* (cross-sectional) gives prevalences, their ratio and difference. *By their outcome*
+  (case-control) gives the odds ratio only: the share with the outcome was set by the sampling. The design is part
+  of the result's settings, and the dossier writes it.
 - **From the 2x2 panel.** The button *Adjust for one variable (Mantel-Haenszel)* of the 2x2 panel (Analysis tab)
-  opens the stratified analysis with the panel's outcome, its event, its two groups and its reference group
-  already chosen: only the variable to adjust for is left to choose, and the plan shows the rest before Run.
+  opens the stratified analysis with the panel's outcome, its event, its two groups, its reference group and its
+  study design already chosen: only the variable to adjust for is left to choose, and the plan shows the rest
+  before Run.
 - **The strata.** One combined ratio sums the strata up only when their ratios are alike. The result says so in three
   ways: no evidence that they differ (which is no proof that they are alike: the test has little power in small
   strata), they differ (said beside the combined ratio: report the ratio of each stratum), or not tested (fewer
@@ -332,8 +340,18 @@ time; each keeps its choices and its result while another is open.
   strata names it. A stratum that holds one group only, or one outcome only,
   has no odds ratio of its own: it adds nothing to the combined odds ratio, and the two tests (the
   Cochran-Mantel-Haenszel test of the association, the Breslow-Day test that the strata are alike) read the
-  others; the result says how many. The risk ratio reads every stratum. How much the variable adjusted for
-  mattered is read on the risk ratio, adjusted against unadjusted: an odds ratio can move without any distortion.
+  others; the result says how many. The risk ratio reads every stratum. Each test that the strata are alike stands
+  beside its own measure: Woolf's for the risk (prevalence) ratios, Breslow-Day's for the odds ratios. Woolf's test
+  reads the strata with an event in both groups: a stratum with events in one group only (a risk ratio of 0, or
+  without an upper bound) is counted beside its verdict, and when Breslow-Day reads it and finds that the strata
+  differ, or when Woolf's test cannot run, Breslow-Day's line stands in. With a common outcome and baseline risks
+  that differ between the strata, the odds ratios differ between strata whose risk ratios do not, and the other way
+  round: when the two tests part so, the result says why, with the reference group's risks; at one baseline risk
+  they part by chance or by power, and the strata are to be read one by one. The adjusted risk difference stands
+  beside the strata's own: with a common risk ratio and baseline risks that differ, their differences differ. How
+  much the variable adjusted for mattered is read on the risk ratio, adjusted against unadjusted: an odds ratio can
+  move without any distortion. In a randomised trial a difference between the two is chance, not confounding. In a
+  cross-sectional sample the odds ratio is a prevalence odds ratio; the page keeps one name for it in every design.
   To adjust for several variables at once, use a logistic model (Survival & regression, Binary).
 - **A change within one group** is not the effect of a treatment: time, regression to the mean and who stayed also
   move it. To compare groups, adjust for the first measurement (Analysis tab, Multivariate).
@@ -350,8 +368,9 @@ time; each keeps its choices and its result while another is open.
 - **The AUC's interval** (DeLong) is cut at 0 and at 1: next to 1 its upper end reads 1.000.
 - **The test or score of *Accuracy of a test*** is a number of three values or more. A test of two values
   (positive or negative) against a reference standard is not offered in this version.
-- **The stratified analysis gives the risk ratio whatever the study design.** In a case-control study, read the
-  odds ratio only.
+- **The study design is said in each analysis.** The 2x2 panel and its pooled detail share it, the panel's button
+  carries it to the stratified analysis, and another outcome starts at *Not stated*. An individually matched
+  case-control study needs a conditional analysis (McNemar's test for pairs), not this one.
 - **Rates are typed.** Rates read from the dataset are those of a count model (Survival & regression, Count or
   rate). A calculator's result follows the numbers typed: it is not kept, and cannot be added to the study
   dossier.
@@ -408,8 +427,9 @@ and the alternative. McNemar, Mantel-Haenszel, the share read from the dataset, 
 the observed data in this version, and each says so beside its Run.
 
 **Zero cells in a 2x2 table.** A zero cell gets the +0.5 (Haldane-Anscombe) correction in its own imputed
-dataset only. When that happens in some imputed datasets but not all, their odds and risk ratios measure
-different things, so they are not pooled: the page pools the risk difference and says why.
+dataset only. When that happens in some imputed datasets but not all, their ratios measure different things, so
+they are not pooled: the summary and the dossier give the pooled chi-square test (D2), the detail the risk (or
+prevalence) difference where the study design supports one, and the page says why.
 - The option *Zero cells: add 0.5 to every cell of every 2x2 table* applies the correction everywhere, so that the
   ratios can be pooled.
 - Report that run as a sensitivity analysis; the page and the dossier label it so.

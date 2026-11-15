@@ -32,8 +32,16 @@ from biostats.paired import (
     paired_table,
     wilcoxon_signed_rank,
 )
-from biostats.rates import incidence_rate, mantel_haenszel, rate_ratio, standardised_ratio
+from biostats.rates import (
+    incidence_rate,
+    mantel_haenszel,
+    rate_ratio,
+    reference_risks,
+    standardised_ratio,
+    stratum_differences,
+)
 from biostats.reliability import category, category_order
+from biostats.study_designs import DESIGNS, DIFFERENCE, NOT_STATED, OFFERED, design_named
 from core.registry import as_code
 from ui.components import empty_state, error_card, help_popover
 from ui.components.mi_mode import mi_token, show_mi_notes
@@ -743,6 +751,7 @@ def strata_choices(
     compare: str,
     reference: Any,
     stratum: str | None = None,
+    design: str | None = None,
 ) -> dict[str, Any]:
     """
     The session values that open the stratified analysis on choices made elsewhere on the page: the 2x2 panel of
@@ -752,7 +761,8 @@ def strata_choices(
 
     Each is carried only when this analysis offers it on ``df`` (the panel can compare two groups of a variable
     that holds more: such a variable is not offered here); what is not carried is left empty. ``stratum``: the
-    variable to adjust for kept from an earlier use, let go when it is now the outcome or the groups.
+    variable to adjust for kept from an earlier use, let go when it is now the outcome or the groups. ``design``:
+    how the panel was told the participants entered the study, carried with its outcome.
     """
     offered = m.two_valued(df)
     chosen: dict[str, Any] = {"mh_outcome": None, "mh_exposure": None}
@@ -768,6 +778,8 @@ def strata_choices(
             chosen |= layout.given("mh_reference", (compare, tuple(compared)), str(reference))
     if stratum is not None and stratum in (outcome, compare):
         chosen["mh_stratum"] = None
+    if chosen["mh_outcome"] and design in DESIGNS:
+        chosen |= layout.given("mh_design", outcome, design)
     return chosen
 
 
@@ -829,7 +841,7 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     )
     candidates = [c for c in groups if c not in (outcome, compare)]
     # in the left half, under what is compared: it spanned the width under two half rows
-    c5, _ = st.columns(2)
+    c5, c6 = st.columns(2)
     stratum = c5.selectbox(
         "Adjust for (one variable, 2 to 8 groups)",
         candidates,
@@ -839,12 +851,30 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         persist_state="page",
         help=HELP["adjust"],
     )
+    # how the participants entered the study: a statement about the outcome, asked once it is chosen and asked
+    # again for another (Not stated); the 2x2 panel's button carries what the panel was told
+    layout.depends("mh_design", outcome, NOT_STATED)
+    design = (
+        c6.radio(
+            m.DESIGN_QUESTION,
+            OFFERED,
+            format_func=m.DESIGN_LABELS.__getitem__,
+            disabled=not outcome,
+            key="mh_design",
+            persist_state="page",
+            # greyed until then: the help says why
+            help="Asked once the outcome is chosen: the answer says how that outcome was sampled. "
+            + HELP["design"],
+        )
+        or NOT_STATED
+    )
     exposed = next((level for level in compared if level != reference), None)
-    config = (compare, outcome, stratum, exposed, event)
+    # the design in words among the settings (the dossier's line, "Last result here"): its stored id read "unknown"
+    config = (compare, outcome, stratum, exposed, event, m.DESIGN_SETTING[design])
     plan = layout.kept(
         "mh_plan",
-        (outcome, event, compare, reference, stratum),
-        lambda: m.plan_strata(df, outcome, event, compare, reference, stratum),
+        (outcome, event, compare, reference, stratum, design),
+        lambda: m.plan_strata(df, outcome, event, compare, reference, stratum, design),
     )
     # a stratum whose values are written several ways is cleaned from the plan, and its copy takes its place
     actions = {"group_key": "mh_stratum", "groupable": candidates, "use": "Adjust for"}
@@ -870,6 +900,7 @@ def _strata(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
                 stratum,  # type: ignore[arg-type]
                 exposure_level=exposed,
                 event_level=event,
+                design=design,
             )
             remember(
                 "mantel_haenszel",
@@ -899,6 +930,360 @@ def _ratio(value: Any) -> str:
 
 
 def _show_strata(
+    res: Any,
+    outcome: str,
+    event: str,
+    compare: str,
+    exposed: str,
+    reference: str,
+    stratum: str,
+    total: int,
+) -> None:
+    design = getattr(
+        res, "design", ""
+    )  # "" for a result kept before the design was asked: shown as it was then
+    if not design:
+        _show_strata_before(res, outcome, event, compare, exposed, reference, stratum, total)
+        return
+    sampling = design_named(design)
+    ratio = m.design_ratio(design)  # "risk ratio", "prevalence ratio", or "" (the odds ratio only)
+    bd_p = float("nan") if res.breslow_day_p is None else float(res.breslow_day_p)
+    woolf_p = float(getattr(res, "woolf_p", float("nan")))
+    # the lines on the strata, and the chip that qualifies the headline's first measure
+    lines, chip = strata_homogeneity(res, ratio)
+    read = getattr(res, "n", None)
+    rows = ""
+    if read is not None:
+        rows = f"; {read:,} of {total:,} rows" + (
+            f", {total - read:,} lack a value" if total > read else ""
+        )
+    odds, odds_bounds = layout.with_interval(res.or_mh, res.or_mh_ci)
+    p_cmh = f"p {layout.p_text(res.mh_test_p)}"
+    if ratio:
+        risk, risk_bounds = layout.with_interval(res.rr_mh, res.rr_mh_ci)
+        metrics = [
+            Metric(
+                f"{ratio.capitalize()}, adjusted for {stratum}",
+                risk,
+                " · ".join(part for part in (risk_bounds, p_cmh) if part),
+            ),
+            Metric("Odds ratio, adjusted", odds, odds_bounds),
+            Metric(
+                "Unadjusted",
+                f"{_as(res.crude_rr, risk)} and {_as(res.crude_or, odds)}",
+                f"{ratio} and odds ratio",
+            ),
+        ]
+    else:
+        metrics = [
+            Metric(
+                f"Odds ratio, adjusted for {stratum}",
+                odds,
+                " · ".join(part for part in (odds_bounds, p_cmh) if part),
+            ),
+            Metric("Unadjusted", _as(res.crude_or, odds), "odds ratio"),
+        ]
+    layout.headline(
+        metrics,
+        f"{as_code(outcome)} = {as_code(event)}, {as_code(exposed)} against {as_code(reference)} "
+        f"({as_code(compare)}), within {res.n_strata} strata of {as_code(stratum)}{rows}. "
+        + m.DESIGN_SENTENCE[design],
+        len(res.warnings),
+        chip=chip,
+    )
+    for line in lines:
+        st.markdown(line)
+    _strata_table(res, design, ratio, outcome, exposed, reference, event)
+    layout.warn(res.warnings)
+    with st.expander("Details: the tests and the method"):
+        details = [
+            "Test of the association over the strata (Cochran-Mantel-Haenszel, continuity-corrected): chi2 = "
+            f"{layout.num(res.mh_test_statistic)}, p {layout.p_text(res.mh_test_p)}."
+        ]
+        if np.isfinite(bd_p):
+            details.append(
+                "Test that the odds ratios of the strata are alike (Breslow-Day): chi2 = "
+                f"{layout.num(res.breslow_day_statistic)}, p {layout.p_text(bd_p)}."
+            )
+        if ratio and np.isfinite(woolf_p):
+            details.append(
+                f"Test that the {ratio}s of the strata are alike (Woolf): chi2 = "
+                f"{layout.num(res.woolf_statistic)}, p {layout.p_text(woolf_p)}, on {res.n_woolf} strata (those "
+                "with an event in both groups)."
+            )
+        if sampling.supports(DIFFERENCE) and np.isfinite(getattr(res, "rd_mh", float("nan"))):
+            details.append(_difference_line(res, sampling.shares == "prevalence", ratio))
+        intervals = "Intervals: Robins-Breslow-Greenland for the odds ratio"
+        if ratio:
+            intervals += f", Greenland-Robins for the {ratio}"
+        if sampling.supports(DIFFERENCE):
+            intervals += ", Sato for the difference"
+        details.append(intervals + ".")
+        st.caption(" ".join(details))
+        st.caption("Method: " + " | ".join(res.references))
+    help_popover(m.DESIGN_READING[design])
+
+
+def _difference_line(res: Any, prevalence: bool, ratio: str) -> str:
+    """The adjusted risk (prevalence) difference in percentage points, and the strata's own beside it: with a common
+    ratio and baseline risks that differ, the differences differ by construction (13.0 points for strata of 5.0
+    and 20.0), and the page's one test of homogeneity is the ratio's."""
+    words = "Prevalence difference" if prevalence else "Risk difference"
+    text = (
+        f"{words}, adjusted (Mantel-Haenszel): {layout.fixed(100 * res.rd_mh, 1)} percentage points"
+    )
+    interval = getattr(res, "rd_mh_ci", None)
+    if interval is None:  # Sato's variance is 0: the interval read "-100.0 to 100.0"
+        text += (
+            ", without an interval: every stratum lies at the edge (a difference of -100 or +100 points), where "
+            "Sato's variance is 0."
+        )
+    else:
+        text += (
+            f", 95% CI {layout.fixed(100 * interval.lower, 1)} to {layout.fixed(100 * interval.upper, 1)} (Sato's "
+            "variance)."
+        )
+    own = stratum_differences(res.per_stratum)
+    if len(own) >= 2:
+        low, high = layout.fixed(100 * own.min(), 1), layout.fixed(100 * own.max(), 1)
+        if low == high:
+            text += f" The strata's own are {'both' if len(own) == 2 else 'all'} {low} points."
+        else:
+            share = "prevalence" if prevalence else "risk"
+            text += (
+                f" The strata's own run from {low} to {high} points: one combined difference sums them up only when "
+                f"they are alike; with a common {ratio}, differences change with each stratum's {share}."
+            )
+    return text
+
+
+DIFFER = ("the strata differ: read each stratum", "caution")
+UNTESTED = ("strata not tested", "neutral")
+
+
+def _span(values: np.ndarray, measure: str, of: str) -> str:
+    """The span of a measure over the strata ("run from 0.458 to 0.861"), or "are all 2.000" when they are one
+    value (they "ran from 2.000 to 2.000")."""
+    low, high = layout.fixed(values.min(), 3), layout.fixed(values.max(), 3)
+    if len(values) == 1:
+        return f"The {measure} is {low}"
+    if low == high:
+        return f"The {measure}s of {of} are {'both' if len(values) == 2 else 'all'} {low}"
+    return f"The {measure}s of {of} run from {low} to {high}"
+
+
+def strata_homogeneity(res: Any, ratio: str) -> tuple[list[str], tuple[str, str] | None]:
+    """
+    Whether the strata differ, in the lines under the headline, and the chip beside its first measure: each test
+    beside its own measure, Woolf's for the design's ratio, Breslow-Day's for the odds ratio. ``ratio``: the
+    design's ("risk ratio", "prevalence ratio"), "" when it reads the odds ratio only.
+
+    Woolf's test reads the strata with an event in both groups. One with events in one group only has a ratio of 0,
+    or without an upper bound, and is counted (the risk ratios "do not differ" was said beside a stratum of 0
+    against 2.0 in the others). When the test cannot run, Breslow-Day's line stands in, beside the odds ratio, and
+    the chip follows it ("strata not tested" stood over strata of opposite directions, Breslow-Day p < 0.001); so
+    it does when Breslow-Day reads strata the test of the ratios cannot and finds that they differ. The line that
+    explains the two tests' parting by a common outcome stands only when they read the same strata and the outcome
+    is common somewhere (10% or more of a group in a stratum), and each direction of the parting is said.
+    """
+    bd_p = float("nan") if res.breslow_day_p is None else float(res.breslow_day_p)
+    bd_known = bool(np.isfinite(bd_p))
+    bd_chip = (DIFFER if bd_p < 0.05 else None) if bd_known else UNTESTED
+    odds = _odds_homogeneity(res, bd_p, "odds ratio")
+    if not ratio:
+        return odds, bd_chip
+    woolf_p = float(getattr(res, "woolf_p", float("nan")))
+    table = res.per_stratum
+    a, n1, c, n0 = (
+        pd.to_numeric(table[name], errors="coerce").to_numpy(dtype=float)
+        for name in ("exposed_events", "exposed_total", "reference_events", "reference_total")
+    )
+    b, d = n1 - a, n0 - c
+    tested = (n1 > 0) & (n0 > 0) & (a + c > 0) & (b + d > 0)  # what Breslow-Day reads
+    read = (a > 0) & (c > 0) & (b + d > 0)  # what Woolf's test reads (biostats.rates._woolf)
+    one_sided = tested & ~read  # events in one group only: a ratio of 0, or without an upper bound
+    zero, unbounded = int((one_sided & (a == 0)).sum()), int((one_sided & (c == 0)).sum())
+    k = zero + unbounded
+    # which of them, as the table writes it: "1 stratum has events in one group only (a risk ratio of 0)"
+    held = (
+        f"{k} {'stratum has' if k == 1 else 'strata have'} events in one group only "
+        f"({m.edge_ratios(ratio, zero, unbounded)})"
+    )
+    left = (
+        f" {held}: the test cannot read {'it' if k == 1 else 'them'}; see the table." if k else ""
+    )
+    with np.errstate(divide="ignore", invalid="ignore"):
+        shares = np.concatenate([(a / n1)[tested], (c / n0)[tested]])
+        ratios = ((a / n1) / (c / n0))[read]
+    common = bool(len(shares) and shares.max() >= 0.10)
+    same = int(read.sum()) == int(tested.sum())
+    share = "prevalence" if ratio.startswith("prevalence") else "risk"
+    # the two tests part by scale only where the reference group's risk differs between the strata: at one baseline
+    # risk a common risk ratio is a common odds ratio, and the reason was given beside risk ratios of 1.4 to 2.6
+    # (a chi-square test of the reference group's events over the strata, p < 0.05)
+    apart_p, lowest, highest = reference_risks(table)
+    by_scale = same and common and bool(apart_p < 0.05)
+    if by_scale:
+        group = as_code(res.reference) if getattr(res, "reference", "") else "the reference group"
+        scale = (
+            f"with a common outcome and {share}s in {group} that differ between the strata "
+            f"({layout.fixed(100 * lowest, 1)}% to {layout.fixed(100 * highest, 1)}%)"
+        )
+    if not np.isfinite(woolf_p):
+        lines = [
+            f":material/help: Whether the {ratio}s of the strata differ was not tested: fewer than two strata have "
+            "an event in both groups." + left
+        ]
+        if bd_known:  # Breslow-Day stands in, beside the odds ratio
+            return lines + odds, bd_chip
+        return lines, UNTESTED
+    if int(read.sum()) == len(a):
+        of = "the strata"
+    elif (
+        (a > 0) & (c > 0) & ~read
+    ).any():  # everyone had the event in a stratum: it has events in both groups
+        of = f"the {int(read.sum())} strata the test reads"
+    else:
+        of = f"the {int(read.sum())} strata with an event in both groups"
+    span = _span(ratios, ratio, of)
+    p = layout.p_text(woolf_p)
+    if woolf_p < 0.05:
+        lines = [
+            f":material/warning: {span}: they differ (p {p}, Woolf's test). Report the {ratio} of each stratum, "
+            f"not one combined {ratio}." + left
+        ]
+        if bd_known and bd_p >= 0.05:
+            said = (
+                f":material/info: The odds ratios of the strata show no evidence that they differ (Breslow-Day p "
+                f"{layout.p_text(bd_p)})"
+            )
+            lines.append(
+                f"{said}: {scale}, the {ratio} changes with each stratum's {share} even when the odds ratio does not. "
+                f"The combined odds ratio sums the strata up; the combined {ratio} does not."
+                if by_scale
+                else f"{said}. Each test reads its own measure: this design reports the {ratio}, so its test decides."
+            )
+        return lines, DIFFER
+    if not (bd_known and bd_p < 0.05):
+        return [
+            f":material/check_circle: {span}: no evidence that they differ (p {p}, Woolf's test). That is no proof "
+            "that they are alike: the test has little power in small strata." + left
+        ], None
+    if by_scale:
+        return [
+            f":material/check_circle: {span}: no evidence that they differ (p {p}, Woolf's test). That is no proof "
+            "that they are alike: the test has little power in small strata." + left,
+            f":material/info: The odds ratios differ between strata (Breslow-Day p {layout.p_text(bd_p)}) while "
+            f"the {ratio}s do not: {scale}, the odds ratio changes with each stratum's {share} even when the "
+            f"{ratio} does not. The combined {ratio} sums the strata up; the combined odds ratio does not.",
+        ], None
+    # Breslow-Day stands in (it reads strata the test of the ratios cannot, or the parting has no reason of scale:
+    # odds ratios that differ at one baseline risk mean ratios that differ): Woolf's line keeps its numbers without
+    # a mark or a verdict (a green "no evidence that they differ" stood above "the odds ratios of the 3 strata
+    # differ"), and the warning closes as every "differ" line does
+    including = (
+        ""
+        if not k
+        else f", including the stratum the test of the {ratio}s cannot read"
+        if k == 1
+        else f", including the {k} strata the test of the {ratio}s cannot read"
+    )
+    return [
+        f":material/info: {span} (p {p}, Woolf's test)"
+        + (f"; {held}, which that test cannot read." if k else "."),
+        f":material/warning: The odds ratios of the {int(tested.sum())} strata differ (Breslow-Day p "
+        f"{layout.p_text(bd_p)}){including}. Report the {ratio} of each stratum, not one combined {ratio}.",
+    ], DIFFER
+
+
+def _odds_homogeneity(res: Any, p: float, words: str) -> list[str]:
+    """The Breslow-Day line: the odds ratios of the strata alike, or not, or not tested. ``words``: what to report
+    of each stratum (the odds ratio; "ratio" for a result kept before the design was asked)."""
+    informative = getattr(res, "n_tested", None)
+    every = pd.to_numeric(res.per_stratum["odds_ratio"], errors="coerce").dropna()
+    ratios, unbounded = every[np.isfinite(every)], int(np.isinf(every).sum())
+    span = ""
+    if len(ratios):
+        span = _span(ratios.to_numpy(dtype=float), "odds ratio", "the strata")
+        if unbounded:
+            span += (
+                f" in {len(ratios)} of the {len(ratios) + unbounded} strata tested; in the other"
+                f"{'s' if unbounded > 1 else ''} the ratio has no upper bound (a cell of the table is empty)"
+            )
+        span += ": "
+    if not np.isfinite(p):
+        return [
+            ":material/help: Whether the strata differ was not tested: "
+            + (
+                "fewer than two strata hold both groups and both outcomes."
+                if informative is not None and informative < 2
+                else "the test has no value on these strata (a combined odds ratio of 0, or without a value)."
+            )
+        ]
+    if p >= 0.05:
+        return [
+            f":material/check_circle: {span}no evidence that they differ (Breslow-Day p {layout.p_text(p)}). "
+            "That is no proof that they are alike: the test has little power in small strata."
+        ]
+    return [
+        f":material/warning: {span}they differ (Breslow-Day p {layout.p_text(p)}). Report the {words} of each "
+        f"stratum, not one combined {words}."
+    ]
+
+
+def _strata_table(
+    res: Any, design: str, ratio: str, outcome: str, exposed: str, reference: str, event: str
+) -> None:
+    """The strata, by design: events among participants for a cohort or a trial; with the outcome for a
+    cross-sectional sample or a design not stated; by outcome, cases and controls, for a case-control sample (its
+    share with the outcome is the sampling's); each with the ratios its design supports."""
+    from ui.components.levels import show_level
+
+    table = res.per_stratum
+    odds = "Odds ratio"  # one name in every design
+    if design == "case-control":
+        # what a case is, said above the counts: the columns "Cases" and "Controls" named no outcome
+        st.caption(
+            f"Cases: {as_code(outcome)} = {as_code(event)}; controls: the other participants."
+        )
+        shown = pd.DataFrame(
+            {
+                "Stratum": table["stratum"],
+                f"Cases: {exposed}": table["exposed_events"],
+                "Cases: all": table["exposed_events"] + table["reference_events"],
+                f"Controls: {exposed}": table["exposed_total"] - table["exposed_events"],
+                "Controls: all": (table["exposed_total"] - table["exposed_events"])
+                + (table["reference_total"] - table["reference_events"]),
+                odds: table["odds_ratio"],
+            }
+        )
+    else:
+        counted = "events" if design in ("cohort", "rct") else f"with {event}"
+        names = {
+            "stratum": "Stratum",
+            "exposed_events": f"{exposed}: {counted}",
+            "exposed_total": f"{exposed}: participants",
+            "reference_events": f"{reference}: {counted}",
+            "reference_total": f"{reference}: participants",
+            "odds_ratio": odds,
+        }
+        if ratio:
+            names["risk_ratio"] = ratio.capitalize()
+        shown = table[[name for name in names if name in table]].rename(columns=names)
+    shown["Stratum"] = [show_level(name) for name in shown["Stratum"]]
+    ratios = [odds] + ([ratio.capitalize()] if ratio and design != "case-control" else [])
+    for name in ratios:  # in words: a missing ratio was drawn "None"
+        shown[name] = [
+            layout.fixed(value, 3)
+            if pd.notna(value) and np.isfinite(value)
+            else ("no upper bound" if pd.notna(value) and value > 0 else "not estimable")
+            for value in shown[name]
+        ]
+    right = {name: st.column_config.TextColumn(alignment="right") for name in ratios}
+    st.dataframe(shown, hide_index=True, width="stretch", column_config=right)
+
+
+def _show_strata_before(
     res: Any,
     outcome: str,
     event: str,

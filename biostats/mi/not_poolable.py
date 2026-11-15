@@ -81,11 +81,13 @@ NOT_POOLABLE: dict[str, NotPoolable] = {
         ),
         NotPoolable(
             analysis="twobytwo_zero_cell",
-            reason="A cell of the 2x2 table is zero in some imputed datasets. Their odds and risk ratios carry the "
-            "+0.5 correction and the others do not, so the estimates measure different things and Rubin's rules "
-            "cannot combine them.",
-            alternative="The risk difference is still pooled. For the ratios, run the analysis again with 0.5 added "
-            "to every cell of every imputed dataset, and report it as a sensitivity analysis.",
+            reason="A cell of the 2x2 table is zero in some imputed datasets. Their ratios carry the +0.5 "
+            "correction and those of the others do not, so the estimates measure different things and Rubin's "
+            "rules cannot combine them.",
+            alternative="The chi-square test (D2) still tests the association, and the risk (or prevalence) "
+            "difference is pooled for a cohort, a trial or a cross-sectional sample. For the ratios, run the "
+            "analysis again with 0.5 added to every cell of every imputed dataset, and report it as a sensitivity "
+            "analysis.",
         ),
         NotPoolable(
             analysis="standardised_variables",

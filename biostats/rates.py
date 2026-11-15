@@ -15,6 +15,7 @@ from statsmodels.stats.rates import confint_poisson, confint_poisson_2indep, tes
 
 from biostats._types import CI
 from biostats.references import REFERENCES
+from biostats.study_designs import BEFORE, DIFFERENCE, RATIO, StudyDesign, design_named
 
 REFERENCES.setdefault(
     "mantel1959",
@@ -27,6 +28,18 @@ REFERENCES.setdefault(
 REFERENCES.setdefault(
     "greenland1985",
     "Greenland S, Robins JM (1985). Estimation of a common effect parameter from sparse follow-up data. Biometrics 41:55-68.",
+)
+REFERENCES.setdefault(
+    "robins1986",
+    "Robins J, Breslow N, Greenland S (1986). Estimators of the Mantel-Haenszel variance consistent in both sparse data and large-strata limiting models. Biometrics 42:311-323.",
+)
+REFERENCES.setdefault(
+    "sato1989",
+    "Sato T (1989). On the variance estimator for the Mantel-Haenszel risk difference. Biometrics 45:1323-1324.",
+)
+REFERENCES.setdefault(
+    "rothman2008",
+    "Rothman KJ, Greenland S, Lash TL (2008). Modern Epidemiology, 3rd edition. Lippincott Williams & Wilkins.",
 )
 REFERENCES.setdefault(
     "ulm1990",
@@ -189,6 +202,16 @@ class StratifiedResult:
     compared: str = ""  # the group whose odds and risk stand above the line
     reference: str = ""  # the group they are compared with
     event: str = ""  # the level of the outcome counted as the event
+    # how the participants were sampled (biostats.study_designs), and the measures it supports: "" and () for a
+    # result kept before the design was asked, read as it was then (every measure)
+    design: str = ""
+    measures: tuple[str, ...] = ()
+    rd_mh: float = float("nan")  # the risk (or prevalence) difference, with Sato's variance
+    rd_mh_ci: CI | None = None
+    # the test that the strata's risk (or prevalence) ratios are alike (Woolf), and the strata it reads
+    woolf_statistic: float = float("nan")
+    woolf_p: float = float("nan")
+    n_woolf: int | None = None
 
 
 def _informative(table: np.ndarray) -> bool:
@@ -260,6 +283,139 @@ def _differ(crude: float, adjusted: float) -> bool:
     return bool(known and abs(np.log(crude) - np.log(adjusted)) > np.log(1.1))
 
 
+def _woolf(tables: Sequence[np.ndarray]) -> tuple[float, float, int]:
+    """
+    The Woolf test that the strata's risk (or prevalence) ratios are alike (Rothman, Greenland & Lash 2008, ch. 15):
+    the inverse-variance weighted sum of squares of the strata's log ratios about their weighted mean, the variance
+    of each Katz's, b/(a n1) + d/(c n0). It reads the strata with an event in both groups and a variance above 0
+    (not everyone with the event in both); statistic, p-value on the strata read - 1 degrees of freedom, and the
+    strata read. Breslow-Day reads the odds ratios: with a common outcome they differ between strata whose risk
+    ratios do not, so each test stands beside its own measure.
+    """
+    nan = float("nan")
+    logs, weights = [], []
+    for table in tables:
+        a, b, c, d = (float(cell) for cell in np.asarray(table, dtype=float).ravel())
+        if a <= 0 or c <= 0:
+            continue
+        variance = b / (a * (a + b)) + d / (c * (c + d))
+        if variance <= 0:
+            continue
+        logs.append(math.log((a / (a + b)) / (c / (c + d))))
+        weights.append(1.0 / variance)
+    if len(logs) < 2:
+        return nan, nan, len(logs)
+    log_ratios, weight = np.asarray(logs), np.asarray(weights)
+    mean = float(np.sum(weight * log_ratios) / np.sum(weight))
+    statistic = float(np.sum(weight * (log_ratios - mean) ** 2))
+    if statistic < 1e-12:  # strata of one ratio: 0, not the rounding's 1.2e-29
+        statistic = 0.0
+    return statistic, float(stats.chi2.sf(statistic, len(logs) - 1)), len(logs)
+
+
+def _rd_mh(tables: Sequence[np.ndarray], alpha: float) -> tuple[float, CI | None]:
+    """The Mantel-Haenszel risk (or prevalence) difference, with Sato's variance (Sato 1989): consistent in sparse
+    strata as in large ones, where the Greenland-Robins variance was half the variance seen in 200 strata of
+    2 + 2. None for its interval when no stratum holds both groups, and when the variance is 0: every stratum then
+    lies at the edge, a difference of -100 or +100 points (the interval read "-1 to 1", from a standard error
+    without a value)."""
+    num = den = p_sum = q_sum = 0.0
+    for table in tables:
+        a, b, c, d = (float(cell) for cell in np.asarray(table, dtype=float).ravel())
+        n1, n0 = a + b, c + d
+        n = n1 + n0
+        if n1 <= 0 or n0 <= 0:
+            continue
+        num += (a * n0 - c * n1) / n
+        den += n1 * n0 / n
+        p_sum += (n1**2 * c - n0**2 * a + n1 * n0 * (n0 - n1) / 2) / n**2
+        q_sum += (a * (n0 - c) + c * (n1 - a)) / (2 * n)
+    if den <= 0:
+        return float("nan"), None
+    rd = num / den
+    variance = (rd * p_sum + q_sum) / den**2
+    if not variance > 1e-15:  # 0 up to rounding: never below it
+        return float(rd), None
+    se = math.sqrt(variance)
+    z = stats.norm.ppf(1 - alpha / 2)
+    return float(rd), CI(
+        lower=float(max(-1.0, rd - z * se)),
+        upper=float(min(1.0, rd + z * se)),
+        level=1 - alpha,
+        method="Sato",
+    )
+
+
+def stratum_differences(per_stratum: pd.DataFrame) -> np.ndarray:
+    """Each stratum's own risk (or prevalence) difference, in the strata that hold both groups: those the
+    Mantel-Haenszel difference combines. Read beside it, since one combined difference sums the strata up only
+    when theirs are alike, and with a common ratio they change with each stratum's risk."""
+    a, n1, c, n0 = (
+        pd.to_numeric(per_stratum[name], errors="coerce").to_numpy(dtype=float)
+        for name in ("exposed_events", "exposed_total", "reference_events", "reference_total")
+    )
+    both = (n1 > 0) & (n0 > 0)
+    return a[both] / n1[both] - c[both] / n0[both]
+
+
+def reference_risks(per_stratum: pd.DataFrame) -> tuple[float, float, float]:
+    """
+    Whether the reference group's risk differs between the strata the two tests of homogeneity read (those that hold
+    both groups and both outcomes): the p-value of a chi-square test of its events over those strata (Pearson,
+    without continuity correction), and its lowest and highest risk. The tests part by scale only where it differs:
+    at one baseline risk a common risk ratio is a common odds ratio. p without a value for fewer than two strata, or
+    when no reference participant, or every one, had the event.
+    """
+    a, n1, c, n0 = (
+        pd.to_numeric(per_stratum[name], errors="coerce").to_numpy(dtype=float)
+        for name in ("exposed_events", "exposed_total", "reference_events", "reference_total")
+    )
+    tested = (n1 > 0) & (n0 > 0) & (a + c > 0) & ((n1 - a) + (n0 - c) > 0)
+    events, others = c[tested], (n0 - c)[tested]
+    nan = float("nan")
+    if not tested.any():
+        return nan, nan, nan
+    risks = events / n0[tested]
+    if tested.sum() < 2 or events.sum() == 0 or others.sum() == 0:
+        return nan, float(risks.min()), float(risks.max())
+    p = float(stats.chi2_contingency(np.column_stack([events, others]), correction=False)[1])
+    return p, float(risks.min()), float(risks.max())
+
+
+def _change_by_design(
+    design: StudyDesign, crude_or: float, or_mh: float, crude_rr: float, rr_mh: float
+) -> list[str]:
+    """The 10% change-in-estimate hint as the design reads it: on its ratio first (a cohort, a cross-sectional
+    sample), as chance in a randomised trial, on the odds ratio alone otherwise."""
+    if design.id == BEFORE:
+        return _change_in_estimate(crude_or, or_mh, crude_rr, rr_mh)
+    if design.supports(RATIO):
+        noun = "prevalence ratios" if design.shares == "prevalence" else "risk ratios"
+        if design.randomised and _differ(crude_rr, rr_mh):
+            return [
+                "the adjusted and unadjusted risk ratios differ by more than 10%: in a randomised trial the "
+                "groups differ in the stratum variable by chance only, so this is no confounding; report the "
+                "analysis the protocol named (adjusting for the factors the randomisation was stratified by is "
+                "the usual one)"
+            ]
+        return [
+            line.replace("risk ratios", noun)
+            for line in _change_in_estimate(crude_or, or_mh, crude_rr, rr_mh)
+        ]
+    if not _differ(crude_or, or_mh):
+        return []
+    if design.id == "case-control":
+        return [
+            "the crude and adjusted odds ratios differ by more than 10%: the stratum variable may be a "
+            "confounder; if the controls were matched on it, the crude odds ratio is biased by the matching: "
+            "report the adjusted one"
+        ]
+    return [
+        "the crude and adjusted odds ratios differ by more than 10%: the stratum variable may be a confounder, "
+        "although odds ratios can also differ without confounding (they are non-collapsible)"
+    ]
+
+
 def _change_in_estimate(crude_or: float, or_mh: float, crude_rr: float, rr_mh: float) -> list[str]:
     """
     The 10% change-in-estimate hint, read on the risk ratio first. Odds ratios are non-collapsible: the crude and
@@ -316,16 +472,25 @@ def mantel_haenszel(
     exposure_level=None,
     event_level=None,
     alpha: float = 0.05,
+    design: str = BEFORE,
 ) -> StratifiedResult:
     """
     Odds and risk ratios combined over strata (Mantel-Haenszel), the Cochran-Mantel-Haenszel test of the association
     and the Breslow-Day test that the strata's odds ratios are alike.
+
+    ``design`` is how the participants were sampled (:mod:`biostats.study_designs`): only the measures it supports
+    are computed and returned (``measures``), so that no reader can show the risk ratio of a case-control sample.
+    The odds ratio and the test always; the risk (prevalence) ratio, its Woolf test of homogeneity and the risk
+    (prevalence) difference with Sato's variance for a cohort, a trial and a cross-sectional sample. Without a
+    design (a caller of before), every measure, as then.
 
     The two tests read the strata that hold both groups and both outcomes. With every stratum, one in which every
     participant had the event gave the Breslow-Day test a degree of freedom too many (p = 0.48 for 0.33), and one of
     a single row left both tests without a value. The risk ratio reads every stratum: one in which everyone had
     the event says that the two risks are equal there.
     """
+    sampling = design_named(design)
+    with_ratio = sampling.supports(RATIO)
     frame = df[[exposure_col, outcome_col, stratum_col]].dropna().astype(str)
     exp_levels = sorted(frame[exposure_col].unique())
     out_levels = sorted(frame[outcome_col].unique())
@@ -358,11 +523,21 @@ def mantel_haenszel(
                 "odds_ratio": (a * d) / (b * c)
                 if b * c > 0
                 else (float("inf") if a * d > 0 else float("nan")),
-                "risk_ratio": (a / (a + b)) / (c / (c + d))
-                if (a + b) > 0 and (c + d) > 0 and c > 0
+                # as the odds ratio: without an upper bound when only the reference group has no event ("not
+                # estimable" was said of a stratum of 10 events in 20 against 0 in 20)
+                "risk_ratio": (
+                    (a / (a + b)) / (c / (c + d))
+                    if c > 0
+                    else (float("inf") if a > 0 else float("nan"))
+                )
+                if (a + b) > 0 and (c + d) > 0
                 else float("nan"),
             }
         )
+        if (
+            not with_ratio
+        ):  # not computed where the design does not support it: never in a table or a record
+            rows[-1].pop("risk_ratio")
         # among the strata the tests read: one that holds a single group is counted with those that carry no
         # information, not twice (the plan said "1 of 7" and the result "3 of 7")
         small += bool(_informative(tbl) and min(a + b, c + d) < 5)
@@ -382,7 +557,12 @@ def mantel_haenszel(
         )
     st = StratifiedTable(tested or tables)
     or_ci = st.oddsratio_pooled_confint(alpha=alpha)
-    rr, rr_ci = _rr_mh(tables, alpha)
+    nan_ci = CI(lower=float("nan"), upper=float("nan"), level=1 - alpha, method="")
+    rr, rr_ci = _rr_mh(tables, alpha) if with_ratio else (float("nan"), nan_ci)
+    rd, rd_ci = _rd_mh(tables, alpha) if sampling.supports(DIFFERENCE) else (float("nan"), None)
+    woolf_statistic, woolf_p, n_woolf = (
+        _woolf(tables) if with_ratio else (float("nan"), float("nan"), None)
+    )
     nan = float("nan")
     mh_statistic, mh_p = nan, nan
     if tested:
@@ -398,8 +578,12 @@ def mantel_haenszel(
         else float("nan")
     )
     a, b, c, d = pooled.ravel()
-    crude_rr = (a / (a + b)) / (c / (c + d)) if a + b > 0 and c + d > 0 and c > 0 else float("nan")
-    warnings.extend(_change_in_estimate(crude, float(st.oddsratio_pooled), crude_rr, rr))
+    crude_rr = (
+        (a / (a + b)) / (c / (c + d))
+        if with_ratio and a + b > 0 and c + d > 0 and c > 0
+        else float("nan")
+    )
+    warnings.extend(_change_by_design(sampling, crude, float(st.oddsratio_pooled), crude_rr, rr))
     return StratifiedResult(
         n_strata=len(tables),
         or_mh=float(st.oddsratio_pooled),
@@ -420,8 +604,10 @@ def mantel_haenszel(
         crude_rr=float(crude_rr),
         references=[
             REFERENCES["mantel1959"],
+            REFERENCES["robins1986"],
             REFERENCES["breslow1980"],
-            REFERENCES["greenland1985"],
+            *([REFERENCES["greenland1985"], REFERENCES["rothman2008"]] if with_ratio else []),
+            *([REFERENCES["sato1989"]] if sampling.supports(DIFFERENCE) else []),
         ],
         warnings=warnings,
         n_tested=len(tested),
@@ -429,6 +615,13 @@ def mantel_haenszel(
         compared=exposure_level,
         reference=next((level for level in exp_levels if level != exposure_level), ""),
         event=event_level,
+        design=sampling.id,
+        measures=sampling.measures if sampling.id != BEFORE else (),
+        rd_mh=rd,
+        rd_mh_ci=rd_ci,
+        woolf_statistic=woolf_statistic,
+        woolf_p=woolf_p,
+        n_woolf=n_woolf,
     )
 
 

@@ -282,8 +282,10 @@ On the **Analysis** tab:
 2. Read **Before you run: the plan**. Each numeric variable gets Welch's t-test, `hf_hospitalisation` gets a
    chi-square test, and Holm is the suggested correction for 4 tests.
 3. Click **Run analysis**.
-4. In the detailed view, choose `hf_hospitalisation`. Set the reference group to *Control* and the event level
-   to *Yes*.
+4. In the detailed view, choose `hf_hospitalisation`. Set the reference group to *Control*, the event level to
+   *Yes*, and **How did the participants enter the study?** to *Followed over time, groups formed by chance
+   (randomised trial)*: risks, their ratio and difference and the number needed to treat are read once the design
+   says the shares are risks.
 
 | Measure (Intervention vs Control) | Value |
 | --- | --- |
@@ -311,9 +313,12 @@ pick the columns, read the plan, then **Run analysis**.
 - **Paired measurements**, *Yes or no*: `smoker_baseline` and `smoker_6m`. **58 participants quit and none
   started** (p < 0.001): the share of smokers falls by 6.2 points.
 - **Stratified (Mantel-Haenszel)**: outcome `hf_hospitalisation` (event *Yes*), compare by `arm` with the reference
-  group *Control*, adjust for **`site_clean`**. The adjusted odds ratio is about **0.64**. Breslow-Day p = 0.33: no
-  evidence that the sites differ. If you choose `site` instead, the uncleaned names give 7 strata: that is why you
-  created `site_clean`.
+  group *Control*, adjust for **`site_clean`**. With the study design not stated, the result gives what every
+  design supports: the adjusted odds ratio is about **0.64**, and Breslow-Day p = 0.33: no evidence that the sites
+  differ. Set **How did the participants enter the study?** to *Followed over time, groups formed by chance
+  (randomised trial)* to read the adjusted risk ratio beside it (the line on the strata then reads Woolf's test of
+  the risk ratios). If you choose `site` instead, the uncleaned names give 7 strata: that is why you created
+  `site_clean`.
 
 ### 5.4 Diagnostic accuracy and agreement
 

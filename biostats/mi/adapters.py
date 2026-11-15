@@ -477,7 +477,8 @@ class TwoByTwoAdapter(Adapter):
             for e in extracts
         ]
         return kept, [
-            f"Odds ratio and risk ratio not pooled: a cell is zero in {zero} of {len(extracts)} imputed datasets. "
+            # the pooled comparison does not know the study design: "the ratios", never "the risk ratio"
+            f"The ratios are not pooled: a cell is zero in {zero} of {len(extracts)} imputed datasets. "
             f"{entry.reason} {entry.alternative}"
         ]
 

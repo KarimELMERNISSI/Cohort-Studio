@@ -6,6 +6,53 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### How the participants entered the study: each analysis reports what the design supports
+
+- **The stratified analysis, the 2x2 panel and the pooled 2x2 of imputed data ask "How did the participants enter
+  the study?"** and report only what the answer supports. Before, the stratified analysis gave a risk ratio whatever
+  the sampling, and the 2x2 panel set to *case-control* still showed the risk ratio, the risk difference and a number
+  needed to treat beside a note that they cannot be estimated. In a case-control sample the "risk ratio" measures the
+  share of controls drawn: from one population whose risk ratio is 2.00, case-control samples gave adjusted "risk
+  ratios" of 1.50, 1.98 or 1.19 depending on the number of controls, while the odds ratio stayed between 2.39 and 2.53.
+  - *Not stated* (where they start): the odds ratio and the test of the association, which every sampling supports.
+  - *Followed over time* (a cohort; a randomised trial): risks, their ratio and difference, and the number needed to
+    treat for a trial only (it reads as the effect of an intervention).
+  - *At one point in time* (cross-sectional): prevalences, the prevalence ratio and difference.
+  - *By their outcome* (case-control): the odds ratio only; the stratified table then reads by cases and controls.
+  - The design is part of the result's settings; the dossier writes it, and a result kept before the design was
+    asked is written as it was, with "Study design: not recorded".
+- **Each test that the strata are alike stands beside its own measure:** a new Woolf test for the risk (prevalence)
+  ratios, Breslow-Day for the odds ratios. Breslow-Day stood beside the risk ratio: in simulated cohorts of four
+  strata of 800 with a common risk ratio and baseline risks from 5% to 45%, it said "the strata differ" 42% of the
+  time, since the odds ratios differ when the baseline risks do. When the two tests part, either way, the result
+  says so, and gives that reason only where the reference group's risks differ between the strata (at one baseline
+  risk a common risk ratio is a common odds ratio).
+  - Woolf's test reads the strata with an event in both groups. A stratum with events in one group only (a ratio of
+    0, or without an upper bound) is counted beside its verdict; when Breslow-Day reads it and finds that the strata
+    differ, or when Woolf's test cannot run, Breslow-Day's line and its chip stand in.
+  - A stratum's ratio without an upper bound (no event in the reference group) reads "no upper bound", as its odds
+    ratio, where it read "not estimable".
+- **An adjusted risk (prevalence) difference** with Sato's variance in the Details, in percentage points, beside the
+  strata's own differences (on the UGDP table of Rothman, Greenland & Lash 2008: 3.5 points, 95% CI -2.8 to 9.7; the
+  risk ratio 1.33, 0.80 to 2.20; Woolf p = 0.51). When every stratum lies at the edge (a difference of -100 or +100
+  points) Sato's variance is 0, and no interval is given where one read "-100 to 100".
+- **The change in estimate is read as the design reads it:** chance, not confounding, in a randomised trial; the
+  odds ratio with the matching's caveat in a case-control sample.
+- **With imputed data and a zero cell,** the summary and the dossier give the pooled chi-square test (D2) where they
+  gave the risk difference, which a case-control sample does not support.
+- **The 2x2 panel's button** carries the design to the stratified analysis with the other choices.
+- **The number needed to treat says which way the difference goes:** "for about every 10 participants in
+  'Intervention' rather than 'Control', one event fewer". It read "about 10 people ... per one additional event"
+  whatever the sign, of an intervention that prevents one.
+- **The 2x2 panel:** the design's ratio first, as in the stratified analysis; the question on a row of its own (the
+  trial's label was cut); the risk difference in percentage points; a zero cell's correction named for the ratios
+  the design reads, once.
+
+### The analysis plan refuses what it cannot read
+
+- **A spec or a record of the analysis plan holding a key this version does not know is refused** with its reason,
+  never read as if the key were not there (a check of a package then reads "not run").
+
 ### Formulas and criteria are computed in a worker with a time limit and a memory limit
 
 - **Every formula and every criterion is computed in a separate worker process, stopped when it takes longer than 30

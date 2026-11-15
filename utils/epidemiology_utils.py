@@ -174,7 +174,8 @@ def calculate_2x2_epidemiology_metrics(
         exposure_level=exposure_label, reference_level=f"Not {exposure_label}",
         event_level=outcome_label, nonevent_level=f"No {outcome_label}",
     )
-    res = analyze_twobytwo(table, alpha=alpha)
+    # every measure, as this wrapper always gave: it states no study design (biostats.study_designs)
+    res = analyze_twobytwo(table, alpha=alpha, design="")
     level = 1.0 - alpha
 
     def _ci(ci) -> ConfidenceInterval:

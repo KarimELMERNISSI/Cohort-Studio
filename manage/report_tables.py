@@ -26,6 +26,17 @@ class ResultBlocks:
     warnings: list[str] = field(default_factory=list)
 
 
+
+# how the participants entered the study, as the dossier writes it (the page's labels, in a sentence: held equal by
+# tests/ui_layer/test_study_design.py); the ids are biostats.study_designs'
+DESIGN_WORDS: dict[str, str] = {
+    "unknown": "not stated: odds ratios only",
+    "cohort": "followed over time (cohort)",
+    "rct": "followed over time, groups formed by chance (randomised trial)",
+    "cross-sectional": "at one point in time (cross-sectional)",
+    "case-control": "by their outcome (case-control)",
+}
+
 def _num(value: Any, digits: int = 3) -> str:
     if value is None:
         return "n/a"
@@ -40,6 +51,15 @@ def _num(value: Any, digits: int = 3) -> str:
     if abs(x) >= 1000:
         return f"{x:,.0f}"
     return f"{x:.{digits}g}" if abs(x) >= 1e-3 or x == 0 else f"{x:.2e}"
+
+
+def _points(share: float) -> str:
+    """A difference of two shares in percentage points, one decimal, a half rounded away from zero, as the page
+    writes it (ui.guidance.numbers.fixed): "-10.6", never "-0.0"."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    rounded = Decimal(repr(100 * float(share))).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return f"{rounded:.1f}" if rounded else "0.0"
 
 
 def _p(value: Any) -> str:
@@ -471,16 +491,23 @@ def _pooled_comparison_blocks(value: dict) -> ResultBlocks:
                     "Result": f"OR = {_num(t.natural_estimate)} (95% CI {_ci(t.natural_ci)}); {_peq(t.p_value)}",
                 }
             )
-        elif item.kind == "twobytwo":  # a zero cell in some imputed datasets: the ratios are not pooled
-            t = res.term("risk_difference")
+        elif item.kind == "twobytwo":
+            # a zero cell in some imputed datasets: the ratios are not pooled. The pooled chi-square test stands in,
+            # which every study design supports (a risk difference is no measure of a case-control sample)
+            d2 = res.tests["chi_square"]
             rows.append(
                 {
                     "Variable": target,
-                    "Analysis": "Risk difference (odds ratio not pooled: a zero cell)",
-                    "Result": f"RD = {_num(t.estimate)} (95% CI {_ci(t.ci)}); {_peq(t.p_value)}",
+                    "Analysis": "Chi-square test (D2; odds ratio not pooled: a zero cell)",
+                    "Result": f"F = {_num(d2.statistic)}, df = {_num(d2.df1, 4)}, {_num(d2.df2, 4)}; {_peq(d2.p_value)}",
                 }
             )
-            blocks.warnings.extend(w for w in res.warnings if w.startswith("Odds ratio and risk ratio not pooled"))
+            blocks.warnings.extend(
+                w
+                for w in res.warnings
+                # the words of before named the risk ratio whatever the design
+                if w.startswith(("The ratios are not pooled", "Odds ratio and risk ratio not pooled"))
+            )
         else:
             d2 = res.tests["chi_square"]
             rows.append(
@@ -502,9 +529,10 @@ def result_blocks(value: Any) -> ResultBlocks:
     from biostats._types import TestResult
     from biostats.agreement import SLOPE_READING, BlandAltman
     from biostats.linear import AncovaResult, LinearModelResult
-    from biostats.rates import StratifiedResult
+    from biostats.rates import StratifiedResult, stratum_differences
     from biostats.regression import APPARENT_AUC, APPARENT_AUC_NOTE, RegressionResult
     from biostats.reliability import NEAR_MISSES, ICCResult, KappaResult
+    from biostats.study_designs import DIFFERENCE, RATIO, design_named
     from biostats.survival import CoxResult, SurvivalComparison
 
     if hasattr(value, "m_total") and hasattr(value, "tests"):
@@ -610,15 +638,68 @@ def result_blocks(value: Any) -> ResultBlocks:
                 if tested == 1
                 else ", none of which holds both groups and both outcomes"
             )
-        blocks.lines.extend(
-            [
-                f"Mantel-Haenszel odds ratio = {_num(value.or_mh)} (95% CI {_ci(value.or_mh_ci)}); crude OR = {_num(value.crude_or)}",
-                f"Mantel-Haenszel risk ratio = {_num(value.rr_mh)} (95% CI {_ci(value.rr_mh_ci)}); crude RR = {_num(value.crude_rr)}",
-                f"Cochran-Mantel-Haenszel test of the association: chi2 = {_num(value.mh_test_statistic)}, "
-                f"{_peq(value.mh_test_p)}; Breslow-Day test that the odds ratios of the strata are alike: chi2 = "
-                f"{_num(value.breslow_day_statistic)}, {_peq(value.breslow_day_p)}; {strata}",
-            ]
+        # how the participants entered the study, and only the measures it supports: never the "risk ratio" of a
+        # case-control sample; a result kept before the design was asked is written as it was then
+        design = getattr(value, "design", "")
+        sampling = design_named(design)
+        blocks.lines.append(
+            "Study design not stated: odds ratios only"  # one colon, as the page's sentence
+            if design == "unknown"
+            else f"Study design: {DESIGN_WORDS[design]}"
+            if design
+            else "Study design: not recorded (computed before the design was asked)"
         )
+        lines = [
+            f"Mantel-Haenszel odds ratio = {_num(value.or_mh)} (95% CI {_ci(value.or_mh_ci)}); crude OR = {_num(value.crude_or)}"
+        ]
+        if sampling.supports(RATIO):
+            prevalence = sampling.shares == "prevalence"
+            ratio, short = ("prevalence ratio", "PR") if prevalence else ("risk ratio", "RR")
+            lines.append(
+                f"Mantel-Haenszel {ratio} = {_num(value.rr_mh)} (95% CI {_ci(value.rr_mh_ci)}); crude {short} = "
+                f"{_num(value.crude_rr)}"
+            )
+            difference = getattr(value, "rd_mh_ci", None)
+            rd = float(getattr(value, "rd_mh", float("nan")))
+            if design and sampling.supports(DIFFERENCE) and math.isfinite(rd):
+                # in percentage points, as the page: a proportion here (-0.106) beside "-9.9 points" there
+                words = "prevalence difference" if prevalence else "risk difference"
+                interval = (
+                    "no interval: every stratum lies at the edge, a difference of -100 or +100 points, where "
+                    "Sato's variance is 0"
+                    if difference is None
+                    else f"95% CI {_points(difference.lower)} to {_points(difference.upper)}; Sato's variance"
+                )
+                line = f"Mantel-Haenszel {words} = {_points(rd)} percentage points ({interval})"
+                own = stratum_differences(value.per_stratum)
+                if len(own) >= 2:
+                    low, high = _points(own.min()), _points(own.max())
+                    line += (
+                        f". The strata's own are {'both' if len(own) == 2 else 'all'} {low} points"
+                        if low == high
+                        else f". The strata's own run from {low} to {high} points: one combined difference sums "
+                        f"them up only when they are alike; with a common {ratio}, differences change with each "
+                        f"stratum's {'prevalence' if prevalence else 'risk'}"
+                    )
+                lines.append(line)
+        tests = (
+            f"Cochran-Mantel-Haenszel test of the association: chi2 = {_num(value.mh_test_statistic)}, "
+            f"{_peq(value.mh_test_p)}; Breslow-Day test that the odds ratios of the strata are alike: chi2 = "
+            f"{_num(value.breslow_day_statistic)}, {_peq(value.breslow_day_p)}"
+        )
+        woolf = getattr(value, "woolf_p", float("nan"))
+        if design and sampling.supports(RATIO) and math.isfinite(woolf):
+            noun = "prevalence ratios" if sampling.shares == "prevalence" else "risk ratios"
+            read = getattr(value, "n_woolf", None)
+            tests += (
+                f"; Woolf test that the {noun} of the strata are alike: chi2 = {_num(value.woolf_statistic)}, "
+                f"{_peq(woolf)}"
+                + (f", on {read} strata (those with an event in both groups)" if read is not None else "")
+            )
+            # the analysis's strata named as such: after Woolf's, "3 strata" read as the test's
+            strata = f"the analysis: {strata}"
+        lines.append(f"{tests}; {strata}")
+        blocks.lines.extend(lines)
         blocks.warnings.extend(value.warnings)
         return blocks
     if isinstance(value, BlandAltman):

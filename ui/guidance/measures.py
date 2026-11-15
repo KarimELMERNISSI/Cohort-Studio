@@ -23,6 +23,7 @@ from scipy import stats
 from biostats.diagnostic import YOUDEN_MIN_CLASS, delong_auc
 from biostats.rates import read_by_the_tests
 from biostats.reliability import by_value, category, category_order, number_of, rating
+from biostats.study_designs import RATIO, design_named
 from biostats.survival import EVENT_WORDS
 from core.registry import as_code
 from ui.guidance.analysis import Advice
@@ -97,13 +98,17 @@ PAIRED_ENTRIES: tuple[Entry, ...] = (
         STRATA,
         "Stratified (Mantel-Haenszel)",
         "A yes/no outcome compared between two groups within the levels of a third "
-        "variable: odds and risk ratios adjusted for it (Mantel-Haenszel).",
+        "variable: the odds ratio, and the risk or prevalence ratio when the study design allows, "
+        "adjusted for it (Mantel-Haenszel).",
         (
             "Mantel-Haenszel",
             "Cochran-Mantel-Haenszel test",
             "Breslow-Day test",
+            "Woolf test",
             "Odds ratio (OR)",
             "Risk ratio (RR)",
+            "Prevalence ratio (PR)",
+            "Case-control study",
             "Confounder",
         ),
     ),
@@ -229,6 +234,11 @@ HELP: dict[str, str] = {
     "event": "The value of the outcome counted as the event.",
     "compare": "The exposure or group compared, in two values.",
     "reference_group": "Ratios compare the other group with this one.",
+    "design": "It decides which ratios mean something. Followed over time, from before the outcome (a cohort; a "
+    "randomised trial, its groups formed by chance): risks, so risk ratios. At one point in time, the outcome and "
+    "the groups recorded together (a survey): prevalences, so prevalence ratios. By their outcome, those with it "
+    "and those without it sampled separately (case-control): the share with the outcome was set by the sampling, "
+    "so odds ratios only. Not stated: the odds ratio, which every design supports.",
     "adjust": "The analysis is done within each of its groups (strata), then combined. Choose a variable that comes "
     "before the exposure and may distort the comparison (site, sex, age group), not a consequence of the exposure. "
     "For several variables at once, use a logistic model (Survival & regression, Binary).",
@@ -1377,6 +1387,99 @@ def plan_share(
 # ----------------------------------------------------------------------------- an association within strata
 
 
+# ----------------------------------------------------------------------------- how the participants entered the study
+
+# the question of the stratified analysis, of the 2x2 panel and of its pooled detail; its ids are those the panel
+# stores (biostats.study_designs), never renamed
+DESIGN_QUESTION = "How did the participants enter the study?"
+DESIGN_LABELS: dict[str, str] = {
+    "unknown": "Not stated: odds ratios only",
+    "cohort": "Followed over time (cohort)",
+    "rct": "Followed over time, groups formed by chance (randomised trial)",
+    "cross-sectional": "At one point in time (cross-sectional)",
+    "case-control": "By their outcome (case-control)",
+}
+# how a result's settings name the design (the dossier's settings line, "Last result here"): words, never the stored
+# id, which read "..., Yes, unknown"
+DESIGN_SETTING: dict[str, str] = {
+    "unknown": "study design not stated",
+    "cohort": "cohort",
+    "rct": "randomised trial",
+    "cross-sectional": "cross-sectional",
+    "case-control": "case-control",
+}
+DESIGN_CASE_CONTROL = "By their outcome (case-control): the share with the outcome was set by the sampling, so odds ratios only."
+DESIGN_NOT_STATED = (
+    "The study design is not stated: odds ratios only, which every design supports. Say how the participants entered "
+    "the study to read risk ratios (followed over time) or prevalence ratios (at one point in time)."
+)
+# how a result's sentence ends, by design
+DESIGN_SENTENCE: dict[str, str] = {
+    "unknown": "Study design not stated: odds ratios only.",
+    "cohort": "Participants followed over time (cohort).",
+    "rct": "Participants followed over time, groups formed by chance (randomised trial).",
+    "cross-sectional": "Participants at one point in time (cross-sectional): prevalences, not risks.",
+    "case-control": "Participants taken by their outcome (case-control): odds ratios only.",
+}
+# "How to read this" of the stratified analysis, by design (Knol et al. 2008 for the case-control reading;
+# Thompson, Myers & Kriebel 1998 for prevalences)
+_COHORT_READING = (
+    "Within each group of the variable adjusted for, the risk of the event among one group is compared with the risk "
+    "among the other; the adjusted risk ratio combines these comparisons (Mantel-Haenszel). One combined ratio sums "
+    "the strata up only when their ratios are alike. How much the variable adjusted for mattered is read on the risk "
+    "ratio, adjusted against unadjusted: the odds ratio can move without any distortion, and with a common outcome it "
+    "lies further from 1. The shares are risks only if every participant was followed for the same period, or until "
+    "the outcome; with losses to follow-up or unequal follow-up, use Survival & regression. For several variables at "
+    "once, a logistic model (Survival & regression, Binary)."
+)
+DESIGN_READING: dict[str, str] = {
+    "cohort": _COHORT_READING,
+    "rct": _COHORT_READING
+    + " In a randomised trial, adjusting for a variable of the randomisation (a stratification factor, a site) makes "
+    "the estimate more precise; a difference between the adjusted and unadjusted ratios is chance, not confounding.",
+    "cross-sectional": "Exposure and outcome were recorded at one time: the shares are prevalences, and the adjusted "
+    "prevalence ratio combines the strata's (Mantel-Haenszel). The odds ratio beside it compares the odds of having "
+    "the outcome at that time, a prevalence odds ratio: further from 1 than the prevalence ratio when the outcome is "
+    "common. A prevalence mixes how often the outcome starts with "
+    "how long it lasts, and which came first is not known: the ratio describes an association at one time. One "
+    "combined ratio sums the strata up only when their ratios are alike. For several variables at once, a logistic "
+    "model (Survival & regression, Binary).",
+    "case-control": "Participants were sampled because they had the outcome (cases) or did not (controls): the share "
+    "with the outcome is the sampling's, so risks, their ratio and their difference cannot be estimated. The odds "
+    "ratio can: the odds of exposure among cases over those among controls equal the odds ratio of the outcome. What "
+    "it approximates depends on how the controls were drawn: among those still free of the outcome when each case "
+    "occurred, the rate ratio; from everyone at the start, the risk ratio; among those free of the outcome at the "
+    "end, the risk ratio only when the outcome is rare. One combined odds ratio sums the strata up only when their "
+    "odds ratios are alike.",
+    "unknown": "How the participants were sampled decides which measures mean something. The odds ratio means the "
+    "same whatever the sampling, and is given: the adjusted odds ratio combines the odds ratios of the strata "
+    "(Mantel-Haenszel), which sums them up only when they are alike. Say whether this is a cohort, a trial, a "
+    "cross-sectional or a case-control sample to read risks or prevalences.",
+}
+
+
+def edge_ratios(ratio: str, zero: int, unbounded: int) -> str:
+    """The ratios of strata with events in one group only, as the strata table writes them: "a risk ratio of 0" (no
+    event in the group compared), "a risk ratio without an upper bound" (none in the reference group), or "risk
+    ratios of 0, or without an upper bound" for several of both kinds."""
+    edge = (
+        "of 0, or without an upper bound"
+        if zero and unbounded
+        else "of 0"
+        if zero
+        else "without an upper bound"
+    )
+    return f"a {ratio} {edge}" if zero + unbounded == 1 else f"{ratio}s {edge}"
+
+
+def design_ratio(design: str) -> str:
+    """The name of a design's ratio ("risk ratio", "prevalence ratio"), "" when the design supports none."""
+    found = design_named(design)
+    if not found.supports(RATIO):
+        return ""
+    return "prevalence ratio" if found.shares == "prevalence" else "risk ratio"
+
+
 def plan_strata(
     df: pd.DataFrame,
     outcome: str | None,
@@ -1384,6 +1487,7 @@ def plan_strata(
     compare: str | None,
     reference: Any | None,
     stratum: str | None,
+    design: str = "unknown",
 ) -> ModelPlan:
     rows = len(df)
     if not outcome or not compare or not stratum:
@@ -1445,7 +1549,7 @@ def plan_strata(
     spelt = _spellings(stratum, df[stratum])
     if spelt:
         advice.append(spelt)
-    empty = small = 0
+    empty = small = zero = unbounded = 0
     sizes: list[int] = []
     expected = lowest = highest = 0.0
     for _, index in groups.groupby(groups).groups.items():
@@ -1457,6 +1561,10 @@ def plan_strata(
             continue
         if min(n1, n0) < SMALL_STRATUM:
             small += 1
+        # events in one group only, which Woolf's test cannot read: a ratio of 0 (none in the group compared), or
+        # without an upper bound (none in the reference group)
+        zero += not (e & y).any()
+        unbounded += not (~e & y).any()
         expected += n1 * m1 / n
         lowest += max(0, m1 - n0)
         highest += min(n1, m1)
@@ -1501,8 +1609,25 @@ def plan_strata(
             Advice("info", "One stratum holds 90% or more of the rows: little is adjusted.")
         )
     advice += _left_out(df, [compare, outcome, stratum], used)
+    ratio = design_ratio(design)
+    first = f"{ratio.capitalize()}s and odds ratios" if ratio else "Odds ratios"
+    one_sided = zero + unbounded
+    if ratio and one_sided:  # which case each is, as the result says it
+        advice.append(
+            Advice(
+                "info",
+                f"{one_sided} of {total} strata {'has' if one_sided == 1 else 'have'} events in one group only "
+                f"({edge_ratios(ratio, zero, unbounded)}): the test that the {ratio}s are alike cannot read "
+                f"{'it' if one_sided == 1 else 'them'} (Breslow-Day's test of the odds ratios can).",
+            )
+        )
+    # the design's own line, as a design not stated has: the clause trailed after the strata's sizes
+    if design == "case-control":
+        advice.append(Advice("info", DESIGN_CASE_CONTROL))
+    elif not design_named(design).supports(RATIO):
+        advice.append(Advice("info", DESIGN_NOT_STATED))
     step = PlanStep(
-        f"Odds and risk ratios of {as_code(outcome)} = {as_code(event)}, {as_code(exposed_level)} against "
+        f"{first} of {as_code(outcome)} = {as_code(event)}, {as_code(exposed_level)} against "
         f"{as_code(reference)} ({as_code(compare)}), within the {total} groups of {as_code(stratum)}, then "
         f"combined (strata of {min(sizes):,} to {max(sizes):,} rows)",
         used,
