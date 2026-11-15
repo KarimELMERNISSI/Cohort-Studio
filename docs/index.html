@@ -166,7 +166,7 @@
         <div class="fact">
           <span class="fact-icon"><svg class="i" aria-hidden="true"><use href="#i-flask"/></svg></span>
           <h3>Tested on every push</h3>
-          <p>More than 2,500 automated tests, type checks and per-package coverage floors run in CI.</p>
+          <p>More than 3,400 automated tests, type checks and per-package coverage floors run in CI.</p>
           <a class="link-arrow fact-link" href="https://github.com/KarimELMERNISSI/Cohort-Studio/actions/workflows/ci.yml">The CI runs <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
         </div>
         <div class="fact">
@@ -337,6 +337,7 @@
               <li>Welch's t-test and Welch ANOVA by default; assumption checks are diagnostics, not gates</li>
               <li>Holm, Benjamini–Hochberg or Bonferroni corrections, explained in plain words</li>
               <li>2×2 tables, ANCOVA, diagnostic accuracy, kappa and ICC, McNemar, Mantel–Haenszel and power</li>
+              <li>A 2×2 or stratified analysis asks how the participants entered the study, and reports only the measures that design supports</li>
             </ul>
             <a class="link-arrow" href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/05_Epidemiology.md">Epidemiology and testing guide <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           </div>
@@ -467,8 +468,9 @@
           <div class="method-card">
             <h3>Epidemiology</h3>
             <ul>
-              <li>Risk ratio, odds ratio and risk difference with the Haldane–Anscombe correction</li>
-              <li>Mantel–Haenszel estimates with the Breslow–Day test <cite>Mantel &amp; Haenszel 1959</cite></li>
+              <li>Measures by study design: the odds ratio for every sampling; risk or prevalence ratios and differences for cohorts, trials and cross-sectional samples; the number needed to treat for a trial <cite>Altman 1998</cite></li>
+              <li>Mantel–Haenszel estimates <cite>Mantel &amp; Haenszel 1959</cite>, the risk difference with Sato's variance <cite>Sato 1989</cite>, and the strata compared by Woolf's and the Breslow–Day tests <cite>Breslow &amp; Day 1980</cite></li>
+              <li>The Haldane–Anscombe correction for a zero cell</li>
               <li>Incidence rates with exact Poisson intervals and rate ratios</li>
               <li>Standardised mortality ratios</li>
             </ul>
@@ -584,6 +586,7 @@
           <ul class="arch-points">
             <li><b>One write path.</b> Every change to the data goes through one session object that records a trace step; nothing changes the data while a page is drawn.</li>
             <li><b>A clean engine.</b> Its statistics (<code>biostats</code>), file import (<code>ingest</code>) and data session (<code>core</code>) packages import no Streamlit, and <code>core</code> imports nothing above it. A layering test enforces both.</li>
+            <li><b>Formulas within limits.</b> Every formula and criterion is computed in a separate worker process, stopped past 30 seconds or 2,048 MB, so one expression cannot hold the server for every user.</li>
             <li><b>Light core install.</b> The application runs without the <code>ai</code>, <code>ml</code> and <code>survival</code> groups; CI tests that minimal install in its own job.</li>
             <li><b>Accounts and workspaces.</b> Role-based accounts with bcrypt and login lockout, one workspace per user, and a first administrator created from a one-time setup token.</li>
           </ul>
