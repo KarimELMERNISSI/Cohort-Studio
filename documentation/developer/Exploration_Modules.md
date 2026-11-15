@@ -259,7 +259,7 @@ Table of categories and lower bounds (all methods, or one) for exports and legen
 _No module description._
 
 **Imports**:
-`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.criteria.describe_definition`, `core.derived.from_config`, `core.population.family_checks`, `core.population.family_masks`, `core.population.family_operator`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`, `enrich.recode.MAX_VALUES`, `enrich.recode.CleanCopy`, `enrich.recode.level_counts`
+`logging`, `collections.abc.Mapping`, `typing.Any`, `numpy`, `pandas`, `statsmodels.stats.proportion.proportion_confint`, `biostats.outliers.UNIVARIATE_METHODS`, `biostats.outliers.detect_outliers`, `core.criteria.criterion_columns`, `core.criteria.describe_definition`, `core.derived.from_config`, `core.expressions.WorkerUnavailable`, `core.population.family_checks`, `core.population.family_masks`, `core.population.family_operator`, `core.registry.as_code`, `enrich.derived.CANNOT`, `enrich.derived.DISAGREES`, `enrich.derived.MIN_ROWS`, `enrich.derived.MOSTLY`, `enrich.derived.TOO_FEW`, `enrich.derived.check_derived`, `enrich.recode.MAX_VALUES`, `enrich.recode.CleanCopy`, `enrich.recode.level_counts`
 
 ### class `DataQualityAuditor` (data_quality_auditor.py)
 

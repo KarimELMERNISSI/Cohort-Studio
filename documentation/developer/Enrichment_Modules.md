@@ -695,7 +695,7 @@ give days, and evaluates it through the whitelisted evaluator (``core.expression
 it as well, so a derived variable is recomputed exactly as it was created._
 
 **Imports**:
-`ast`, `datetime`, `logging`, `re`, `collections.abc.Iterable`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `core.expressions.DEFAULT_POLICY`, `core.expressions.evaluate_tree`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`, `utils.logging_config.single_line`
+`ast`, `logging`, `re`, `collections.abc.Iterable`, `dataclasses.dataclass`, `typing.Any`, `numpy`, `pandas`, `core.expressions.DEFAULT_POLICY`, `core.expressions.ExpressionStopped`, `core.expressions.WorkerUnavailable`, `core.expressions.evaluate_tree`, `core.expressions.runner.HELPERS`, `core.expressions.runner.SAFE_SUB`, `ingest.analyzer.DataAnalyzer`, `ingest.dates.smart_parse_dates`
 
 ### class `FormulaReading` (formulas.py)
 

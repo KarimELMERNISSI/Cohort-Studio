@@ -1635,6 +1635,10 @@ No description available.
 
 No description available.
 
+### class `FormulasSection` (settings.py)
+
+No description available.
+
 ### class `DevelopmentSection` (settings.py)
 
 No description available.

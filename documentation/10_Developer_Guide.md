@@ -182,6 +182,39 @@ below in place raises `UntracedMutationError`.
   (the processors minus one by default; a container's CPU quota is not visible there, so set it).
 - **A discarded Enrich draft deletes its snapshot files**, but never one that a saved trace uses
   (`manage.snapshots.delete_unreferenced`).
+- **Expressions are computed in worker processes, with a time limit and a memory limit.** Every formula and criterion
+  goes through `core.expressions.evaluate_tree`, which hands the tree to the runner installed in the process
+  (`core/expressions/runner.py`); none means this process (a notebook, the worker itself). `main.py` installs the pool
+  of `manage/workers/` once per server process (`install_for`), unless `CMP_FORMULA_IN_PROCESS` keeps expressions in
+  the process (the test suite sets it; the log warns; never on a shared server). Every expression goes there, the
+  user's own included: one rule, so that no page computes one in the server's process.
+  - **A worker** is the real interpreter, started isolated (`-I -B`), in an empty folder, with no setting or key in its
+    environment; it imports `core.expressions` only. Its memory limit is a Job Object on Windows and its own
+    `RLIMIT_DATA` on Linux (`manage/workers/limits.py`); macOS has the time limit only. The pool ends a worker at the
+    time limit, the only way to stop Python's pattern engine, and starts its replacement in the background. A worker
+    runs at the normal priority: the time limit is the server's clock, and a starved worker missed it.
+  - **A worker serves every user in turn:** what one job leaves in its memory is out of the next job's reach only
+    because the evaluator offers no function that reads memory it was not given, or a file
+    (`test_no_expression_reads_memory_it_was_not_given_or_a_file`). Adding a numpy or pandas name to the evaluator
+    must keep that test passing.
+  - **What travels:** the tree, the table cut to the columns it reads, the values among its names, and the functions it
+    calls by name, which must be registered in `runner.HELPERS`. An answer is read by a reader that knows the names
+    values and errors need and nothing else (`manage/workers/wire.py`), its size capped.
+  - **A stop** is the expression's own failure (`ExpressionStopped`, an `UnsafeExpressionError` with its reason and
+    limit): remembered, shown in its own words, and said "stopped earlier" when it is refused again. **No worker**
+    (`WorkerUnavailable`) is nobody's: the handlers that catch everything let it through and nothing is remembered.
+    The sidebar's population box and an AI suggestion's trial say it in place, so the page goes on; a page that needs
+    an expression stops, and `main.py` says why in the waiting line's place, with Try again.
+  - **A page that waits** more than a second shows a line (`ui/waiting.computing`): under the control that started the
+    computation when the page opens its own (Compute & Preview, Validate's criterion form), at the top of the page
+    otherwise; Stop or a click elsewhere stops the run there, and the worker computing is ended. A widget's callback
+    runs before the script, outside that line, so the criteria's callbacks record the ticks only
+    (`AppState.tick(..., install=False)`) and the run computes the population (`begin_run`, inside `computing()`).
+  - **Tests:** the suite computes every expression through the wire in memory (`manage.workers.wire.round_trip`,
+    installed by `tests/conftest.py`), so a value or a class the reader of answers does not know fails there first; the
+    processes have their own tests (`tests/test_expression_workers.py`).
+  - **What a worker does not stop:** it can open a file the server's account can read, and the network. The evaluator's
+    whitelist remains the barrier against running code; the worker is the one against holding the server.
 
 ### Keeping it so
 

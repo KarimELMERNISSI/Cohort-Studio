@@ -1860,6 +1860,77 @@ No description available.
 
 ---
 
+## limits.py
+
+_The limits of a worker process, on each platform.
+
+- **Windows:** one Job Object per worker, made with ``ctypes`` (pywin32 is no dependency of the application): a memory
+  limit per process (an allocation beyond it raises MemoryError inside the worker, which lives on), one active process
+  (the worker cannot start another), kill on close (the worker ends with the server, a crash of the server included),
+  and death on an unhandled exception (no error dialog waits).
+
+- **Linux:** the worker limits itself before numpy loads (:func:`limit_self`): its data (``RLIMIT_DATA``, since Linux
+  4.7 its private writable memory, mapped memory included), no core file (it would hold data), and the system's
+  out-of-memory killer taking it first (``oom_score_adj`` 1000). Before each job its CPU time is limited too
+  (:func:`cpu_deadline`): a worker whose parent can no longer end it stops by itself.
+
+- **macOS:** the time limit only (and the CPU's): the system does not hold a data limit on mapped memory.
+
+**No lower priority:** the time limit is the server's clock, so a worker the system starves of processor time would
+miss it. With every core busy, a worker below normal priority did not start within 30 s three times out of three,
+and ordinary criteria reached the time limit; at normal priority it started. A runaway expression is bounded by the
+time limit, on at most ``CMP_FORMULA_WORKERS`` processes.
+
+This module imports the standard library only: the worker's bootstrap calls it before anything else loads._
+
+**Imports**:
+`__future__.annotations`, `sys`, `typing.Any`
+
+### def `mechanism` (limits.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+How a worker's memory is limited here, for the server's log.
+
+### def `memory_limited` (limits.py)
+
+- **Arguments**: ``
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `limit_self` (limits.py)
+
+- **Arguments**: `memory_mb: int`
+
+- **Returns**: `None`
+
+In the worker, before numpy loads: its data limited to ``memory_mb`` (Linux), no core file, the out-of-memory
+killer's first choice. Nothing on Windows: its Job Object holds it.
+
+### def `cpu_deadline` (limits.py)
+
+- **Arguments**: `seconds: float`
+
+- **Returns**: `None`
+
+In the worker, before each job (POSIX): its CPU time limited to what it used, the job's time limit and 5 s more,
+so that a worker its parent can no longer end stops by itself (SIGXCPU ends a process).
+
+### def `machine_memory_mb` (limits.py)
+
+- **Arguments**: ``
+
+- **Returns**: `ComplexType`
+
+The memory this server may use, in megabytes: its container's (cgroup ``memory.max``) or its machine's; None
+when it cannot be read.
+
+---
+
 ## local_duckdb.py
 
 _Local DuckDB IAM Provider.
@@ -2466,6 +2537,141 @@ A saved version's table: read by pandas, or by DuckDB for a file pandas cannot r
 - **Returns**: `ComplexType`
 
 A package's member, when it was extracted: never another file.
+
+---
+
+## pool.py
+
+_The pool of workers that compute expressions, shared by every session of a server process (:class:`ExpressionWorkers`,
+a runner of :mod:`core.expressions.runner`). Each expression leases a warm worker, which computes it under the time
+limit and the memory limit, and gives it back.
+
+- **A worker** is the real interpreter (``biostats.processes.interpreter``), started isolated (``-I``), writing no
+  bytecode (``-B``), in an empty folder of its own, with no setting or key in its environment and one thread for the
+  linear algebra (its memory: about 70 MB rather than 480). It imports ``core.expressions`` only.
+
+- **The limits:** the memory's is the worker's own (:mod:`manage.workers.limits`); the time's is the pool's, which ends
+  the worker at the limit (the only way to stop Python's pattern engine, which holds its interpreter while it
+  searches). A worker is replaced after a stop, after a MemoryError, and after 500 jobs.
+
+- **Waiting:** a call that waits more than a second calls the run's hook (:func:`waiting`) every tenth of a second, so
+  that a page can say why it waits, and a rerun can interrupt it: the worker computing is then ended. When that call
+  ends, the hook is told once, so that the page's line goes with it.
+
+- **A stop is remembered:** the same job (its bytes' digest, no data) is refused at once, with the same sentence.
+
+- **Fail closed:** when no worker can start, an expression is not computed (:class:`WorkerUnavailable`); it is never
+  computed in the server's process instead._
+
+**Imports**:
+`__future__.annotations`, `ast`, `atexit`, `contextlib`, `contextvars`, `hashlib`, `logging`, `os`, `queue`, `shutil`, `subprocess`, `sys`, `tempfile`, `threading`, `time`, `collections.OrderedDict`, `collections.abc.Callable`, `collections.abc.Iterator`, `collections.abc.Mapping`, `pathlib.Path`, `typing.Any`, `pandas`, `biostats.processes.interpreter`, `core.expressions.errors.ExpressionStopped`, `core.expressions.errors.WorkerUnavailable`, `core.expressions.runner.columns_read`, `core.expressions.safe_eval.validate_tree`, `manage.workers.limits`, `manage.workers.wire.answer_limit`, `manage.workers.wire.job_for`, `manage.workers.wire.pack`, `manage.workers.wire.read_answer`, `manage.workers.wire.read_exactly`, `manage.workers.wire.read_length`, `manage.workers.wire.rows_of`, `manage.workers.wire.stopped`, `manage.workers.wire.value_of`, `manage.workers.wire.write_message`
+
+### class `_NotReady` (pool.py)
+
+A worker that did not say it was ready: why, in fixed words and numbers (for the log).
+
+### class `_Wait` (pool.py)
+
+The run's hook for one call: called while the call has waited a second or more, told once when it ends.
+
+**Methods:**
+
+- **__init__**(`self`) -> `None`
+  > No description available.
+
+- **tick**(`self`) -> `None`
+  > No description available.
+
+- **end**(`self`) -> `None`
+  > No description available.
+
+### class `_Worker` (pool.py)
+
+One worker process, its job (Windows), its folder, and the thread that reads its answers.
+
+**Methods:**
+
+- **__init__**(`self, process: subprocess.Popen[bytes], job: ComplexType, folder: str`) -> `None`
+  > No description available.
+
+- **_read**(`self`) -> `None`
+  > No description available.
+
+- **alive**(`self`) -> `bool`
+  > No description available.
+
+- **end**(`self`) -> `None`
+  > Ends the process now, and gives back what it held.
+
+- **close**(`self`) -> `None`
+  > Closes its input: an idle worker returns; one that does not is ended.
+
+- **_finish**(`self`) -> `None`
+  > No description available.
+
+### class `ExpressionWorkers` (pool.py)
+
+The runner that computes each expression in a warm worker, under ``seconds`` and ``memory_mb``; at most
+``workers`` of them at once, shared by every session of the process. Validated here first, so that an expression
+the evaluator refuses costs no round trip; validated again in the worker.
+
+**Methods:**
+
+- **__init__**(`self`) -> `None`
+  > No description available.
+
+- **__call__**(`self, tree: ast.Expression, df: ComplexType`) -> `Any`
+  > No description available.
+
+- **_compute**(`self, worker: _Worker, payload: bytes, rows: int, wait: _Wait`) -> `dict[ComplexType]`
+  > Sends a job and waits for its answer, up to the time limit; ends the worker on a stop or an interruption
+  > (the caller then does not give it back healthy).
+
+- **_remember**(`self, digest: bytes, reason: str, limit: ComplexType, pattern: bool`) -> `None`
+  > No description available.
+
+- **_lease**(`self, wait: ComplexType`) -> `_Worker`
+  > A worker for one job: an idle one, else a new one while fewer than ``workers`` run; else waits, up to the
+  > time limit and the start limit, for one to be given back.
+
+- **_give_back**(`self, worker: _Worker`) -> `None`
+  > No description available.
+
+- **_retire_idle**(`self`) -> `None`
+  > Ends the workers idle for more than ten minutes, one staying warm (called under the lock).
+
+- **_start**(`self, wait: ComplexType`) -> `_Worker`
+  > No description available.
+
+- **_environment**(`needs: Mapping[ComplexType]`) -> `dict[ComplexType]`
+  > What a worker's environment holds: what the interpreter needs, one thread for the linear algebra, the system
+  > memory pool for pyarrow; never a setting or a key of the server's.
+
+- **warm**(`self`) -> `None`
+  > Starts one worker in the background, so that the first expression does not wait for it.
+
+- **processes**(`self`) -> `list[int]`
+  > The ids of the workers running (for the tests).
+
+- **close**(`self`) -> `None`
+  > Ends every worker: the idle ones return at the end of their input; any still running after 5 s is ended.
+
+### def `waiting` (pool.py)
+
+- **Arguments**: `hook: ComplexType`
+
+- **Returns**: `Iterator[None]`
+
+Inside the block, a call that waits more than a second calls ``hook(True)`` every tenth of a second (where a
+page says why it waits, and where Streamlit can stop the run), then ``hook(False)`` once when it ends.
+
+### def `_holds_pattern` (pool.py)
+
+- **Arguments**: `tree: ast.AST`
+
+- **Returns**: `bool`
+
+Whether an expression searches a text by a pattern (``.str.contains`` and its kind).
 
 ---
 
@@ -4080,6 +4286,28 @@ Open the engine's index in ``base_dir/<engine>`` (on a server when the engine ha
 
 ---
 
+## serve.py
+
+_A worker's loop: the jobs of :mod:`manage.workers.wire`, computed one at a time with the same evaluator as the server
+(:func:`manage.workers.wire.compute_job`). A worker imports ``core.expressions`` only, never ``enrich``, the AI packages
+or Streamlit._
+
+**Imports**:
+`__future__.annotations`, `gc`, `os`, `pickle`, `sys`, `manage.workers.limits.cpu_deadline`, `manage.workers.wire.compute_job`, `manage.workers.wire.pack`, `manage.workers.wire.read_exactly`, `manage.workers.wire.read_length`, `manage.workers.wire.write_message`
+
+### def `main` (serve.py)
+
+- **Arguments**: `seconds: float`
+
+- **Returns**: `None`
+
+The worker's loop: one job at a time, read from its input, computed, answered, until its input closes (the pool
+closed it, or the server ended). Its standard output is moved aside first, so that a library that prints cannot
+break the channel: the answers go to the handle saved before. Before each job its CPU time is limited (POSIX);
+after a large one it gives its memory back (the collector, and pyarrow's pool).
+
+---
+
 ## server_addresses.py
 
 _The addresses of the servers a user may choose in Settings, by kind (``OLLAMA_ADDRESSES``, the Ollama services;
@@ -4602,5 +4830,168 @@ No description available.
 - **get_available_datasets_from_traces**(`self`) -> `None`
   > Scans all trace files in the trace directory (the workspace's) and returns a list of available datasets.
   > Each entry contains: session_id, timestamp, step_description, file_path.
+
+---
+
+## wire.py
+
+_What a worker that computes an expression is sent, and what it gives back.
+
+- **A message** is a pickle (protocol 5) after its length in 8 bytes.
+
+- **A job:** the tree, the table cut to the columns the expression reads (whole when it reads the table in another
+  way), the policy, the values among the expression's names, and the helpers by their names: a callable that is not a
+  registered helper (:data:`core.expressions.runner.HELPERS`) cannot be sent.
+
+- **An answer:** the value, or the expression's error, with the warnings it raised. It is read by a reader that knows
+  the names values and errors need and nothing else (an answer that names ``os.system`` is refused), its size capped
+  before it is read: code that got past the evaluator in a worker cannot run in the server through its answer.
+
+:func:`round_trip` passes a job and its answer through the wire in memory, without a process: the test suite computes
+every expression through it, so that what a worker computes is shown to be what this process computes._
+
+**Imports**:
+`__future__.annotations`, `ast`, `logging`, `pickle`, `re`, `struct`, `sys`, `warnings`, `collections.abc.Mapping`, `typing.IO`, `typing.Any`, `numpy`, `pandas`, `core.expressions.errors.ExpressionError`, `core.expressions.errors.ExpressionStopped`, `core.expressions.errors.WorkerUnavailable`, `core.expressions.runner.HELPERS`, `core.expressions.runner.columns_read`, `core.expressions.safe_eval.compute_here`
+
+### class `_Refused` (wire.py)
+
+No description available.
+
+### class `_AnswerReader` (wire.py)
+
+Reads an answer, knowing the names its values and errors need and nothing else.
+
+**Methods:**
+
+- **find_class**(`self, module: str, name: str`) -> `Any`
+  > No description available.
+
+### def `pack` (wire.py)
+
+- **Arguments**: `obj: Any`
+
+- **Returns**: `bytes`
+
+No description available.
+
+### def `write_message` (wire.py)
+
+- **Arguments**: `stream: IO[bytes], payload: bytes`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `read_length` (wire.py)
+
+- **Arguments**: `stream: IO[bytes]`
+
+- **Returns**: `int`
+
+No description available.
+
+### def `read_exactly` (wire.py)
+
+- **Arguments**: `stream: IO[bytes], size: int`
+
+- **Returns**: `bytes`
+
+No description available.
+
+### def `job_for` (wire.py)
+
+- **Arguments**: `tree: ast.Expression, df: ComplexType`
+
+- **Returns**: `dict[ComplexType]`
+
+The job of an expression: its table cut to the columns it reads (the index kept, so the rows it counts and its
+result's labels are the same), its values, and its helpers by name.
+
+### def `rows_of` (wire.py)
+
+- **Arguments**: `job: Mapping[ComplexType]`
+
+- **Returns**: `int`
+
+No description available.
+
+### def `compute_job` (wire.py)
+
+- **Arguments**: `job: Mapping[ComplexType]`
+
+- **Returns**: `dict[ComplexType]`
+
+The answer to a job, computed with the same evaluator as the server: the value and the warnings raised on the
+way, or the expression's error (whole when it can travel, else its message). A MemoryError is the memory limit,
+the answer ``stopped``.
+
+### def `_portable` (wire.py)
+
+- **Arguments**: `exc: Exception`
+
+- **Returns**: `Any`
+
+The error itself when it can be sent and read back; its message otherwise (read as the expression's own
+error, :class:`core.expressions.errors.ExpressionError`).
+
+### def `answer_limit` (wire.py)
+
+- **Arguments**: `sent: int, rows: int`
+
+- **Returns**: `int`
+
+The largest answer read for a job of ``sent`` bytes over ``rows`` rows.
+
+### def `_refused` (wire.py)
+
+- **Arguments**: `written: str`
+
+- **Returns**: `_Refused`
+
+What was refused, for the log: a name a worker could fill with anything is not written.
+
+### def `_read_by_name` (wire.py)
+
+- **Arguments**: `owner: Any, attribute: Any`
+
+- **Returns**: `Any`
+
+getattr, as an answer may use it: only the attributes of :data:`READ_BY_NAME`.
+
+### def `read_answer` (wire.py)
+
+- **Arguments**: `payload: bytes`
+
+- **Returns**: `dict[ComplexType]`
+
+An answer, read with the restricted reader. One that names anything else, or cannot be read, means the worker
+cannot be trusted: :class:`WorkerUnavailable`, the name refused in the log (a name, never data).
+
+### def `value_of` (wire.py)
+
+- **Arguments**: `answer: Mapping[ComplexType]`
+
+- **Returns**: `Any`
+
+The value of an answer, its warnings raised again here (the caller's filters apply), or its error raised.
+
+### def `stopped` (wire.py)
+
+- **Arguments**: `reason: str, limit: ComplexType`
+
+- **Returns**: `ExpressionStopped`
+
+The sentence a page shows when a worker stopped an expression at one of its limits; ``again``: the same job,
+stopped earlier, refused now without being computed; ``whole``: the job held the whole table (``input``).
+
+### def `round_trip` (wire.py)
+
+- **Arguments**: `tree: ast.Expression, df: ComplexType`
+
+- **Returns**: `Any`
+
+A runner that passes the job and its answer through the wire in memory, as a worker would: the job pickled and
+read back, computed by :func:`compute_job`, the answer pickled and read by the restricted reader under its cap. No
+process: the test suite computes every expression through it.
 
 ---

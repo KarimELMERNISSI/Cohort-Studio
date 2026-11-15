@@ -89,6 +89,9 @@ See: [01_Home.md](01_Home.md)
 | 2.6 | **Check conformity** (duplicates, consistency, uniformity). |
 | 2.7 | **Compare** the cleaned dataset against the original. |
 
+A criterion that takes too long or needs too much memory is stopped: see *When a formula or a criterion is stopped*
+(phase 3).
+
 See: [02_Data_Validation.md](02_Data_Validation.md)
 
 ### Phase 3 — Enrichment & Preparation
@@ -103,6 +106,18 @@ See: [02_Data_Validation.md](02_Data_Validation.md)
 | 3.4 | Start from the **AI variable suggestions** (AI engine): indices and scores proposed from your columns, each with its source, to review in the editor. |
 | 3.5 | **Transform variables** (encoding, scaling) and apply **dimensionality reduction** (PCA, FAMD, t-SNE, UMAP). |
 | 3.6 | Run **population clustering** (K-Means, DBSCAN, GMM). |
+
+**When a formula or a criterion is stopped.** Every formula, criterion and check is computed in a separate process,
+which the server stops when it takes longer than 30 seconds or needs more than 2,048 MB (an administrator sets both).
+After a second the page says "Computing a formula or criterion...", under Compute & Preview or Validate's criterion
+form when you started it there, else at the top of the page; Stop, at the top right, ends the wait, and so does a
+click elsewhere. A stopped formula adds no column, and the page says which limit stopped it.
+A stopped criterion cannot be evaluated: while it is ticked the analyses stop, until you correct it on Data > Validate
+or untick it in the sidebar. The same formula or criterion on the same data is then refused at once, and the page
+says it was stopped earlier. If its pattern repeats a repetition, as `(a+)+` does, write it without one: such a pattern
+can take hours on one long value. "The server is computing other formulas and criteria" means that every process was
+busy: try again in a moment. "Formulas and criteria cannot be computed on this server" means that none could start:
+try again, and if it lasts, tell the person who runs the server.
 
 See: [03_Data_Enrichment.md](03_Data_Enrichment.md), [09_Clustering.md](09_Clustering.md)
 
@@ -186,6 +201,34 @@ The page manages the accounts of the identity provider the server signs users in
 local accounts, or Better Auth through its admin API. When sign-in is disabled, there are no accounts to manage.
 
 See: [10_Developer_Guide.md](10_Developer_Guide.md)
+
+### Formulas and criteria: the workers
+
+Every formula and criterion is computed in a worker process, so that one that runs too long or needs too much memory
+is stopped without holding the server for every user. `CMP_FORMULA_SECONDS` (30 by default, at least 1) and
+`CMP_FORMULA_MEMORY_MB` (2,048, at least 512) set the two limits, and `CMP_FORMULA_WORKERS` (2, at least 1) the warm
+workers that every session of the server shares. Set them in `.env` or the environment (listed in `.env.example`);
+they are read when the server starts. The server needs up to workers times memory beyond its own, besides the
+multiple imputation's workers (`CMP_MI_MAX_WORKERS`). The log warns at start when the formulas' workers alone may need
+more than half the machine's or the container's memory. A table larger than half the memory limit is not sent to a
+worker: the page says so.
+
+- **On each system:** on Windows, the memory limit is a Job Object, which also ends the worker with the server and
+  keeps it from starting a process; on Linux, it is a limit of the worker's data, and the system's out-of-memory killer
+  takes the worker before the server; on macOS only the time is limited (the log says so at start).
+- **What a worker holds:** no setting and no key, and no reference to a table between two expressions. It is given
+  only the columns an expression names (as `df['age']`); an expression that reads the table otherwise, as `len(df)`,
+  is given the whole table, its identifier columns included. A worker serves the expressions of every user of the
+  server in turn: what keeps one user's expression from reading what an earlier one left in the worker's memory is
+  the evaluator, which offers no function that reads memory it was not given, or a file (a test keeps it so).
+- **What it does not stop:** code that got past the expression evaluator could still read a file the server's account
+  can read, or use the network. The evaluator's whitelist remains the barrier against running code; the worker is the
+  one against holding the server.
+- **When no worker can start** (the log says why), formulas and criteria are not computed: the sidebar says the
+  population was not computed, the analyses see no row, and a page that needs a formula or a criterion says so, with
+  Try again. They are never computed in the server's own process instead. `CMP_FORMULA_IN_PROCESS=1` does that, for development
+  only: it removes both limits, so it must never be set on a shared or production server, and the log warns at start
+  while it is on.
 
 ### RAG Quality Monitoring
 

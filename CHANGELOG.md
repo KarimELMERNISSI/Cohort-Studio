@@ -6,6 +6,54 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Formulas and criteria are computed in a worker with a time limit and a memory limit
+
+- **Every formula and every criterion is computed in a separate worker process, stopped when it takes longer than 30
+  seconds or needs more than 2,048 MB.**
+  - **What used to run in the server's own process, which every user shares:** a formula typed on Enrich, an AI
+    engine's suggestion tried on the data before it is offered, a declared derived variable's check and fills, the
+    criteria of the analysis population and of Validate, those of an uploaded study configuration or trace, and the
+    steps of a replay.
+  - **What could hold or end the server for everyone:** a pattern that backtracks (`(a+)+$` on one long value of a
+    free-text column read as objects, where Python's pattern engine holds the process while it searches), or a formula
+    whose steps each stay within the evaluator's budget but together hold more than a gigabyte (`np.where(df['site']
+    == 'Alpha', df['site'].str.pad(95), df['site'].str.pad(96))` on a million rows).
+  - **Now:** such an expression is stopped, and the page says which limit stopped it. Nothing is changed, and the
+    other users do not notice. A stop is remembered: the same expression on the same table is refused at once, and
+    the page says it was stopped earlier. After a second of waiting, a line says "Computing a formula or
+    criterion..." where the computation was started (under Compute & Preview, under Validate's criterion form, else
+    at the top of the page); Stop or a click elsewhere ends the wait and the worker. A ticked criterion is computed
+    in the run that follows the tick, under that line, rather than before it.
+  - **When no worker can compute:** the sidebar says "Population not computed" and the page carries on, so its
+    navigation, Settings and Log out stay usable; the analyses see no row, never rows the ticked criteria may exclude;
+    a page that needs a formula or a criterion says why in the line's place, with Try again; an AI engine's
+    suggestion says "Not tried on your data yet". The pool is asked once in that run, and again at the next.
+  - **The results are the same as before:** the worker computes with the same evaluator, on a copy of the columns the
+    expression reads, and the test suite computes every criterion, formula and check through the worker's channel,
+    with the same rows and values.
+  - **The limits on each system:** on Windows, the memory limit is a Job Object, which also ends the worker with the
+    server and keeps it from starting a process; on Linux, it is a limit of the worker's data, and the system's
+    out-of-memory killer takes the worker first; on macOS, only the time is limited.
+  - **The settings:** `CMP_FORMULA_SECONDS` (30), `CMP_FORMULA_MEMORY_MB` (2,048) and `CMP_FORMULA_WORKERS` (2). The
+    server needs up to workers times memory beyond its own, which the log says at start when it is more than half the
+    machine's; a table larger than half the memory limit is not sent. A worker ended after a stop is replaced in the
+    background. When no worker can start, formulas and criteria are not computed, and the log says why in fixed
+    words; they are never computed in the server's process instead. `CMP_FORMULA_IN_PROCESS` does that, for
+    development only: it removes both limits, so it must never be set on a shared or production server, and the log
+    warns while it is on.
+  - **What a worker holds, and what it does not stop:** it holds no setting or key, and keeps nothing of a table
+    between two expressions. Its answers are read by a reader that takes back values and errors and nothing else. A
+    worker serves every user in turn, and the evaluator offers no function that reads memory it was not given, or a
+    file: a test keeps it so. It does not stop code that got past the evaluator's whitelist from reading files or
+    using the network: the whitelist remains the barrier against running code, and the worker the one against holding
+    the server.
+  - **The server's log holds no formula's text:** two debug lines that wrote it, or its parts, now give their
+    lengths.
+- **A formula's subtraction of two dates is computed by the evaluator, with its checks**, and only read in days by a
+  helper: before, the helper itself subtracted, out of the checks' sight.
+- **The quality dashboard and the criteria let "no worker" through:** a failure swallowed there would have been kept
+  with the audit, which is cached by the data.
+
 ### Dependency updates: Streamlit 1.67, pypdf 7, google-genai 3 and seven others
 
 - For a known vulnerability: opentelemetry-api 1.45.2 (CVE-2026-126360), which the Anthropic SDK uses; no pull
