@@ -599,7 +599,7 @@ def run_univariate_analysis(df, analyzer, transformed=False):
         subset_cols.append("P-Value (Adj)")
         
     st.dataframe(
-        display_df.style.map(lambda x: 'background-color: #d4edda' if isinstance(x, (float, int)) and x < 0.05 else '', subset=subset_cols)
+        display_df.style.map(lambda x: 'background-color: #d4edda; color: #14532d' if isinstance(x, (float, int)) and x < 0.05 else '', subset=subset_cols)
                         .format(format_dict),
         column_config={
             "Assumptions": st.column_config.ListColumn("Assumptions & Warnings", width="large"),

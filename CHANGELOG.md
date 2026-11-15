@@ -48,6 +48,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   trial's label was cut); the risk difference in percentage points; a zero cell's correction named for the ratios
   the design reads, once.
 
+### The summary table's significant p-values readable in the dark theme
+
+- **The Analysis tab's summary table** marks a p-value below 0.05 with a pale green background, and set no text
+  colour: in the dark theme the text stayed white and could not be read. It now takes a dark green text with its
+  background, in both themes.
+
 ### The analysis plan refuses what it cannot read
 
 - **A spec or a record of the analysis plan holding a key this version does not know is refused** with its reason,
