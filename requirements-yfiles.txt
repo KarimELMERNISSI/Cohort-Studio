@@ -146,7 +146,7 @@ lance-namespace-urllib3-client==0.13.0
     # via lance-namespace
 lancedb==0.41.0
     # via cohortstudio
-langchain-core==1.7.6
+langchain-core==1.8.0
     # via
     #   cohortstudio
     #   langchain-text-splitters
