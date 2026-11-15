@@ -268,9 +268,22 @@ class SharingSection(_Section):
     disclosure_min: int = Field(10, ge=5, validation_alias="CMP_DISCLOSURE_MIN")
 
 
+class FormulasSection(_Section):
+    # every formula and criterion is computed in a worker process (manage.workers), stopped when it takes longer than
+    # this many seconds, or needs more memory than this many megabytes (macOS: the time only); the server needs up to
+    # workers x memory beyond its own
+    seconds: int = Field(30, ge=1, validation_alias="CMP_FORMULA_SECONDS")
+    memory_mb: int = Field(2048, ge=512, validation_alias="CMP_FORMULA_MEMORY_MB")
+    # the warm workers shared by every session of the server
+    workers: int = Field(2, ge=1, validation_alias="CMP_FORMULA_WORKERS")
+
+
 class DevelopmentSection(_Section):
     # a change of the data that bypasses the trace raises instead of logging (the test suite sets it)
     strict_state: bool = Field(False, validation_alias="CMP_STRICT_STATE")
+    # formulas and criteria computed in the server's own process, without a time or a memory limit (the test suite
+    # sets it; the server log warns at start-up)
+    formula_in_process: bool = Field(False, validation_alias="CMP_FORMULA_IN_PROCESS")
 
 
 @dataclass(frozen=True)
@@ -283,6 +296,7 @@ class Settings:
     graph: GraphSection
     statistics: StatisticsSection
     sharing: SharingSection
+    formulas: FormulasSection
     development: DevelopmentSection
 
 
@@ -295,6 +309,7 @@ _SECTIONS: dict[str, type[_Section]] = {
     "graph": GraphSection,
     "statistics": StatisticsSection,
     "sharing": SharingSection,
+    "formulas": FormulasSection,
     "development": DevelopmentSection,
 }
 # The environment variables of the settings, section by section

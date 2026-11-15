@@ -14,6 +14,7 @@ from core.expressions import (
     safe_format,
     validate,
 )
+from core.expressions.runner import running
 
 
 @pytest.fixture
@@ -118,11 +119,17 @@ def test_extra_locals_and_tree_api(df: pd.DataFrame) -> None:
         return a - b
 
     tree = ast.parse("__safe_sub__(var_0, var_1) * 2", mode="eval")
-    result = evaluate_tree(
-        tree,
-        df,
-        extra_locals={"var_0": df["Weight"], "var_1": df["Lean mass"], "__safe_sub__": safe_sub},
-    )
+    # a callable of the caller's own is computed in this process: a worker takes registered helpers only
+    with running(None):
+        result = evaluate_tree(
+            tree,
+            df,
+            extra_locals={
+                "var_0": df["Weight"],
+                "var_1": df["Lean mass"],
+                "__safe_sub__": safe_sub,
+            },
+        )
     assert result.tolist() == [20.0, 40.0, 50.0, 30.0]
     with pytest.raises(UnsafeExpressionError, match="Unknown name"):
         evaluate("var_9 + 1", df, extra_locals={"var_0": df["Weight"]})
@@ -248,7 +255,8 @@ def test_an_expression_gets_a_table_of_its_own(df: pd.DataFrame) -> None:
         return True
 
     tree = ast.parse("keep(df)", mode="eval")
-    assert evaluate_tree(tree, df, extra_locals={"keep": keep}) is True
+    with running(None):  # the caller's own callable: this process only
+        assert evaluate_tree(tree, df, extra_locals={"keep": keep}) is True
     assert seen[0] is not df and seen[0]["sex"].iloc[0] == "changed"
     assert df.equals(before)
     # a new column, as ever

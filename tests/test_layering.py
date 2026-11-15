@@ -94,8 +94,14 @@ UTILS_GROUPS = {
 ENTRY_POINTS = ("main", "manage_users")  # above every layer
 # R5, on each name that runs outside the app (a listed name must exist): ``python -m manage.replay`` runs its
 # ``__main__``, which no import of the package reaches, so every module under a headless package is checked by name
-HEADLESS = ("manage_users", "manage.replay", "manage.replay.engine", "manage.services")
-HEADLESS_PACKAGES = ("manage.replay",)
+HEADLESS = (
+    "manage_users",
+    "manage.replay",
+    "manage.replay.engine",
+    "manage.services",
+    "manage.workers",
+)
+HEADLESS_PACKAGES = ("manage.replay", "manage.workers")
 AI_SDKS = ("anthropic", "google.genai", "google.generativeai", "mistralai", "ollama", "openai")
 AI_PACKAGES = EXTRAS["ai"]
 # Streamlit inside their render method only (R3), and in translate a Streamlit component package: a renderer draws

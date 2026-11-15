@@ -19,6 +19,15 @@ os.environ.setdefault("CMP_STRICT_STATE", "1")
 # setup has its own tests (tests/test_first_admin.py, tests/ui_layer/test_first_admin_page.py).
 os.environ.setdefault("CMP_ADMIN_PASSWORD", "test-bootstrap-password-1")
 
+# Every expression the tests compute goes through the worker's wire in memory (manage.workers.wire.round_trip): the
+# job and its answer pickled and read back as a worker's are, the answer by the restricted reader. What a worker
+# computes is so shown to be what this process computes, at the speed of the suite. A test of this process's own
+# computation installs nothing (core.expressions.runner.running(None)).
+from core.expressions.runner import install as _install_runner
+from manage.workers.wire import round_trip as _round_trip
+
+_install_runner(_round_trip)
+
 
 @pytest.fixture(autouse=True)
 def _ollama_server_runs_it_here(monkeypatch: pytest.MonkeyPatch):
