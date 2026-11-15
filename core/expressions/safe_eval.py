@@ -45,8 +45,9 @@ anyone reads it (``9 ** 9 ** 8`` would keep the server busy for minutes), in two
 What is not bounded: the time a pattern takes (pandas runs it with an engine that backtracks), what several steps
 hold together (each step has the budget: an expression of a few steps holds a few times as much), and what a step
 builds by a way these checks do not see. The budget refuses what the checks see before it is built; it is no
-memory limit and no time limit, which a process has only from outside (a worker with both is planned). An
-expression nested too deep to be walked is refused as too complex.
+memory limit and no time limit, which a process has only from outside: in the application every expression is
+computed in a worker process that has both (``core.expressions.runner``, ``manage.workers``). An expression
+nested too deep to be walked is refused as too complex.
 """
 
 from __future__ import annotations

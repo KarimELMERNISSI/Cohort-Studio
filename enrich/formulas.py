@@ -16,11 +16,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from core.expressions import DEFAULT_POLICY, evaluate_tree
+from core.expressions import DEFAULT_POLICY, ExpressionStopped, WorkerUnavailable, evaluate_tree
 from core.expressions.runner import HELPERS, SAFE_SUB
 from ingest.analyzer import DataAnalyzer
 from ingest.dates import smart_parse_dates
-from utils.logging_config import single_line
 
 logger = logging.getLogger(__name__)
 
@@ -296,6 +295,8 @@ class FormulaTrial:
     problem: str | None = None  # why it cannot be computed, in words
     inputs: tuple[str, ...] = ()  # the columns it uses
     warnings: tuple[str, ...] = ()  # computed, but read it twice (a text it compares with that never occurs)
+    stopped: bool = False  # stopped by a limit of the worker: ``problem`` is the application's sentence, no value
+    tried: bool = True  # False: no worker could try it (``problem`` says why); tried again later
 
     @property
     def ok(self) -> bool:
@@ -364,6 +365,9 @@ def try_formula(formula: str, data: pd.DataFrame, *, target: str | None = None) 
     if unknown:
         return FormulaTrial(problem=f"not in the data: {', '.join(unknown)}")
     ok, result, _ = evaluate_formula_safely(formula, "__trial__", data, return_series=True)
+    if not ok and isinstance(result, ExpressionStopped):
+        # a limit of the worker says nothing of the data: its sentence whole, and no example of a value
+        return FormulaTrial(problem=str(result), inputs=reading.names, stopped=True)
     if ok:
         if (
             target in data.columns
@@ -456,7 +460,7 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
                 parsed_series, _ = smart_parse_dates(dataset[col])
                 dataset[col] = parsed_series
     except Exception as e:
-        logger.debug("Date conversion failed: %s", e)
+        logger.debug("Date conversion failed (%s)", type(e).__name__)  # its message can hold the value not read
 
     # A - B is read in days when it is a difference of two dates: __safe_sub__(A - B), the subtraction itself the
     # evaluator's, with its checks (core.expressions.runner.in_days, a helper registered by its name)
@@ -484,7 +488,8 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
 
     local_vars: dict[str, Any] = {columns[name]: dataset[name] for name in identified_columns}
     local_vars[SAFE_SUB] = HELPERS[SAFE_SUB]
-    logger.debug("evaluate_formula: %d variables available; formula=%s", len(columns), single_line(formula))
+    # its length, never its text: a formula can hold a value of the data ("site == 'Wiltz'")
+    logger.debug("evaluate_formula: %d variables available; a formula of %d characters", len(columns), len(formula))
 
     try:
         # date subtractions give days, then the whitelisted evaluation (no builtins, restricted np/pd: core.expressions)
@@ -521,6 +526,10 @@ def evaluate_formula_safely(formula: str, variable_name: str, dataset: pd.DataFr
             f"Check for mismatched types or operations in your formula."
         ), dataset
 
+    except WorkerUnavailable:
+        raise  # no worker computed it: nothing is known of the formula, and the page says so
+    except ExpressionStopped as stop:  # a limit of the worker: the stop itself, its words without the generic hint
+        return False, stop, dataset
     except Exception as e:
         return False, (
             f"Error evaluating formula: {e!s}\n"

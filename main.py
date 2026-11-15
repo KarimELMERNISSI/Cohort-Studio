@@ -24,15 +24,18 @@ except SettingsError as exc:  # stopped before a module reads the wrong value; t
 
 import streamlit as st
 
+from core.expressions import WorkerUnavailable
 from manage.ai_payload import disable_remote_tracing
 from manage.iam import IAMConfigurationError
 from manage.iam.authz import is_admin_role
+from manage.workers.pool import BUSY
 from ui import nav, shell
 from ui.auth import LOGO, require_login
 from ui.preferences import seed_session
 from ui.services import stop_engine_off_list
 from ui.state import get_state
 from ui.theme import APP_NAME, apply_theme, show_logo
+from ui.waiting import computing
 from utils.logging_config import configure_logging
 
 
@@ -43,6 +46,16 @@ def _bootstrap_admin_once() -> str:
 
     _, message = shared().iam.ensure_bootstrap_admin()
     return message
+
+
+@st.cache_resource(show_spinner=False)
+def _expression_workers_once() -> bool:
+    """The workers that compute every formula and criterion under a time limit and a memory limit, installed once
+    per server process (manage.workers); unless the development switch keeps them in this process, which the
+    log says."""
+    from manage.workers import install_for
+
+    return install_for(settings)
 
 
 def main() -> None:
@@ -58,6 +71,7 @@ def main() -> None:
     except IAMConfigurationError as exc:  # never another identity provider in place of the one configured
         st.error(f"CohortStudio cannot start: {exc}", icon=":material/gpp_bad:")
         st.stop()
+    _expression_workers_once()
 
     if not require_login():
         st.stop()
@@ -66,11 +80,21 @@ def main() -> None:
     stop_engine_off_list()
 
     state = get_state()
-    state.begin_run()  # the dataset views of this run (AppState is the only writer of the data)
     is_admin = is_admin_role(st.session_state.get("user_role"))  # privileges come from the stored role
     page = st.navigation(nav.build_navigation(is_admin), position=nav.NAV_POSITION)
-    shell.render_sidebar(state)
-    page.run()
+    # the views, the sidebar and the page run where a formula or criterion that waits on a worker says why the page
+    # waits, and a click elsewhere or Stop ends it; no worker to compute it: the page says so in the waiting line's
+    # place, and the next run asks again
+    line = None
+    try:
+        with computing() as line:
+            state.begin_run()  # the dataset views of this run (AppState is the only writer of the data)
+            shell.render_sidebar(state)
+            page.run()
+    except WorkerUnavailable as exc:
+        with line.container() if line is not None else st.container():
+            st.error(str(exc), icon=":material/hourglass_empty:" if str(exc) == BUSY else ":material/error:")
+            st.button("Try again", key="worker_try_again", icon=":material/refresh:")
     state.end_run()  # strict mode (tests): the page must not have modified the views in place
 
 

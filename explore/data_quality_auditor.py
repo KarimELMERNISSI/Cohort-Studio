@@ -9,6 +9,7 @@ from statsmodels.stats.proportion import proportion_confint
 from biostats.outliers import UNIVARIATE_METHODS, detect_outliers
 from core.criteria import criterion_columns, describe_definition
 from core.derived import from_config
+from core.expressions import WorkerUnavailable
 from core.population import family_checks, family_masks, family_operator
 from core.registry import as_code
 from enrich.derived import CANNOT, DISAGREES, MIN_ROWS, MOSTLY, TOO_FEW, check_derived
@@ -364,6 +365,8 @@ class DataQualityAuditor:
             self.domain_checks, self.domain_na = (found.fails, found.checks, flagged), None
             return failing_score(found.fails, found.checks)
 
+        except WorkerUnavailable:
+            raise  # no worker: the audit is not kept (it is cached by the data), and the page says so
         except Exception as e:
             logger.error("Error computing domain validity (%s)", type(e).__name__)
             self.domain_na = "the rules could not be checked"

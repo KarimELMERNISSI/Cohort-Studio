@@ -14,6 +14,7 @@ import hashlib
 import pandas as pd
 import streamlit as st
 
+from core.expressions import WorkerUnavailable
 from core.population import EXCLUSION, catalogue, family_words
 from ui.components.text import plain
 
@@ -28,23 +29,31 @@ def _family_key(family: str) -> str:
     return "popfam::" + hashlib.sha1(family.encode("utf-8")).hexdigest()[:12]
 
 
+# The callbacks record the ticks only: the run that follows computes the population (AppState.begin_run), where the
+# page says why it waits and a click elsewhere stops it (manage.workers)
+
+
 def _on_toggle(criterion_id: str) -> None:
     from ui.state import get_state
 
-    get_state().tick(criterion_id, bool(st.session_state.get(_widget_key(criterion_id))))
+    get_state().tick(
+        criterion_id, bool(st.session_state.get(_widget_key(criterion_id))), install=False
+    )
 
 
 def _on_family(family: str) -> None:
     from ui.state import get_state
 
-    get_state().activate_family(family, bool(st.session_state.get(_family_key(family))))
+    get_state().activate_family(
+        family, bool(st.session_state.get(_family_key(family))), install=False
+    )
 
 
 def activate_family(family: str, on: bool = True) -> None:
     """Callback for buttons outside the sidebar (Validate): tick or untick a whole family."""
     from ui.state import get_state
 
-    get_state().activate_family(family, on)
+    get_state().activate_family(family, on, install=False)
 
 
 def family_title(family: str, kind: str) -> str:
@@ -55,8 +64,16 @@ def family_title(family: str, kind: str) -> str:
 def render_population_selector(state) -> None:
     """Sidebar: one checkbox per criterion, grouped by family, with what each excludes."""
     criteria = catalogue(state.config)
-    population = state.population
-    if population is None:
+    try:
+        population = (
+            state.population
+        )  # "no worker" at the run's start is said at once (AppState, for the run)
+        if population is None:
+            return
+        counts = state.session.criterion_counts(state.config) if criteria else {}
+    except WorkerUnavailable as exc:
+        # said here, so that the sidebar and the page stay usable (the analyses see no row); asked again next run
+        st.caption(f":material/hourglass_empty: Population not computed. {plain(exc, limit=400)}")
         return
     if not criteria:
         st.caption(
@@ -65,13 +82,12 @@ def render_population_selector(state) -> None:
         )
         return
     ticked = set(state.ticked)
-    counts = state.session.criterion_counts(state.config)
     icon = ":material/filter_alt:" if population.ok else ":material/error:"
     with st.expander(f"Population: {population.label}", icon=icon, expanded=not population.ok):
         if not population.ok:
             st.error(
                 "A ticked criterion cannot be evaluated, so the analyses are stopped: "
-                + "; ".join(plain(e, limit=300) for e in population.errors.values())
+                + "; ".join(plain(e, limit=500) for e in population.errors.values())
             )
         families: dict[str, list] = {}
         for criterion in criteria:
@@ -114,14 +130,16 @@ def population_banner(*, purpose: str = "analyses") -> None:
     state = get_state()
     if not state.has_data:
         return
+    # no worker computed the population when the run began: "no worker" goes to the page's handler at once, and the
+    # page runs on nothing (its views hold no row)
     population = state.population
     if population is None:
         return
     if not population.ok:
+        said = "; ".join(plain(e, limit=500) for e in population.errors.values()).rstrip(". ")
         st.error(
-            "The analysis population cannot be evaluated: "
-            + "; ".join(plain(e, limit=300) for e in population.errors.values())
-            + ". Untick the criterion in the sidebar or correct it on Data > Validate.",
+            f"The analysis population cannot be evaluated: {said}. Untick the criterion in the sidebar or "
+            "correct it on Data > Validate.",
             icon=":material/error:",
         )
         st.stop()

@@ -16,6 +16,7 @@ import biostats.reduction as rd
 import enrich.external_data as eed
 from app_pages.enrichment_derived import render_derived_variables
 from app_pages.enrichment_mi import render_multiple_imputation
+from core.expressions import WorkerUnavailable
 from core.population import PopulationResult, catalogue
 from core.registry import as_code
 from enrich.derived import recomputed
@@ -58,9 +59,9 @@ from ui.graph_view import current_theme, render_graph
 from ui.preferences import import_dayfirst
 from ui.session_scope import get_current_scope
 from ui.state import get_state
+from ui.waiting import computing
 from utils.data_paths import get_traces_dir
 from utils.export_utils import to_excel
-from utils.logging_config import single_line
 from utils.multipage import _load_excel_with_selection, get_file_hash, load_bytes, load_dataframe
 from utils.optional import available_methods, method_available, missing_methods_message
 
@@ -963,7 +964,7 @@ def tokenize_formula(formula: str) -> list[str]:
               .split(sep=" ; ")
               )
     tokens = [token.strip() for token in tokens]
-    logger.debug("formula tokens: %s", single_line(tokens))
+    logger.debug("formula tokens: %d", len(tokens))  # their number, never their text (a token can be a value)
     
     # Replace placeholders with the original quoted tokens
     for idx, token in enumerate(quoted_tokens):
@@ -1643,8 +1644,11 @@ def define_new_variables(main_data):
             st.error(CARET_IS_NOT_A_POWER)  # a new formula: a recorded one replays as it was computed
         else:
             try:
-                # Compute the new variable
-                succ, e, temp_main_data = evaluate_formula_safely(computation_formula, variable_name, main_data.copy())
+                # Compute the new variable; a wait is said here, under the button, where the user looks (ui.waiting)
+                with computing():
+                    succ, e, temp_main_data = evaluate_formula_safely(
+                        computation_formula, variable_name, main_data.copy()
+                    )
                 
                 if succ:
                     st.success(f"Variable '{variable_name}' successfully computed! Review the preview below.")
@@ -1657,9 +1661,14 @@ def define_new_variables(main_data):
                         'temp_data': temp_main_data  # Storing for immediate preview
                     }
                 else:
+                    st.session_state.preview_new_variable = None  # an earlier preview's warning would follow it
                     st.error(f"Computation failed: {plain(e, limit=500)}")
-            
+
+            except WorkerUnavailable as e:  # no worker computed it: nothing is known of the formula
+                st.session_state.preview_new_variable = None
+                st.error(plain(e, limit=500))
             except Exception as e:
+                st.session_state.preview_new_variable = None
                 st.error(f"Error computing variable: {plain(e, limit=500)}")
                 st.info("Make sure your formula uses valid column names and operators (+, -, *, /, etc.).")
 
@@ -2110,7 +2119,11 @@ def _tried(
     key = (formula, target, get_state().session.draft_fp, rows)
     if sugg.get("_tried_on") != key:
         scope = data if population is None else data.loc[data.index.intersection(population.included)]
-        sugg["_trial"], sugg["_tried_on"] = try_formula(formula, scope, target=target), key
+        try:
+            trial = try_formula(formula, scope, target=target)
+        except WorkerUnavailable as exc:  # not tried: said on the suggestion, kept nowhere, tried again next run
+            return FormulaTrial(problem=str(exc), tried=False)
+        sugg["_trial"], sugg["_tried_on"] = trial, key
     return sugg["_trial"]
 
 
@@ -2122,11 +2135,16 @@ def _from_missing(counts: list[tuple[str, int]]) -> str:
 
 
 def _show_trial(trial: FormulaTrial, gives: str) -> None:
-    """What a suggestion gives on the data, or why it cannot be computed there (its text as code: it quotes values)."""
-    if trial.ok:
+    """What a suggestion gives on the data, or why it cannot be computed there (its text as code: it quotes values;
+    the application's own sentence for a limit of the worker, or for no worker, as text)."""
+    if not trial.tried:
+        st.caption(f":material/hourglass_empty: Not tried on your data yet. {plain(trial.problem, limit=400)}")
+    elif trial.ok:
         st.caption(f":material/check_circle: On your data: {gives}.")
         for warning in trial.warnings:
             st.caption(f":material/warning: {as_code(warning, limit=120)}")
+    elif trial.stopped:
+        st.caption(f":material/error: Cannot be computed on your data: {plain(trial.problem, limit=400)}")
     else:
         st.caption(f":material/error: Cannot be computed on your data: {as_code(trial.problem, limit=300)}")
 

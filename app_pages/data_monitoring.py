@@ -17,6 +17,7 @@ from app_pages.data_quality_dashboard import render_dashboard
 from app_pages.validate_dates import date_candidates, dates_found
 from core.criteria import (
     RULES_VERSION,
+    CriterionError,
     criterion_columns,
     criterion_unknown,
     expression_rule,
@@ -50,6 +51,7 @@ from ui.components.tabs import PageTab, lazy_tabs
 from ui.components.text import plain
 from ui.session_scope import get_current_scope
 from ui.state import get_state
+from ui.waiting import computing
 from utils.config_loader import create_empty_config, transform_expression
 from utils.export_utils import to_excel
 from utils.multipage import load_dataframe
@@ -950,8 +952,9 @@ def apply_family_mask(df: pd.DataFrame, family_name: str, family_config: dict, s
     """
     masks = family_masks(df, family_config)
     for rule, message in masks.errors.items():
+        said = plain(message, limit=500).rstrip(". ")
         st_container.error(
-            f"Rule {as_code(rule)} ({family_words(family_name)}) cannot be evaluated: {plain(message, limit=300)}. "
+            f"Rule {as_code(rule)} ({family_words(family_name)}) cannot be evaluated: {said}. "
             "Correct it or untick it: the "
             "analysis population refuses it while it is ticked."
         )
@@ -996,7 +999,7 @@ def _exclude_outliers(detection: dict) -> None:
         description=f"Rows flagged by {detection['method']} {detection['params']} on {', '.join(columns)}, "
                     "frozen when added.",
     )
-    get_state().tick(criterion_id("outliers", name), True)
+    get_state().tick(criterion_id("outliers", name), True, install=False)  # the next run computes the population
 
 
 def _clip_outliers(detection: dict) -> None:
@@ -1621,9 +1624,9 @@ def unknown_advice(
     What an inclusion criterion does where it is unknown for want of a value: it excludes those rows (a missing value
     meets no condition, written with != or ~ too: "not pregnant" excludes the men whose pregnancy is not recorded).
     The words, and the expression that keeps them (None for a kind other than an expression); None when the criterion
-    is known on every row.
+    is known on every row. A limit of the worker that stopped it raises its CriterionError.
     """
-    unknown = int(criterion_unknown(df, name or "criterion", definition).sum())
+    unknown = int(criterion_unknown(df, name or "criterion", definition, stops=True).sum())
     if not unknown or not len(df):
         return None
     columns = criterion_columns(name or "criterion", definition)
@@ -1646,8 +1649,15 @@ def unknown_advice(
 
 
 def _say_unknown(df: pd.DataFrame, name: str, definition: dict[str, Any], st_container) -> None:
-    """The advice of :func:`unknown_advice`, said before the criterion is added."""
-    advice = unknown_advice(df, name, definition)
+    """The advice of :func:`unknown_advice`, said before the criterion is added; or, when a limit of the worker
+    stopped it, the stop, said here rather than only once it is added. A wait is said under the form, where the user
+    looks (ui.waiting)."""
+    try:
+        with computing(st_container):
+            advice = unknown_advice(df, name, definition)
+    except CriterionError as exc:  # a limit of the worker stopped it (criterion_unknown's stops)
+        st_container.error(plain(exc, limit=500), icon=":material/timer_off:")
+        return
     if advice is None:
         return
     words, kept = advice

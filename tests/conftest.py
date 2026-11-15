@@ -19,6 +19,10 @@ os.environ.setdefault("CMP_STRICT_STATE", "1")
 # setup has its own tests (tests/test_first_admin.py, tests/ui_layer/test_first_admin_page.py).
 os.environ.setdefault("CMP_ADMIN_PASSWORD", "test-bootstrap-password-1")
 
+# The AppTests run main.py, which would start the worker processes for formulas and criteria: the tests compute in
+# this process, through the round trip below (the processes have their own tests: tests/test_expression_workers.py)
+os.environ.setdefault("CMP_FORMULA_IN_PROCESS", "1")
+
 # Every expression the tests compute goes through the worker's wire in memory (manage.workers.wire.round_trip): the
 # job and its answer pickled and read back as a worker's are, the answer by the restricted reader. What a worker
 # computes is so shown to be what this process computes, at the speed of the suite. A test of this process's own

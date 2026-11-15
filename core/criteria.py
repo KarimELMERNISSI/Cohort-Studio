@@ -36,7 +36,9 @@ import pandas as pd
 from biostats.outliers import MULTIVARIATE_METHODS
 from core.expressions import (
     DEFAULT_POLICY,
+    ExpressionStopped,
     UnsafeExpressionError,
+    WorkerUnavailable,
     column_references,
     evaluate_tree,
     validate,
@@ -730,6 +732,10 @@ def _expression_value(
             validate(expression), bare=bare
         )  # the user's expression is checked as written
         return evaluate_tree(tree, df, policy=_THREE_VALUED, extra_locals=HELPERS)
+    except WorkerUnavailable:
+        raise  # no worker computed it: nothing is known of the criterion, and nothing is remembered
+    except ExpressionStopped as exc:  # a limit of the worker: the criterion's own, in its words
+        raise CriterionError(f"criterion '{name}': {exc}") from exc
     except UnsafeExpressionError as exc:
         raise CriterionError(f"criterion '{name}': expression rejected ({exc})") from exc
     except Exception as exc:
@@ -773,6 +779,8 @@ def _expression_checks(
         if isinstance(func, ast.Attribute) and func.attr in _CONVERSIONS:
             try:
                 converted = evaluate_tree(ast.Expression(body=node), df)
+            except WorkerUnavailable:
+                raise
             except Exception:
                 continue  # a part that cannot be read alone: its columns decide
             if isinstance(converted, pd.Series) and converted.index.equals(df.index):
@@ -876,7 +884,7 @@ def criterion_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -
     """
     try:
         return rule_kind(name, definition).mask(df, name, definition)
-    except CriterionError:
+    except CriterionError, WorkerUnavailable:
         raise
     except Exception as exc:
         raise CriterionError(f"criterion '{name}': {exc}") from exc
@@ -892,6 +900,8 @@ def earlier_mask(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> 
     """
     try:
         return _earlier(df, name, definition)
+    except WorkerUnavailable:
+        raise
     except Exception:
         return None
 
@@ -917,14 +927,17 @@ def _earlier(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.S
     return fired.sum(axis=1) >= int(definition["threshold"])  # as _threshold_mask counts
 
 
-def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> pd.Series:
+def criterion_unknown(
+    df: pd.DataFrame, name: str, definition: Mapping[str, Any], *, stops: bool = False
+) -> pd.Series:
     """
     The rows where a criterion does not fire for want of a value: an expression where its value is unknown in
     three-valued logic (a comparison or a test met a missing value), any other kind where it does not fire and one of
     its checks is not made (:func:`settled`, Kleene's reading of the kind: a numeric range where its value is missing;
     "at least 2 of 3" only where the missing rules could still reach 2, never where the known ones settle it). An
     inclusion criterion excludes these rows, which the participant flow counts apart. Never raises: no row when the
-    criterion cannot be read (:func:`criterion_mask` says why).
+    criterion cannot be read (:func:`criterion_mask` says why); except, with ``stops``, the CriterionError of a limit
+    of the worker, for a caller that says it (Validate's form, before the criterion is added).
     """
     none = pd.Series(False, index=df.index)
     try:
@@ -936,6 +949,12 @@ def criterion_unknown(df: pd.DataFrame, name: str, definition: Mapping[str, Any]
             return pd.Series(value.isna().to_numpy(dtype=bool), index=df.index)
         _, known = settled(df, name, definition)
         return pd.Series(~known.to_numpy(dtype=bool), index=df.index)
+    except WorkerUnavailable:
+        raise
+    except CriterionError as exc:
+        if stops and isinstance(exc.__cause__, ExpressionStopped):
+            raise
+        return none
     except Exception:
         return none
 
@@ -952,6 +971,8 @@ def criterion_lacking(df: pd.DataFrame, name: str, definition: Mapping[str, Any]
     """
     try:
         return _bare(df, name, definition)[1]
+    except WorkerUnavailable:
+        raise
     except Exception:
         return pd.Series(False, index=df.index)
 
@@ -1009,7 +1030,7 @@ def rule_checks(df: pd.DataFrame, name: str, definition: Mapping[str, Any]) -> l
             if column in df.columns:
                 held &= df[column].notna()
         return [RuleCheck(name, "", held | fires, fires)]
-    except CriterionError:
+    except CriterionError, WorkerUnavailable:
         raise
     except Exception as exc:
         raise CriterionError(f"criterion '{name}': {exc}") from exc

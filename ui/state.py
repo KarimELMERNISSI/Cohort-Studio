@@ -34,6 +34,7 @@ import streamlit as st
 
 from core.derived import DerivedVariable, decided_on_data, record, with_definitions
 from core.derived import from_config as derived_from_config
+from core.expressions import WorkerUnavailable
 from core.fingerprint import frame_fingerprint, ids_to_ranges, ranges_to_ids
 from core.lineage import canonical_json
 from core.population import PopulationResult, catalogue, criteria_from_trace, evaluate_population
@@ -869,14 +870,22 @@ class AppState:
 
     @property
     def population(self) -> PopulationResult | None:
-        return self.session.population(self.config) if self.session.loaded else None
+        if not self.session.loaded:
+            return None
+        self._population_this_run()
+        return self.session.population(self.config)
 
     def analysis_frame(self) -> pd.DataFrame:
-        """Rows kept by the ticked criteria; raises PopulationError when a ticked criterion is broken."""
+        """Rows kept by the ticked criteria; raises PopulationError when a ticked criterion is broken, and
+        WorkerUnavailable when no worker could compute them in this run."""
+        self._population_this_run()
         return self.session.analysis_frame(self.config)
 
     def identity(self) -> DataIdentity | None:
-        return self.session.identity(self.config) if self.session.loaded else None
+        if not self.session.loaded:
+            return None
+        self._population_this_run()
+        return self.session.identity(self.config)
 
     def single_imputed_counts(self, columns: Iterable[str] | None = None) -> dict[str, int]:
         """Values filled by a single imputation in the analysis population, per column (``columns`` only)."""
@@ -902,19 +911,24 @@ class AppState:
     def ticked(self) -> tuple[str, ...]:
         return self.session.ticked
 
-    def set_ticked(self, ids) -> None:
+    def set_ticked(self, ids, *, install: bool = True) -> None:
+        """The ticked criteria. A widget's callback passes ``install=False``: Streamlit runs it before the script,
+        where no waiting line shows and no handler says "no worker" (manage.workers); the run that follows installs
+        the views, the population computed there (:meth:`begin_run`)."""
         self.session.set_ticked(ids)
-        self._install_views()
+        if install:
+            self._install_views()
 
-    def tick(self, criterion_id: str, on: bool = True) -> None:
+    def tick(self, criterion_id: str, on: bool = True, *, install: bool = True) -> None:
         self.session.tick(criterion_id, on)
-        self._install_views()
+        if install:
+            self._install_views()
 
-    def activate_family(self, family: str, on: bool = True) -> None:
+    def activate_family(self, family: str, on: bool = True, *, install: bool = True) -> None:
         """Tick (or untick) every criterion of a family."""
         members = [c.id for c in catalogue(self.config) if c.family == family]
         ticked = [c for c in self.session.ticked if c not in members]
-        self.set_ticked(ticked + (members if on else []))
+        self.set_ticked(ticked + (members if on else []), install=install)
 
     # ------------------------------------------------------------------ derived from the data
 
@@ -929,6 +943,7 @@ class AppState:
             return None
         frame, slot, key = session.base, "analyzer:base", ""
         if rows == "analysis":
+            self._population_this_run()
             population = session.population(self.config)
             # every row when no criterion is ticked, or a ticked one is broken (as the views, _install_views)
             if population.ok and population.criteria:
@@ -1114,12 +1129,17 @@ class AppState:
 
     def record_population_use(self) -> None:
         if self.session.loaded:
+            self._population_this_run()
             with contextlib.suppress(PopulationError):
                 self.session.record_population_use(self.config)
 
     # ------------------------------------------------------------------ views and run guards
 
     def _install_views(self) -> None:
+        """The dataset views of the run. When no worker could compute the population, the analyses see no row
+        rather than rows the criteria may exclude, and "no worker" is kept for the rest of the run
+        (:meth:`no_worker_this_run`): the sidebar says so, a page that needs the population stops, and nothing asks
+        the pool again until the next run (each ask can wait for the time limit and a worker's start)."""
         ss = st.session_state
         session = self.session
         if not session.loaded:
@@ -1128,22 +1148,41 @@ class AppState:
             ss.pop("enriched_df", None)
             ss[_VIEWS_KEY] = {}
             return
+        no_worker = ""
         try:
             analysis = session.analysis_frame(self.config)
         except PopulationError:
             analysis = session.base  # the population banner stops the analysis pages
+        except WorkerUnavailable as exc:
+            analysis = session.base.iloc[
+                0:0
+            ]  # no row the ticked criteria may exclude reaches a page
+            no_worker = str(exc)
         data_view = analysis.copy(deep=False)
         enrich_view = session.draft_frame().copy(deep=False)
         ss["data"] = data_view
         ss["working_df"] = data_view
         ss["enriched_df"] = enrich_view
         record: dict[str, Any] = {"data": id(data_view), "enriched_df": id(enrich_view)}
+        if no_worker:
+            record["no_worker"] = no_worker
         if strict_state():
             record["fp"] = {
                 "data": frame_fingerprint(data_view),
                 "enriched_df": frame_fingerprint(enrich_view),
             }
         ss[_VIEWS_KEY] = record
+
+    def no_worker_this_run(self) -> str:
+        """Why no worker computed the population when this run began ("" when one did): kept until the next run."""
+        return str((st.session_state.get(_VIEWS_KEY) or {}).get("no_worker") or "")
+
+    def _population_this_run(self) -> None:
+        said = self.no_worker_this_run()
+        if said:
+            raise WorkerUnavailable(
+                said
+            )  # said again at once: the pool is asked again at the next run
 
     def begin_run(self) -> None:
         """Reinstall the dataset views; call once per run, before the sidebar and the page."""
@@ -1343,6 +1382,7 @@ class AppState:
             return False, "No dataset loaded.", None
         ref = self.dataset
         name = dataset_base_name(base_name or (ref.name if ref else "cohort"))
+        self._population_this_run()  # no worker in this run: said before anything is saved
         ok, msg, saved = self.db_manager.save_dataset(base, base_name=name)
         if ok and saved:
             self.session.record_population_use(self.config)
@@ -1457,8 +1497,10 @@ class AppState:
         tm = self.transformation_manager
         session = self.session
         population = None
-        with contextlib.suppress(PopulationError, RuntimeError):
-            population = session.population(self.config)
+        with contextlib.suppress(
+            PopulationError, RuntimeError
+        ):  # no worker (a RuntimeError): saved without it
+            population = None if self.no_worker_this_run() else session.population(self.config)
         lineage = {
             "schema": 1,
             "dataset": saved,

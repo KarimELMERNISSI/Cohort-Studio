@@ -196,8 +196,9 @@ What the writer of a package must do, which this module cannot:
   numbers, never of a box's details, an analysis's note, a stored label or a warning), the format's fixed names
   as ``own``, each criterion stored as numbers through :meth:`RareFinder.bounds`, the identifying columns the
   person who shares marks, the columns the package shows as ``shown`` (a value that is the name of a column it
-  does not show is looked for), and copies of the datasets; run it in a process with a time limit and a memory
-  limit, and show what it did not finish, or stopped on, as not checked;
+  does not show is looked for), and copies of the datasets. Each of its tests runs in a worker with a time limit
+  and a memory limit, as every expression does (``manage.workers``), and one stopped reads as not checked; give
+  the scan a deadline, and show the texts not read by then as not checked;
 - check every member against a closed schema: no fingerprint of rows, of cells or of a spec, no intermediate head
   of the trace, no number marked as one participant's;
 - show the person who shares what each result tells them (``DisclosedRecord.told``), keep it in the export log,
@@ -235,6 +236,7 @@ from biostats.plan import (
     ResultRecord,
 )
 from core.attrition import DATA, LOADED, SOURCE, AnalysisCount, FlowBox, ParticipantFlow
+from core.expressions.errors import WorkerUnavailable
 from core.expressions.safe_eval import DEFAULT_POLICY, evaluate_tree
 
 DEFAULT_K = 10
@@ -3815,9 +3817,9 @@ class RareFinder:
                     if 0 < int((tested == value).sum()) < self.policy.k:
                         return True
             return False
-        except (
-            Exception
-        ):  # the evaluator refuses the form, or the test fails on these data: not checked
+        except WorkerUnavailable:
+            raise  # no worker: the scan cannot be run here, which the writer says
+        except Exception:  # the evaluator refuses the form, the test fails on these data, or a worker stopped it: not checked
             return None
 
     def _label(self, column: str) -> str:
