@@ -50,11 +50,13 @@ def single_line(value: object) -> str:
     screen of whoever reads the log.
     """
     text = str(value)
-    if text.isprintable():
-        return text
-    return "".join(
-        one if one.isprintable() else one.encode("unicode_escape").decode("ascii") for one in text
-    )
+    if not text.isprintable():
+        text = "".join(
+            one if one.isprintable() else one.encode("unicode_escape").decode("ascii") for one in text
+        )
+    # no line break is left (each was written as its escape): the replace changes nothing, and says so to the code
+    # scan, which cannot tell a printable text from one that holds a line break
+    return text.replace("\n", "\\n")
 
 
 AUDIT_LOGGER = "cohortstudio.audit"

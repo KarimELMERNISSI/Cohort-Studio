@@ -10,6 +10,7 @@ import gc
 import os
 import pickle
 import sys
+from typing import IO
 
 from manage.workers.limits import cpu_deadline
 from manage.workers.wire import compute_job, pack, read_exactly, read_length, write_message
@@ -28,7 +29,17 @@ def main(seconds: float) -> None:
     channel = os.fdopen(os.dup(sys.stdout.fileno()), "wb")
     quiet = os.open(os.devnull, os.O_WRONLY)
     os.dup2(quiet, sys.stdout.fileno())
-    sys.stdout = open(os.devnull, "w", encoding="utf-8")  # for the life of the worker
+    os.close(quiet)  # the standard output now holds its copy
+    with open(os.devnull, "w", encoding="utf-8") as silent:  # for the life of the worker
+        sys.stdout = silent
+        try:
+            _serve(channel, seconds)
+        finally:
+            sys.stdout = sys.__stdout__
+
+
+def _serve(channel: IO[bytes], seconds: float) -> None:
+    """The jobs, one at a time, until the worker's input closes."""
     source = sys.stdin.buffer
     write_message(channel, pack({"ready": os.getpid()}))
     while True:

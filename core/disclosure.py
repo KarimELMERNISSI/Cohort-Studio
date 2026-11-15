@@ -3094,9 +3094,6 @@ _WORDS = frozenset(
     {"true", "false", "none", "null"}
 )  # in every text, and no participant's value on their own
 _EQUALITY = frozenset({"eq", "ne", "isin"})
-_PATTERN_TESTS = frozenset(
-    {"contains", "match", "fullmatch"}
-)  # their first argument is a regular expression
 _PLAIN_TESTS = frozenset({"startswith", "endswith"})
 _SAME_VALUES = frozenset(
     {"astype", "strip", "lower", "upper", "casefold", "fillna"}

@@ -88,7 +88,6 @@ def test_a_formula_stopped_by_a_limit_says_so_without_examples_of_the_data() -> 
 def test_the_pool_is_installed_from_the_settings_unless_the_switch_keeps_expressions_here(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import manage.workers as workers
     from core.expressions import runner
 
     here = SimpleNamespace(
@@ -114,7 +113,7 @@ def test_the_pool_is_installed_from_the_settings_unless_the_switch_keeps_express
             raise AssertionError("not computed in this test")
 
     monkeypatch.setattr("manage.workers.pool.ExpressionWorkers", Pool)
-    monkeypatch.setattr(workers, "_pool", None)
+    monkeypatch.setattr("manage.workers._pool", None)
     there = SimpleNamespace(
         development=SimpleNamespace(formula_in_process=False),
         formulas=SimpleNamespace(seconds=12, memory_mb=1024, workers=3),

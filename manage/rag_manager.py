@@ -353,7 +353,7 @@ class RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin):
         the engine started, so it kept answering. Returns whether it stopped.
         """
         withdrawn = set(recipients) if recipients else {r for confirmed in self.confirmed for r in confirmed}
-        gone = sorted((c for c in self.confirmed if c & withdrawn), key=lambda c: sorted(c))
+        gone = sorted((c for c in self.confirmed if c & withdrawn), key=sorted)
         self.confirmed = {c for c in self.confirmed if not c & withdrawn}
         for confirmed in gone:
             self.confirmed_by.pop(confirmed, None)

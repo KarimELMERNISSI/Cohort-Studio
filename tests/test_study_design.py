@@ -249,11 +249,16 @@ def test_a_stratum_the_test_of_the_ratios_cannot_read_is_counted_and_breslow_day
     assert res.woolf_statistic == 0.0 and res.woolf_p == 1.0  # not the rounding's 1.2e-29
     lines, chip = strata_homogeneity(res, "risk ratio")
     assert lines == [
-        ":material/info: The risk ratios of the 2 strata with an event in both groups are both 2.000 (p = 1.000, "
-        "Woolf's test); 1 stratum has events in one group only (a risk ratio of 0), which that test cannot read.",
-        ":material/warning: The odds ratios of the 3 strata differ (Breslow-Day p = 0.049), including the stratum "
-        "the test of the risk ratios cannot read. Report the risk ratio of each stratum, not one combined risk "
-        "ratio.",
+        (
+            ":material/info: The risk ratios of the 2 strata with an event in both groups are both 2.000 (p = "
+            "1.000, Woolf's test); 1 stratum has events in one group only (a risk ratio of 0), which that test "
+            "cannot read."
+        ),
+        (
+            ":material/warning: The odds ratios of the 3 strata differ (Breslow-Day p = 0.049), including the "
+            "stratum the test of the risk ratios cannot read. Report the risk ratio of each stratum, not one "
+            "combined risk ratio."
+        ),
     ]
     text = " ".join(lines)
     assert (
@@ -348,8 +353,10 @@ def test_no_reason_of_scale_at_one_baseline_risk() -> None:
     lines, chip = strata_homogeneity(res, "risk ratio")
     assert lines == [
         ":material/info: The risk ratios of the strata run from 1.400 to 2.600 (p = 0.167, Woolf's test).",
-        ":material/warning: The odds ratios of the 4 strata differ (Breslow-Day p = 0.032). Report the risk ratio "
-        "of each stratum, not one combined risk ratio.",
+        (
+            ":material/warning: The odds ratios of the 4 strata differ (Breslow-Day p = 0.032). Report the risk "
+            "ratio of each stratum, not one combined risk ratio."
+        ),
     ]
     assert chip == DIFFER
     p, low, high = reference_risks(_counted(POPULATION, "cohort").per_stratum)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -162,7 +164,7 @@ def test_the_two_tests_read_the_strata_that_hold_both_groups_and_both_outcomes(a
 
 def test_one_informative_stratum_has_no_other_to_differ_from() -> None:
     res = _mh({"A": SITES["A"], "E": (10, 0, 10, 0)})
-    assert res.n_tested == 1 and res.breslow_day_p != res.breslow_day_p  # not a number: not tested
+    assert res.n_tested == 1 and math.isnan(res.breslow_day_p)  # not a number: not tested
     assert res.mh_test_p == pytest.approx(_mh_alone(SITES["A"]))
     assert res.or_mh == pytest.approx((35 * 74) / (85 * 46))
     # said by their number: "the two tests read the other 1" stood where one of the two read none
@@ -172,7 +174,7 @@ def test_one_informative_stratum_has_no_other_to_differ_from() -> None:
     )
     assert not any("the two tests read" in w for w in res.warnings)
     none = _mh({"E": (10, 0, 10, 0), "F": (0, 5, 0, 5)})
-    assert none.n_tested == 0 and none.mh_test_p != none.mh_test_p and none.or_mh != none.or_mh
+    assert none.n_tested == 0 and math.isnan(none.mh_test_p) and math.isnan(none.or_mh)
     assert any("no stratum is left for the two tests" in w for w in none.warnings)
     assert read_by_the_tests(3) == "the two tests read the other 3"
 

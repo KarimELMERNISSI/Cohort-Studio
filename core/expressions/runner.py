@@ -49,7 +49,8 @@ class Runner(Protocol):
         *,
         policy: Any,
         extra_locals: Mapping[str, Any],
-    ) -> Any: ...
+    ) -> Any:
+        """The value of ``tree`` on ``df`` (None: no table), under the evaluator's ``policy``."""
 
 
 _lock = threading.Lock()

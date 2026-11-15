@@ -60,7 +60,7 @@ def limit_self(memory_mb: int) -> None:
             with open("/proc/self/oom_score_adj", "w", encoding="ascii") as score:
                 score.write("1000")
         except OSError:
-            pass
+            pass  # not allowed in some containers: the memory limit above still stops the worker
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
@@ -89,7 +89,7 @@ def machine_memory_mb() -> int | None:
             if text.isdigit():
                 return int(text) // 2**20
         except OSError:
-            pass
+            pass  # no limit of a container to read: the machine's memory is read next
         try:
             with open("/proc/meminfo", encoding="ascii") as info:
                 for line in info:
@@ -110,7 +110,7 @@ def machine_memory_mb() -> int | None:
 
 if sys.platform == "win32":
     import ctypes
-    from ctypes import wintypes
+    import ctypes.wintypes as wintypes
 
     _EXTENDED_LIMIT_INFORMATION = 9
     _LIMIT_ACTIVE_PROCESS = 0x00000008
