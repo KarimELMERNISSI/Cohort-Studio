@@ -313,6 +313,76 @@ def test_a_received_spec_is_read_strictly_and_says_why_it_cannot_be() -> None:
         plan.run(AnalysisSpec.from_dict({**written, "kind_version": 2}), _cohort())
 
 
+def test_a_key_this_version_does_not_know_is_refused_by_every_reader() -> None:
+    """A spec or a record written by a later version, holding a key this one never writes, is refused with a reason
+    (a check of a package then reads "not run"), never read as if the key were not there: a calculation from typed
+    numbers would read back as an analysis of the data with no variables. The reason names no key and no value."""
+    done = plan.run(
+        specify("cox", time="days", event="died", compare="arm", adjust=["age"]), _cohort()
+    )
+    written = json.loads(json.dumps(done.spec.to_dict()))
+    later = read_spec({**written, "typed": {"with": 3, "of": 928}})
+    assert later[0] is None and "does not know" in later[1]
+    assert "typed" not in later[1] and "928" not in later[1]
+    on = ComputedOn("observed", "f" * 64, 10).to_dict()
+    imputation = ImputationUsed("e" * 64, 5).to_dict()
+    record = plan.record("cox", done.result)
+    assert record is not None
+    stored = record.to_dict()
+    part = stored["parts"][0]
+    for reader, value in (
+        (ComputedOn.from_dict, {**on, "weights": "w"}),
+        (ImputationUsed.from_dict, {**imputation, "engine": "x"}),
+        (ResultRecord.from_dict, {**stored, "source": "typed"}),
+        (Part.from_dict, {**part, "typed": True}),
+        (Number.from_dict, {**part["numbers"][0], "unit": "days"}),
+    ):
+        with pytest.raises(ValueError, match="does not know"):
+            reader(value)
+
+
+def test_each_reader_knows_the_keys_its_writer_writes() -> None:
+    """The keys a reader takes are those its class writes: a field added to one and not the other fails here."""
+    done = plan.run(
+        specify("cox", time="days", event="died", compare="arm", adjust=["age"]), _cohort()
+    )
+    imputation = ImputationUsed("e" * 64, 5)
+    on = ComputedOn("imputed", "f" * 64, 10, imputation=imputation)
+    assert set(done.spec.on(on).to_dict()) == plan.SPEC_KEYS
+    assert set(on.to_dict()) == plan.COMPUTED_ON_KEYS
+    assert set(imputation.to_dict()) == plan.IMPUTATION_KEYS
+    record = plan.record("cox", done.result)
+    assert record is not None
+    assert set(record.to_dict()) == plan.RECORD_KEYS
+    assert set(record.parts[0].to_dict()) == plan.PART_KEYS
+    assert set(record.parts[0].numbers[0].to_dict()) == plan.NUMBER_KEYS
+
+
+def test_today_s_ids_and_record_json_are_kept() -> None:
+    """Pinned before the source of typed numbers is added: a spec of today keeps its id and its fingerprint, and a
+    record its JSON, whatever is added to them later (only when present)."""
+    spec = specify("cox", time="days", event="died", compare="arm", adjust=("age",))
+    assert spec.request_id == "4410b23e8bb7bd9b8f1e9732409280b7b99f205161fa704b9fcdf290dd3b9d28"
+    assert (
+        spec.on(ComputedOn("observed", "f" * 64, 10)).fingerprint
+        == "571b0ab6ac753757f596cc22cbcda6e3e965977b3962f2d4a4d9b2f99489f78f"
+    )
+    for kind, request_id in (
+        ("proportion", "6d63a6a20240efe84020ca819c62b2d51dc14a36cb55042aa7abbecf08bbc469"),
+        ("diagnostic", "1c093fa78c184ef8447313bdf72725b4415f8faa5b1d96046903c435fe4e1eac"),
+        ("mantel_haenszel", "6b756979ab2f1667b5a73d32c61b63f8ef5f1952a537c724509dd41b0b5bc900"),
+    ):
+        assert specify(kind).request_id == request_id, kind
+    record = ResultRecord(
+        "cox", parts=(Part("p", numbers=(Number("a", 1.5),), support={"arm=drug": 12}),)
+    )
+    assert record.to_json() == (
+        '{"complete_case":null,"kind":"cox","parts":[{"id":"p","labels":{},"numbers":[{"class":"deterministic",'
+        '"fine":false,"name":"a","rule":"plain","scale":null,"value":1.5}],"support":{"arm=drug":12}}],'
+        '"pooled":false,"record_version":1,"warnings":[]}'
+    )
+
+
 # ----------------------------------------------------------------------------- one call computes a kind
 
 

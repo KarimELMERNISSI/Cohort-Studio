@@ -144,6 +144,50 @@ def _typed(
     return found
 
 
+# the keys each part of a spec or a record holds, as its to_dict writes them: a reader refuses any other, so that
+# a key a later version writes is never read as if it were not there (its meaning lost without a word)
+IMPUTATION_KEYS = frozenset({"cells_fp", "m", "subset", "step_index", "step_hash"})
+COMPUTED_ON_KEYS = frozenset(
+    {
+        "mode",
+        "data_fp",
+        "n_population",
+        "n_analysed",
+        "rows_fp",
+        "protocol_hash",
+        "rules_version",
+        "trace_head",
+        "trace_steps",
+        "imputation",
+    }
+)
+SPEC_KEYS = frozenset(
+    {
+        "kind",
+        "kind_version",
+        "pooled",
+        "variables",
+        "options",
+        "decided",
+        "random",
+        "backend",
+        "data",
+    }
+)
+NUMBER_KEYS = frozenset({"name", "value", "class", "scale", "rule", "fine"})
+PART_KEYS = frozenset({"id", "labels", "support", "numbers"})
+RECORD_KEYS = frozenset({"kind", "record_version", "pooled", "parts", "warnings", "complete_case"})
+
+
+def _closed(value: Mapping[str, Any], keys: frozenset[str], what: str) -> None:
+    """ValueError when ``value`` holds a key that ``what`` never holds in this version (written by a later one).
+    The key is not named: a received file can hold anything."""
+    if isinstance(value, Mapping) and set(value) - keys:
+        raise ValueError(
+            f"the {what} holds a key this version does not know (written by a later version)"
+        )
+
+
 # ----------------------------------------------------------------------------- what it was computed on
 
 
@@ -172,6 +216,7 @@ class ImputationUsed:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> ImputationUsed:
+        _closed(value, IMPUTATION_KEYS, "imputation")
         return cls(
             cells_fp=_typed(value, "cells_fp", str),
             m=_typed(value, "m", int),
@@ -225,6 +270,7 @@ class ComputedOn:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> ComputedOn:
+        _closed(value, COMPUTED_ON_KEYS, "description of what an analysis was computed on")
         imputation = _typed(value, "imputation", dict, optional=True)
         return cls(
             mode=_typed(value, "mode", str),
@@ -328,7 +374,8 @@ class AnalysisSpec:
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> AnalysisSpec:
         """A spec read back. ValueError for a value of another type than a spec holds there (the key is named, never
-        the value), or for a kind, a role or an option this version does not know."""
+        the value), or for a kind, a role, an option or a key this version does not know."""
+        _closed(value, SPEC_KEYS, "analysis spec")
         data = _typed(value, "data", dict, optional=True)
         random = _typed(value, "random", dict, optional=True)
         return cls(
@@ -372,8 +419,8 @@ class AnalysisSpec:
 
 def read_spec(value: Any) -> tuple[AnalysisSpec | None, str]:
     """
-    A spec from a received file, or the reason it cannot be read here: a kind, a role or an option this version does
-    not know (the package was made by a later one), a value of another type. The reason names keys and kinds, never
+    A spec from a received file, or the reason it cannot be read here: a kind, a role, an option or a key this
+    version does not know (the package was made by a later one), a value of another type. The reason names keys and kinds, never
     a value: a check of the package then reads "not run" with it.
     """
     if not isinstance(value, Mapping):
@@ -446,6 +493,7 @@ class Number:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> Number:
+        _closed(value, NUMBER_KEYS, "number of a result")
         return cls(
             name=_typed(value, "name", str),
             value=_restored(value.get("value")),
@@ -503,6 +551,7 @@ class Part:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> Part:
+        _closed(value, PART_KEYS, "part of a result")
         return cls(
             id=_typed(value, "id", str),
             numbers=tuple(Number.from_dict(n) for n in _typed(value, "numbers", list)),
@@ -554,6 +603,7 @@ class ResultRecord:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> ResultRecord:
+        _closed(value, RECORD_KEYS, "result record")
         inner = _typed(value, "complete_case", dict, optional=True)
         return cls(
             kind=_typed(value, "kind", str),
