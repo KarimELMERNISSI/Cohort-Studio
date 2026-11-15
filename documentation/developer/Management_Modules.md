@@ -4302,7 +4302,7 @@ _A worker's loop: the jobs of :mod:`manage.workers.wire`, computed one at a time
 or Streamlit._
 
 **Imports**:
-`__future__.annotations`, `gc`, `os`, `pickle`, `sys`, `manage.workers.limits.cpu_deadline`, `manage.workers.wire.compute_job`, `manage.workers.wire.pack`, `manage.workers.wire.read_exactly`, `manage.workers.wire.read_length`, `manage.workers.wire.write_message`
+`__future__.annotations`, `gc`, `os`, `pickle`, `sys`, `typing.IO`, `manage.workers.limits.cpu_deadline`, `manage.workers.wire.compute_job`, `manage.workers.wire.pack`, `manage.workers.wire.read_exactly`, `manage.workers.wire.read_length`, `manage.workers.wire.write_message`
 
 ### def `main` (serve.py)
 
@@ -4314,6 +4314,14 @@ The worker's loop: one job at a time, read from its input, computed, answered, u
 closed it, or the server ended). Its standard output is moved aside first, so that a library that prints cannot
 break the channel: the answers go to the handle saved before. Before each job its CPU time is limited (POSIX);
 after a large one it gives its memory back (the collector, and pyarrow's pool).
+
+### def `_serve` (serve.py)
+
+- **Arguments**: `channel: IO[bytes], seconds: float`
+
+- **Returns**: `None`
+
+The jobs, one at a time, until the worker's input closes.
 
 ---
 
