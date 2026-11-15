@@ -6,7 +6,7 @@ altair==6.3.0
     #   streamlit
 annotated-types==0.8.0
     # via pydantic
-anthropic==2.6.0
+anthropic==2.8.0
     # via cohortstudio
 anyio==4.15.1
     # via
@@ -76,7 +76,7 @@ formulaic==1.2.2
     #   statsmodels
 google-auth==2.62.0
     # via google-genai
-google-genai==3.0.0
+google-genai==3.2.0
     # via cohortstudio
 grpcio==1.84.0
     # via qdrant-client
@@ -146,7 +146,7 @@ lance-namespace-urllib3-client==0.13.0
     # via lance-namespace
 lancedb==0.41.0
     # via cohortstudio
-langchain-core==1.7.6
+langchain-core==1.8.0
     # via
     #   cohortstudio
     #   langchain-text-splitters
@@ -208,7 +208,7 @@ numpy==2.5.4
     #   statsmodels
     #   streamlit
     #   umap-learn
-openai==3.46.0
+openai==3.49.0
     # via cohortstudio
 openpyxl==3.1.5
     # via cohortstudio
@@ -287,7 +287,7 @@ pynndescent==0.6.0
     # via umap-learn
 pyparsing==3.3.3
     # via matplotlib
-pypdf==7.0.0
+pypdf==7.0.1
     # via cohortstudio
 python-dateutil==2.9.0.post0
     # via
