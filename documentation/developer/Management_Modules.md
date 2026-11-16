@@ -1195,7 +1195,7 @@ The input is plain data (:class:`DossierInput`); the app gathers it (app_pages/s
 supports these reporting guidelines; it does not certify compliance, and it is not an electronically signed record._
 
 **Imports**:
-`__future__.annotations`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `io.BytesIO`, `typing.Any`, `pandas`, `docx.Document`, `docx.shared.Cm`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.attrition.MISSING_VALUES_NOTE`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `manage.report_tables.ResultBlocks`
+`__future__.annotations`, `dataclasses`, `logging`, `re`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `io.BytesIO`, `typing.Any`, `pandas`, `docx.Document`, `docx.shared.Cm`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.attrition.MISSING_VALUES_NOTE`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `manage.report_tables.ResultBlocks`
 
 ### class `DossierResult` (dossier.py)
 
@@ -1204,6 +1204,25 @@ No description available.
 ### class `DossierInput` (dossier.py)
 
 No description available.
+
+### def `_text` (dossier.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `str`
+
+A text as a Word document can hold it: the characters XML 1.0 refuses (a vertical tab pasted from a word
+processor, a NUL of a fixed-width export) become U+FFFD, so that one value of the data cannot stop the dossier.
+
+### def `_writable` (dossier.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `Any`
+
+``value`` with every text it holds as a Word document can hold it (:func:`_text`): the input of the dossier
+passes through it once, whatever its section (a title, a settings line, a table's headers and cells, a line, a
+warning, a reference).
 
 ### def `_small` (dossier.py)
 
@@ -1220,6 +1239,15 @@ No description available.
 - **Returns**: `None`
 
 No description available.
+
+### def `_write_result` (dossier.py)
+
+- **Arguments**: `doc: Any, result: DossierResult, figure: int`
+
+- **Returns**: `int`
+
+One result of section 5: its title, what it was computed on, its tables, lines, figure and notes. Gives back
+the number of the last figure written.
 
 ### def `_pairs` (dossier.py)
 
@@ -4072,6 +4100,61 @@ No description available.
 - **Returns**: `ResultBlocks`
 
 No description available.
+
+### def `sampling_line` (report_tables.py)
+
+- **Arguments**: `sampling: str, prevalence: Any`
+
+- **Returns**: `str`
+
+How the participants entered the study, and where the predictive values of the block are read: said by what
+was written (a line that sent the reader to "a prevalence given" stood over a table without one). ``read``:
+whether the predictive values at the prevalence given have a value (a test that calls everyone, or no one,
+positive has none).
+
+### def `_small_side` (report_tables.py)
+
+- **Arguments**: `acc: Any, auc: Any, least: int`
+
+- **Returns**: `str`
+
+The side of the reference standard that holds fewer than ``least`` participants ("have the condition", "are
+without the condition"; "" when both hold enough). Read on the 2x2 table whenever there is one, whatever the
+index test: a yes/no test has no AUC, and a result without the AUC's counts was read as "enough". Without a
+table, on the AUC's counts (:func:`_thin_side`).
+
+### def `_bounds` (report_tables.py)
+
+- **Arguments**: `ci: Any`
+
+- **Returns**: `str`
+
+An interval's two bounds, or nothing when it has none ("n/a to n/a" stood beside a predictive value that no
+test result gives).
+
+### def `_ratio_row` (report_tables.py)
+
+- **Arguments**: `name: str, value: Any, ci: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+A likelihood ratio's row: at a zero cell, the one bound the data leave ("0" stood alone, and "inf").
+
+### def `_accuracy_blocks` (report_tables.py)
+
+- **Arguments**: `value: dict`
+
+- **Returns**: `ResultBlocks`
+
+The accuracy of a test against a reference standard: a score (its AUC; at a cut-off, the 2x2 table and its
+measures) or a yes/no test (the table and its measures; no AUC).
+
+One rule for a side of the reference standard, whatever the index test: with fewer than the dossier's threshold
+on a side, neither the table nor a measure is written (they read those participants one by one), and one line
+says so. A yes/no test is read as a cut-off typed beforehand: the side it calls does not count, its positive
+value being a code of the data, not a score found on them. The table goes with the measures: sensitivity,
+specificity and the predictive values give its cells back, so writing it adds nothing, and holding it back
+alone would protect nothing.
 
 ### def `result_blocks` (report_tables.py)
 

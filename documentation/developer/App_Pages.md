@@ -66,8 +66,8 @@ Returns a dictionary with the selected configuration.
 ## analysis_diagnostic.py
 
 _Diagnostic accuracy & agreement, a tab of Analyze > Hypothesis tests & epidemiology: three questions, one open at a
-time (ui.guidance.measures): the accuracy of a test against a reference standard (sensitivity, specificity, the ROC
-curve and its AUC), the agreement of two measurements (Bland-Altman limits and the ICC, on one set of columns), and the
+time (ui.guidance.measures): the accuracy of a test against a reference standard (a score, with the ROC curve and its
+AUC, or a yes/no test: sensitivity, specificity, predictive values by the sampling), the agreement of two measurements (Bland-Altman limits and the ICC, on one set of columns), and the
 agreement of two raters on categories (Cohen's kappa).
 
 Each follows the page pattern of Survival & regression (app_pages.analysis_layout): nothing is preselected, the plan
@@ -75,7 +75,7 @@ says what Run will do, one click runs it, and the result reads the estimate firs
 function of its own here (``accuracy_of``, ``kappa_of``), so that the numbers are checked without the page._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.youden_cutoff`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.KOOPMAN`, `biostats.diagnostic.SAMPLING_NOT_STATED`, `biostats.diagnostic.SAMPLINGS`, `biostats.diagnostic.SCORE_CARRIED`, `biostats.diagnostic.SERIES`, `biostats.diagnostic.TWO_GATE`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.reads_share`, `biostats.diagnostic.verification`, `biostats.diagnostic.yes_no_table`, `biostats.diagnostic.youden_cutoff`, `biostats.references.cite`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
 
 ### def `_rgba` (analysis_diagnostic.py)
 
@@ -84,6 +84,30 @@ function of its own here (``accuracy_of``, ``kappa_of``), so that the numbers ar
 - **Returns**: `str`
 
 No description available.
+
+### def `accuracy_settings` (analysis_diagnostic.py)
+
+- **Arguments**: `form: str, present: Any, positive: Any, direction: ComplexType, mode: ComplexType, cutoff: ComplexType, prevalence: ComplexType, sampling: str`
+
+- **Returns**: `dict[ComplexType]`
+
+The options in use of one accuracy analysis, by stored id: those ``biostats.plan.KINDS["diagnostic"]`` declares,
+so that the identity of a result on the page (its settings, built from these: :func:`_config`) is the identity
+of its request.
+
+The form and the value that means the condition, always; the test's positive value for a yes/no test; the
+direction and the cut-off's mode for a score, the cut-off for one typed beforehand only; the sampling and the
+prevalence wherever a 2x2 table is read (a yes/no test, a score at a cut-off). An option left out takes its
+declared default: a score without a cut-off is one analysis whatever the sampling question holds.
+
+### def `_config` (analysis_diagnostic.py)
+
+- **Arguments**: `columns: Sequence[ComplexType], settings: dict[ComplexType]`
+
+- **Returns**: `tuple`
+
+A result's settings as the page keeps them and the dossier's line writes them: the two columns, then each
+option in use (:func:`accuracy_settings`), in the words of its id's catalogue.
 
 ### def `_as_measured` (analysis_diagnostic.py)
 
@@ -105,12 +129,13 @@ participant's own when few lie beyond it: the dossier writes an end only when en
 
 ### def `accuracy_of` (analysis_diagnostic.py)
 
-- **Arguments**: `df: pd.DataFrame, outcome: str, present: Any, score: str, direction: str, mode: str, cutoff: ComplexType, prevalence: ComplexType`
+- **Arguments**: `df: pd.DataFrame, outcome: str, present: Any, score: str, direction: str, mode: str, cutoff: ComplexType, prevalence: ComplexType, sampling: str`
 
 - **Returns**: `dict[ComplexType]`
 
 The accuracy of ``score`` against ``outcome`` = ``present`` on the rows where both are recorded: the AUC always;
-with a cut-off (fixed beforehand, or found on these data by Youden's J), the 2x2 table and its measures.
+with a cut-off (fixed beforehand, or found on these data by Youden's J), the 2x2 table and its measures, by the
+``sampling`` (predictive values at the share in the data for a series only).
 
 ``direction`` says which way the test points. For "lower", the same functions read the reversed marker, and the
 cut-off is given back on the marker's own scale (positive when the test is at most the cut-off): a marker that
@@ -160,6 +185,48 @@ No description available.
 The ROC curve, square, with the point of the 2x2 table when a cut-off is set (the table's own sensitivity and
 specificity: the nearest threshold of the curve was drawn, which is another point for a typed cut-off).
 
+### def `accuracy_yes_no_of` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame, outcome: str, present: Any, test: str, positive: Any, prevalence: ComplexType, sampling: str`
+
+- **Returns**: `dict[ComplexType]`
+
+The accuracy of the yes/no ``test`` (positive when it is ``positive``) against ``outcome`` = ``present``, on the
+rows where both are recorded: the 2x2 table and its measures, by the sampling. A yes/no test has one point on
+the ROC plane: no curve, no area, no cut-off. The result has the keys of a score's (``score`` names the index
+test's column, whatever its form), with ``index_form``, the test's two values, and no ``auc``.
+
+### def `_reference_standard` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame, standards: list[str], first: Any, second: Any`
+
+- **Returns**: `tuple`
+
+The reference standard and the value that means the condition is present: asked once for a score and for a
+yes/no test of the same study (their keys are shared).
+
+### def `_sampling_and_prevalence` (analysis_diagnostic.py)
+
+- **Arguments**: `outcome: ComplexType, share: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+How the participants entered the study, and beside it the prevalence where the test will be used: two of the
+three answers read predictive values only at that prevalence, so it stands in view (it was the one field of a
+folded "More options"). The question is a statement about who was taken into the study, asked once the reference
+standard is chosen and again for another; it starts at "Not stated", which reads no predictive value at the share
+in the data.
+
+### def `_prevalence_setting` (analysis_diagnostic.py)
+
+- **Arguments**: `prevalence: ComplexType`
+
+- **Returns**: `ComplexType`
+
+A prevalence given, among a result's settings: in words (a bare "0.05" stood in the dossier's line), with
+twelve significant figures (two prevalences a person can type are two results; six kept 0.1234561 and 0.1234564
+as one).
+
 ### def `_accuracy` (analysis_diagnostic.py)
 
 - **Arguments**: `df: pd.DataFrame`
@@ -167,6 +234,104 @@ specificity: the nearest threshold of the curve was drawn, which is another poin
 - **Returns**: `None`
 
 No description available.
+
+### def `_accuracy_yes_no` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_counts_table` (analysis_diagnostic.py)
+
+- **Arguments**: `table: pd.DataFrame`
+
+- **Returns**: `None`
+
+A 2x2 table with its totals, the counts written as the headline writes them ("1,072": the table read "1072"
+under "667 of 1,072").
+
+### def `_predictive_pair` (analysis_diagnostic.py)
+
+- **Arguments**: `positive: tuple[ComplexType], negative: tuple[ComplexType]`
+
+- **Returns**: `str`
+
+The two predictive values of one line, each with its interval; one that has no value is said with its reason
+("negative n/a" stood for a test that called everyone positive).
+
+### def `_predictive_caption` (analysis_diagnostic.py)
+
+- **Arguments**: `acc: Any, prevalence: ComplexType, unequal: bool`
+
+- **Returns**: `str`
+
+The predictive values under the 2x2 table, by the sampling: at the share in the data for a series, at the
+prevalence given whatever the sampling (its interval carried from the likelihood ratio's, the prevalence taken
+as known). The numbers first; where none is read, why, with the share named and what to do. ``unequal``: the
+reference standard was done unequally by test result, and the share among those who had it is then no
+prevalence, even in a series.
+
+### def `_measure_rows` (analysis_diagnostic.py)
+
+- **Arguments**: `acc: Any, prevalence: ComplexType`
+
+- **Returns**: `pd.DataFrame`
+
+Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
+in the data and the share classified correctly for a series only).
+
+### def `_intervals` (analysis_diagnostic.py)
+
+- **Arguments**: `acc: Any, prevalence: ComplexType`
+
+- **Returns**: `str`
+
+The methods of the intervals, in one line under the table of every measure.
+
+### def `_unequal` (analysis_diagnostic.py)
+
+- **Arguments**: `res: dict[ComplexType]`
+
+- **Returns**: `bool`
+
+Whether the reference standard was done unequally by test result in this result.
+
+### def `_methods` (analysis_diagnostic.py)
+
+- **Arguments**: `res: dict[ComplexType]`
+
+- **Returns**: `str`
+
+The references of a result's measures; with the caution of partial verification, its own.
+
+### def `_show_accuracy_yes_no` (analysis_diagnostic.py)
+
+- **Arguments**: `res: dict[ComplexType]`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_accuracy_score` (analysis_diagnostic.py)
+
+- **Arguments**: `df: pd.DataFrame`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_share_parts` (analysis_diagnostic.py)
+
+- **Arguments**: `value: Any, ci: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+A share and the bounds of its interval, as percentages: one decimal ("40.8%", "34.5% to 47.6%"); "" for an
+interval without bounds. Bounds that one decimal writes alike take three, and the share with them ("100.0% (95%
+CI 100.0% to 100.0%)" stood for a negative predictive value at a prevalence of 1 in 2,500). A share below 100%
+is never written "100.0%" nor one above 0 "0.0%" (the rule of "more than 99 of 100 pairs").
 
 ### def `_share` (analysis_diagnostic.py)
 
@@ -4703,7 +4868,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `enrich.transformation_logic.added_columns`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.components.study.status_text`, `ui.components.study.study_status`, `ui.components.study.study_strip`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
+`__future__.annotations`, `logging`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `enrich.transformation_logic.added_columns`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.components.study.status_text`, `ui.components.study.study_status`, `ui.components.study.study_strip`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 
