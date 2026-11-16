@@ -373,7 +373,9 @@ def test_today_s_ids_and_record_json_are_kept() -> None:
         # declaration until the first spec of the kind is written (its runner, its typed source or the package
         # writer); after that, a change bumps the kind's version
         ("diagnostic", "651b0f6002c54b519034c2c4cf97351b9ae263070e1a06cc10bc4d5d5c678eb8"),
-        ("mantel_haenszel", "6b756979ab2f1667b5a73d32c61b63f8ef5f1952a537c724509dd41b0b5bc900"),
+        # declared with its roles, its options and its design's values, under the same rule: no spec of the kind
+        # was written before
+        ("mantel_haenszel", "ce166d2e5f2234018b8523f44b9cf45d6ce14d2526e2c21d7fcffe176c2c4d1e"),
     ):
         assert specify(kind).request_id == request_id, kind
     # the canonical form of a request, apart from any kind's declaration: a spec without roles or options, read
@@ -1220,3 +1222,57 @@ def test_a_pooled_result_counts_the_rows_its_datasets_left_out() -> None:
     left = pooled.part("model").number("rows_left_out")
     assert left.value == 2 and left.fine
     assert pooled.part("model").support["rows_min"] == len(truth) - 2
+
+
+# ----------------------------------------------------------------------------- the closed values of an option
+
+
+@pytest.mark.parametrize(
+    ("kind", "option", "forged"),
+    [
+        ("diagnostic", "sampling", "nested"),
+        ("diagnostic", "sampling", ""),
+        ("diagnostic", "index_form", "ordinal"),
+        ("diagnostic", "mode", "Youden"),
+        ("diagnostic", "direction", "up"),
+        ("mantel_haenszel", "design", "nested case-control"),
+    ],
+)
+def test_a_spec_refuses_a_value_of_an_option_it_does_not_know(
+    kind: str, option: str, forged: str
+) -> None:
+    """A spec checked the names of its options, never their values: a sampling, a form or a design this version does
+    not know read as its own, and the runner would have raised on a word, where a received spec exists to say
+    "written by a later version" and read not run. The reason names the option, never the value."""
+    reason = f"the {kind} analysis does not know this value of its option {option} (written by a later version)"
+    with pytest.raises(ValueError) as refused:
+        specify(kind, options={option: forged})
+    assert str(refused.value) == reason and (not forged or forged not in reason)
+    written = specify(kind).to_dict()
+    received = {**written, "options": {**written["options"], option: forged}}
+    assert read_spec(received) == (None, reason)
+    assert read_spec(written)[1] == ""
+
+
+def test_the_closed_values_are_the_ids_their_modules_keep() -> None:
+    from biostats.diagnostic import CUTOFF_MODES, DIRECTIONS, INDEX_FORMS, SAMPLINGS
+    from biostats.study_designs import ACCURACY_SAMPLING, DESIGNS, OFFERED
+
+    accuracy = plan.KINDS["diagnostic"].choices
+    assert set(accuracy["sampling"]) == set(SAMPLINGS)
+    assert accuracy["index_form"] == INDEX_FORMS
+    assert accuracy["direction"] == (None, *DIRECTIONS)
+    assert accuracy["mode"] == (None, *CUTOFF_MODES)
+    assert plan.KINDS["mantel_haenszel"].choices["design"] == OFFERED and set(OFFERED) == set(
+        DESIGNS
+    )
+    # one question, two catalogues: each design has its sampling, among the accuracy's
+    assert set(ACCURACY_SAMPLING) == set(DESIGNS) and set(ACCURACY_SAMPLING.values()) == set(
+        SAMPLINGS
+    )
+    for kind in plan.KINDS.values():
+        offered = {**kind.options, **kind.pooled_options}
+        for option, known in kind.choices.items():
+            # a closed option is a declared one, and its default is among its values
+            assert option in offered, (kind.id, option)
+            assert any(offered[option] == value for value in known), (kind.id, option)

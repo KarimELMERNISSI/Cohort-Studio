@@ -346,6 +346,13 @@ class AnalysisSpec:
                 f"the analysis kind {self.kind} has no option {', '.join(unknown)}; its options: "
                 f"{', '.join(offered) or 'none'}"
             )
+        for name, known in kind.choices.items():
+            # the option named, never the value: a value this version does not know was written by a later one
+            if name in self.options and not any(self.options[name] == value for value in known):
+                raise ValueError(
+                    f"the {self.kind} analysis does not know this value of its option {name} (written by a later "
+                    "version)"
+                )
         for name in ("variables", "options", "decided", "backend"):
             object.__setattr__(self, name, _plain(getattr(self, name)))
         if self.random is not None:
@@ -637,6 +644,10 @@ class AnalysisKind:
     A kind may declare its roles and options before its runner (for its record's labels). Its request id then moves
     with the declaration until the first spec of the kind is written (by its runner, a typed source or the package
     writer); from then on, a change of the declaration moves ``version``.
+
+    ``choices`` closes the values of the options that hold stored ids (a sampling, a form, a design): a spec holding
+    another value is refused with the option named, and a received one reads as written by a later version, where
+    its runner would have raised on a word. A value added to a closed set moves ``version``.
     """
 
     id: str
@@ -645,6 +656,7 @@ class AnalysisKind:
     roles: tuple[str, ...] = ()
     options: Mapping[str, Any] = field(default_factory=dict)  # with their defaults
     pooled_options: Mapping[str, Any] = field(default_factory=dict)  # of the pooled analysis only
+    choices: Mapping[str, tuple[Any, ...]] = field(default_factory=dict)  # the closed values
     libraries: tuple[str, ...] = ()  # whose versions the spec records
     run: (
         Callable[[AnalysisSpec, pd.DataFrame], tuple[Any, dict[str, Any], dict[str, Any]]] | None
@@ -2121,7 +2133,15 @@ KINDS: dict[str, AnalysisKind] = {
         AnalysisKind("paired", "Paired test", "Paired t-test, pooled"),
         AnalysisKind("one_sample", "One-sample test", "One-sample t-test, pooled"),
         AnalysisKind("mcnemar", "McNemar's test"),
-        AnalysisKind("mantel_haenszel", "Mantel-Haenszel stratified analysis"),
+        AnalysisKind(
+            "mantel_haenszel",
+            "Mantel-Haenszel stratified analysis",
+            # declared before its runner and its record, as the accuracy of a test is: the design's values are the
+            # ids of biostats.study_designs (OFFERED), held equal by tests/biostats_layer/test_plan.py
+            roles=("outcome", "compare", "stratum"),
+            options={"alpha": 0.05, "event_level": None, "reference": None, "design": "unknown"},
+            choices={"design": ("unknown", "cohort", "rct", "cross-sectional", "case-control")},
+        ),
         AnalysisKind(
             "diagnostic",
             "Diagnostic accuracy",
@@ -2140,6 +2160,13 @@ KINDS: dict[str, AnalysisKind] = {
                 "cutoff": None,
                 "prevalence": None,
                 "sampling": "not_stated",  # SAMPLING_NOT_STATED
+            },
+            choices={
+                "index_form": ("number", "yes_no"),
+                "direction": (None, "higher", "lower"),
+                "mode": (None, "No cut-off", "Manual", "Youden-optimal (data-driven)"),
+                # never "": that is how a result computed before the question reads, not what a request asks
+                "sampling": ("not_stated", "series", "two_gate"),
             },
             record=_record_diagnostic,
         ),

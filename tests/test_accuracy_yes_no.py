@@ -928,6 +928,9 @@ def test_the_settings_of_a_result_are_declared_options_of_its_kind() -> None:
     options = plan.KINDS["diagnostic"].options
     for settings in _settings_grid():
         assert set(settings) <= set(options), settings
+        # and their values are among the closed ones: the page's settings make a spec the kind accepts
+        made = plan.specify("diagnostic", options=settings, reference="ill", index="test")
+        assert {name: made.options[name] for name in settings} == settings
     # the ids the page, the record and the dossier read are the engine's, and the kind's defaults among them
     assert (m.NUMBER, m.YES_NO) == INDEX_FORMS and set(m.TEST_RESULTS) == set(INDEX_FORMS)
     assert (m.NO_CUTOFF, m.FIXED, m.YOUDEN) == CUTOFF_MODES and set(m.CUTOFFS) == set(CUTOFF_MODES)

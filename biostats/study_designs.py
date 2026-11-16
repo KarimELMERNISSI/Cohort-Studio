@@ -55,6 +55,19 @@ DESIGNS: dict[str, StudyDesign] = {
 # the order the page offers them in
 OFFERED = (NOT_STATED, "cohort", "rct", "cross-sectional", "case-control")
 
+# The accuracy of a test asks the same question with answers of its own (biostats.diagnostic.SAMPLINGS: two
+# catalogues, since the answers differ). Where a design declared for an outcome later fills that answer in, it is by
+# this table, and only when the reference standard is that outcome: sampled by it (case-control), those with and
+# without the condition were sampled apart (two-gate); followed over time, or taken at one point in time, the
+# participants entered before the condition was known (a series); a design not stated is a sampling not stated.
+ACCURACY_SAMPLING: dict[str, str] = {
+    NOT_STATED: "not_stated",
+    "cohort": "series",
+    "rct": "series",
+    "cross-sectional": "series",
+    "case-control": "two_gate",
+}
+
 _BEFORE_DESIGNS = StudyDesign(BEFORE, (RATIO, ODDS_RATIO, DIFFERENCE, NNT), "risk")
 
 
@@ -70,6 +83,7 @@ def design_named(design: str | None) -> StudyDesign:
 
 
 __all__ = [
+    "ACCURACY_SAMPLING",
     "BEFORE",
     "DESIGNS",
     "DIFFERENCE",
