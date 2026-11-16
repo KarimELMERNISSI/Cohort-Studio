@@ -20,7 +20,23 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from biostats.diagnostic import YOUDEN_MIN_CLASS, delong_auc
+from biostats.diagnostic import FIXED_CUTOFF as FIXED
+from biostats.diagnostic import FOUND_CUTOFF as YOUDEN
+from biostats.diagnostic import (
+    HIGHER,
+    LOWER,
+    NO_CUTOFF,
+    SAMPLING_NOT_STATED,
+    SERIES,
+    TWO_GATE,
+    YOUDEN_MIN_CLASS,
+    Verification,
+    delong_auc,
+    reads_share,
+    verification,
+)
+from biostats.diagnostic import SCORE_FORM as NUMBER
+from biostats.diagnostic import YES_NO_FORM as YES_NO
 from biostats.rates import read_by_the_tests
 from biostats.reliability import by_value, category, category_order, number_of, rating
 from biostats.study_designs import RATIO, design_named
@@ -47,16 +63,22 @@ PAIRED, ONE_GROUP, STRATA, RATES = "paired", "one_group", "strata", "rates"
 DIAGNOSTIC_ENTRIES: tuple[Entry, ...] = (
     Entry(
         ACCURACY,
-        "Accuracy of a test (ROC)",
-        "A score or marker against a reference standard: sensitivity, specificity, predictive values, the ROC curve "
-        "and its AUC.",
+        "Accuracy of a test",
+        "A score or a yes/no test against a reference standard: sensitivity, specificity, predictive values, "
+        "likelihood ratios; for a score, the ROC curve and its AUC.",
         (
+            "Reference standard",
+            "Index test",
             "Sensitivity",
             "Specificity",
             "Positive / negative predictive value",
             "Likelihood ratio",
+            "Diagnostic odds ratio",
             "ROC curve and AUC",
             "Youden index",
+            "Verification bias",
+            "Series (single-gate)",
+            "Two-gate design",
         ),
     ),
     Entry(
@@ -123,8 +145,39 @@ PAIRED_ENTRIES: tuple[Entry, ...] = (
 ENTRY = {entry.id: entry for entry in (*DIAGNOSTIC_ENTRIES, *PAIRED_ENTRIES)}
 
 # the second choice of an entry: ids kept in the page's state and in the links, with their labels
-NUMBER, YES_NO = "number", "yes_no"
 MEASURES = {NUMBER: "A number (continuous)", YES_NO: "Yes or no (binary)"}
+# the form of an index test: the same ids, in the words of a test's result
+TEST_RESULTS = {
+    NUMBER: "A number (a score or a marker)",
+    YES_NO: "Positive or negative (yes or no)",
+}
+# how the participants of an accuracy study entered it (biostats.diagnostic: ids kept with results), asked under
+# the question of the stratified analysis; what a result's sentence and its settings say of it
+SAMPLING_LABELS = {
+    SAMPLING_NOT_STATED: "Not stated: predictive values only at a prevalence you type",
+    SERIES: "As they came, before the condition was known (a series, consecutive or random)",
+    TWO_GATE: "With and without the condition, sampled apart (two-gate)",
+}
+SAMPLING_SENTENCE = {
+    SAMPLING_NOT_STATED: "How the participants entered the study is not stated.",
+    SERIES: "Participants taken as they came, before the condition was known (a series).",
+    TWO_GATE: "Participants with and without the condition sampled apart (two-gate): sensitivity and specificity "
+    "may read higher than where the test will be used.",
+}
+# sampled apart, the spectrum of the participants is not the setting's (Lijmer et al. 1999)
+TWO_GATE_SPECTRUM = (
+    "Sampled apart, those with the condition are often clearer cases and those without healthier than where the test "
+    "will be used: sensitivity and specificity may read higher (Lijmer et al. 1999)."
+)
+SAMPLING_SETTING = {
+    SAMPLING_NOT_STATED: "sampling not stated",
+    SERIES: "a series of participants",
+    TWO_GATE: "sampled apart (two-gate)",
+}
+PREVALENCE_BOUNDS = (
+    "Type a prevalence strictly between 0 and 1 (0.02 for 2%), or leave it empty: at 0 or at 1 a predictive value is "
+    "0% or 100% whatever the test."
+)
 MEAN, SHARE = "mean", "share"
 COMPARED = {MEAN: "A mean (a measurement)", SHARE: "A share (a yes/no variable)"}
 DATASET, TYPED = "dataset", "typed"
@@ -135,14 +188,13 @@ CALCULATIONS = {
     TWO_RATES: "Two rates and their ratio",
     EXPECTED: "Observed against expected (SMR, SIR)",
 }
-# values stored with results since before the entries: kept, their labels changed
-NO_CUTOFF, FIXED, YOUDEN = "No cut-off", "Manual", "Youden-optimal (data-driven)"
+# the cut-off's modes are values stored with results since before the entries (biostats.diagnostic): kept, their
+# labels changed
 CUTOFFS = {
     NO_CUTOFF: "None: curve and AUC only",
     FIXED: "A value fixed beforehand",
     YOUDEN: "Found on these data (Youden's J, exploratory)",
 }
-HIGHER, LOWER = "higher", "lower"
 T_TEST, SIGNED_RANK = "Paired t-test", "Wilcoxon signed-rank"
 CHANGES = {
     T_TEST: "Mean change (paired t-test)",
@@ -186,14 +238,29 @@ HELP: dict[str, str] = {
     "values.",
     "present": "The value of the reference standard that means the condition is present.",
     "index": "The measurement whose accuracy is assessed: a score or a marker, one number per participant.",
+    "test_result": "A number: a score or a marker, read at every cut-off (the ROC curve) or at one. Positive or "
+    "negative: a test whose result is already yes or no, read from a column of two values.",
+    "yes_no_test": "The test's result for each participant, in two values: positive or negative. A column with a "
+    "third value (indeterminate, not done) is not listed. To read the test on its definite results, make that value "
+    "missing in a copy (Data > Clean). Then read it again with that value counted as positive, and as negative (two "
+    "more copies): the accuracy without them is higher than the test's in use. Report how many there were (STARD "
+    "item 15).",
+    "test_positive": "The value of the test that means a positive result.",
+    "sampling": "It decides where predictive values can be read. As they came: every participant eligible in a "
+    "period, or a random sample of them, taken before anyone knew who had the condition, then given the reference "
+    "standard: the share with the condition is that of the setting, and predictive values are read at it. Sampled "
+    "apart: a group known to have the condition (from a clinic, a registry) and a group known not to (healthy "
+    "volunteers): that share was set by the sampling, so predictive values are read only at the prevalence you "
+    "give. Not stated: the same, until you say. Asked once the reference standard is chosen.",
     "direction": "Which way the test points is known before the data: a marker that rises with the condition, or "
     "one that falls with it (an ejection fraction, a filtration rate). The medians beside it show what these data "
     "say.",
     "cutoff": "A cut-off found on the same data makes sensitivity and specificity look better than they are in new "
     "participants. Use a value fixed beforehand (a protocol, a guideline, the maker's threshold) when there is one.",
     "cutoff_value": "The threshold fixed beforehand, in the unit of the test.",
-    "prevalence": "Predictive values depend on how common the condition is. Leave empty to read them at the share "
-    "in these data; give another value for another setting (0.02 for 2%).",
+    "prevalence": "Predictive values depend on how common the condition is. Give the prevalence where the test "
+    "will be used (0.02 for 2%): they are read at it whatever the sampling, the prevalence taken as known. Leave "
+    "empty to read them at the share in these data, which a series of participants allows.",
     "measurements": "One column per method, rater or occasion, each measuring the same quantity on the same "
     "participants, in the same unit. Two columns give the Bland-Altman limits and the ICC; three or more, the ICC.",
     "analyses": "Bland-Altman says by how much two measurements differ, in their unit; the ICC, how well repeated "
@@ -528,10 +595,11 @@ def plan_accuracy(
     mode: str,
     cutoff: float | None,
     prevalence: float | None,
+    sampling: str = SAMPLING_NOT_STATED,
 ) -> ModelPlan:
     rows = len(df)
     if not outcome or not score:
-        return _idle(rows, "Choose the reference standard and the test.")
+        return _idle(rows, _to_choose(outcome, score))
     frame = pd.DataFrame(
         {"y": df[outcome], "x": pd.to_numeric(df[score], errors="coerce")}
     ).dropna()
@@ -565,6 +633,8 @@ def plan_accuracy(
         )
     if mode == FIXED and cutoff is None:
         return _idle(rows, "Type the cut-off fixed beforehand, or choose another cut-off.")
+    if mode != NO_CUTOFF and prevalence is not None and not 0 < prevalence < 1:
+        return _idle(rows, PREVALENCE_BOUNDS)
     lower = direction == LOWER
     counts = f"{n_pos:,} with the condition, {n_neg:,} without"
     steps = [
@@ -585,7 +655,7 @@ def plan_accuracy(
     elif mode == FIXED:
         steps.append(
             PlanStep(
-                f"Sensitivity, specificity and predictive values with the test positive when it is {bound} "
+                f"{_measures_read(sampling, prevalence)} with the test positive when it is {bound} "
                 f"{_num(float(cutoff))}, a value fixed beforehand; the ROC curve and its AUC",  # type: ignore[arg-type]
                 len(frame),
             )
@@ -593,7 +663,7 @@ def plan_accuracy(
     else:
         steps.append(
             PlanStep(
-                "Sensitivity, specificity and predictive values at the cut-off found on these data (the largest "
+                f"{_measures_read(sampling, prevalence)} at the cut-off found on these data (the largest "
                 "sensitivity + specificity - 1), with the range of the cut-offs found in bootstrap resamples; the "
                 "ROC curve and its AUC",
                 len(frame),
@@ -646,6 +716,13 @@ def plan_accuracy(
                         "wide.",
                     )
                 )
+    # the reference standard done unequally on the two sides of a cut-off typed beforehand (one found on the data
+    # is known only once it is run: the result then says it)
+    unequal = Verification(0, 0, 0, 0)
+    if mode == FIXED and cutoff is not None:
+        values = pd.to_numeric(df[score], errors="coerce")
+        called = (values <= cutoff if lower else values >= cutoff).where(values.notna())
+        unequal = verification(called, df[outcome])
     if mode == FIXED and cutoff is not None:
         low, high = float(frame["x"].min()), float(frame["x"].max())
         nobody = cutoff < low if lower else cutoff > high
@@ -662,7 +739,13 @@ def plan_accuracy(
                         else f"With the test positive when it is {bound} {_num(float(cutoff))}, everyone is called "
                         f"positive ({as_code(score)} runs from {_num(low)} to {_num(high)})."
                     )
-                    + " The right variable, the right unit?",
+                    + (
+                        # among the rows with the reference standard only: the scores on the other side of the
+                        # cut-off never had it
+                        " " + verification_words(unequal)
+                        if unequal.one_sided
+                        else " The right variable, the right unit?"
+                    ),
                 )
             )
     if mode == YOUDEN:
@@ -681,21 +764,296 @@ def plan_accuracy(
                     f"Fewer than {YOUDEN_MIN_CLASS} participants in a group: no range is drawn for the cut-off.",
                 )
             )
+    share = n_pos / (n_pos + n_neg)
+    if mode == FIXED and cutoff is not None and unequal.partial and not unequal.one_sided:
+        advice.append(Advice("caution", verification_words(unequal, share)))
     if mode != NO_CUTOFF:
-        share = n_pos / (n_pos + n_neg)
-        text = (
-            f"Predictive values are read at the share with the condition in these data ({share:.1%}). That is the "
-            "prevalence only if participants were taken as they came; where those with and without the condition "
-            "were sampled apart, give the prevalence."
+        if sampling == TWO_GATE:
+            advice.append(Advice("info", TWO_GATE_SPECTRUM))
+        advice.append(
+            Advice("info", predictive_words(share, prevalence, sampling, unequal.partial))
         )
-        if prevalence is not None:
-            text = (
-                f"Predictive values are read at the share with the condition in these data ({share:.1%}) and at "
-                f"the prevalence typed ({prevalence:.1%})."
-            )
-        advice.append(Advice("info", text))
     advice += _left_out(df, [outcome, score], len(frame))
     return ModelPlan(rows, tuple(steps), tuple(advice))
+
+
+def _to_choose(outcome: str | None, test: str | None) -> str:
+    """What is still to choose, by name: the reference standard is carried from one form of the entry to the other,
+    and "Choose the reference standard and the test" stood over one already chosen."""
+    if outcome:
+        return "Choose the test."
+    return (
+        "Choose the reference standard." if test else "Choose the reference standard and the test."
+    )
+
+
+def _measures_read(sampling: str, prevalence: float | None, more: str = "") -> str:
+    """The measures a plan's step promises: predictive values only when the result will read some (at the share in
+    the data for a series, or at a prevalence given). ``more`` closes the list (" and likelihood ratios")."""
+    predictive = reads_share(sampling) or prevalence is not None
+    if more:
+        return f"Sensitivity, specificity{', predictive values' if predictive else ''}{more}"
+    return (
+        "Sensitivity, specificity and predictive values"
+        if predictive
+        else "Sensitivity and specificity"
+    )
+
+
+def prevalence_text(prevalence: float) -> str:
+    """A prevalence typed, as a percentage with the figures it has: 1 in 2,500 read "0.0%"."""
+    return f"{100 * prevalence:.3g}%"
+
+
+def predictive_words(
+    share: float, prevalence: float | None, sampling: str, unequal: bool = False
+) -> str:
+    """Where the predictive values are read, by how the participants entered the study: at the share with the
+    condition in the data for a series only (sampled apart, that share was set by the sampling), at the prevalence
+    given whatever the sampling. ``unequal``: the reference standard was done unequally by test result; the share
+    among those who had it is then not the setting's prevalence, even in a series."""
+    at = f"{share:.1%}"
+    typed = None if prevalence is None else prevalence_text(prevalence)
+    if sampling == SERIES:
+        also = "" if typed is None else f" They are also read at the prevalence typed ({typed})."
+        if unequal:
+            return (
+                f"Predictive values are read among those who had the reference standard ({at} with the condition); "
+                "with the reference standard done unequally, that share is not the prevalence of the setting."
+                + also
+            )
+        if typed is None:
+            return (
+                f"Predictive values are read at the share with the condition in these participants ({at}): a "
+                "series, so that share is the prevalence of its setting."
+            )
+        return (
+            f"Predictive values are read at the share with the condition in these participants ({at}, a series) "
+            f"and at the prevalence typed ({typed})."
+        )
+    if sampling == TWO_GATE:
+        if typed is None:
+            return (
+                f"Those with and without the condition were sampled apart: the share with it here ({at}) was set "
+                "by the sampling, and predictive values are not read at it. Give the prevalence where the test "
+                "will be used."
+            )
+        return (
+            "Those with and without the condition were sampled apart: predictive values are read at the prevalence "
+            f"typed ({typed}), not at the share with it here ({at})."
+        )
+    if typed is None:
+        return (
+            "No predictive values yet: if the participants were taken as they came (a series), say so to read them "
+            f"at the share in these data ({at}); otherwise give the prevalence where the test will be used."
+        )
+    return (
+        f"Predictive values are read at the prevalence typed ({typed}). If the participants were taken as they came "
+        f"(a series), say so to read them at the share in these data too ({at})."
+    )
+
+
+def other_way_words(counted: str, sensitivity: float, false_positives: float) -> str:
+    """A test that is positive more often without the condition than with it: the plan's caution and the result's.
+    ``counted`` names what was counted as a positive test (a column and its value)."""
+    return (
+        f"Counted as a positive test, {counted} is found in {sensitivity:.1%} of the participants with the "
+        f"condition and {false_positives:.1%} of those without it: the test points the other way. Check the value "
+        "that means a positive test, and the one that means the condition is present."
+    )
+
+
+def _times(ratio: float) -> str:
+    return "more than 10 times" if ratio > 10 else f"{ratio:.1f} times"
+
+
+def verification_words(found: Verification, share: float | None = None) -> str:
+    """
+    The caution of partial verification, with its counts: the reference standard done unequally by test result
+    (Begg & Greenes 1983); "" when it was done alike, or when it cannot be read. ``share``: the share with the
+    condition among those who had the reference standard, which is then not the prevalence.
+
+    The likelihood ratios and the predictive values at a prevalence given are read from sensitivity and specificity,
+    and err with them (a likelihood ratio of 2.90 for a true 8.00); the predictive values among those who had the
+    reference standard do not, when it followed the test result alone. Counts, not rounded shares: 250 of 251 read
+    "100%". With few participants the shares differ by chance: said when the ratio's interval includes 1.
+    """
+    if not found.partial:
+        return ""
+    positive = f"{found.positive_with_reference:,} of {found.positive:,}"
+    negative = f"{found.negative_with_reference:,} of {found.negative:,}"
+    if found.one_sided:
+        if found.negative_with_reference == 0:
+            return (
+                f"None of the {found.negative:,} who tested negative had the reference standard, against {positive} "
+                "who tested positive: sensitivity and specificity cannot be read from these data (verification "
+                "bias). Among those who tested positive, the share with the condition (the positive predictive "
+                "value) can."
+            )
+        return (
+            f"None of the {found.positive:,} who tested positive had the reference standard, against {negative} who "
+            "tested negative: sensitivity and specificity cannot be read from these data (verification bias). Among "
+            "those who tested negative, the share without the condition (the negative predictive value) can."
+        )
+    among = "" if share is None else f" ({share:.1%})"
+    after = (
+        " The likelihood ratios and the predictive values at a prevalence given are read from them, and err with "
+        "them. The predictive values among those who had the reference standard do not, if it followed the test "
+        f"result alone; their share with the condition{among} is then not the prevalence."
+    )
+    chance = " With so few participants this may be chance." if found.may_be_chance else ""
+    if found.ratio > 1:
+        return (
+            f"Those who tested positive had the reference standard {_times(found.ratio)} as often as those who "
+            f"tested negative ({positive} against {negative}). If that followed the test result, sensitivity is "
+            "overestimated and specificity underestimated (verification bias)." + after + chance
+        )
+    return (
+        f"Those who tested negative had the reference standard {_times(1 / found.ratio)} as often as those who "
+        f"tested positive ({negative} against {positive}). If that followed the test result, sensitivity is "
+        "underestimated and specificity overestimated (verification bias)." + after + chance
+    )
+
+
+def plan_accuracy_yes_no(
+    df: pd.DataFrame,
+    outcome: str | None,
+    present: Any | None,
+    test: str | None,
+    positive: Any | None,
+    prevalence: float | None,
+    sampling: str = SAMPLING_NOT_STATED,
+) -> ModelPlan:
+    """The plan of a yes/no index test against a reference standard: both values of the test are named before Run
+    (a column of `Positive` and `Indeterminate` reads "negative when `Indeterminate`"), a test that points the other
+    way is said, and so is a reference standard done unequally by test result."""
+    rows = len(df)
+    if not outcome or not test:
+        return _idle(rows, _to_choose(outcome, test))
+    if outcome == test:
+        return _refused(
+            rows,
+            Advice("violated", "The test and the reference standard are two different columns."),
+        )
+    frame = df[[outcome, test]].dropna()
+    if frame.empty:
+        return _refused(
+            rows,
+            Advice("violated", f"No row holds both {as_code(outcome)} and {as_code(test)}."),
+        )
+    held = levels_of(frame[outcome])
+    if len(held) != 2:
+        said = Advice(
+            "violated",
+            f"{as_code(outcome)} holds {len(held)} value{'s' if len(held) != 1 else ''} in the rows where the test "
+            "is recorded: a reference standard holds two (the condition present, or absent).",
+        )
+        spelt = _spellings(outcome, df[outcome])
+        return _refused(rows, said, *([spelt] if spelt else []))
+    results = levels_of(frame[test])
+    if len(results) != 2:
+        every = levels_of(df[test])
+        if len(results) == 1 and len(every) == 2:
+            # the column holds its two values: the reference standard was done after one of them only ("holds 1
+            # value: a yes/no test holds two" blamed the test of a screening programme whose biopsies follow a
+            # positive screen)
+            chosen = positive is not None and category(positive) in {category(v) for v in every}
+            unequal = verification(
+                (df[test].map(category) == category(positive if chosen else results[0])).where(
+                    df[test].notna()
+                ),
+                df[outcome],
+            )
+            return _refused(
+                rows,
+                Advice(
+                    "violated",
+                    verification_words(unequal)
+                    if chosen
+                    else f"{as_code(test)} holds two values, and one only in the rows where the reference standard "
+                    "is recorded: the reference standard was done after one test result only, so sensitivity and "
+                    "specificity cannot be read from these data (verification bias).",
+                ),
+            )
+        said = Advice(
+            "violated",
+            f"{as_code(test)} holds {len(results)} value{'s' if len(results) != 1 else ''} in the rows where the "
+            "reference standard is recorded: a yes/no test holds two (positive or negative).",
+        )
+        spelt = _spellings(test, df[test])
+        return _refused(rows, said, *([spelt] if spelt else []))
+    if present is None or category(present) not in {category(v) for v in held}:
+        return _idle(rows, "Choose the value that means the condition is present.")
+    if positive is None or category(positive) not in {category(v) for v in results}:
+        return _idle(rows, "Choose the value that means a positive test.")
+    if prevalence is not None and not 0 < prevalence < 1:
+        return _idle(rows, PREVALENCE_BOUNDS)
+    with_it = (frame[outcome].map(category) == category(present)).to_numpy(dtype=bool)
+    called = (frame[test].map(category) == category(positive)).to_numpy(dtype=bool)
+    tp, fp = int((called & with_it).sum()), int((called & ~with_it).sum())
+    fn, tn = int((~called & with_it).sum()), int((~called & ~with_it).sum())
+    n_pos, n_neg = tp + fn, fp + tn
+    negative = next(v for v in results if category(v) != category(positive))
+    steps = (
+        PlanStep(
+            f"The accuracy of {as_code(test)} (positive when {as_code(positive)}, negative when "
+            f"{as_code(negative)}) against {as_code(outcome)} = {as_code(present)} ({n_pos:,} with the condition, "
+            f"{n_neg:,} without)",
+            len(frame),
+        ),
+        PlanStep(
+            f"{_measures_read(sampling, prevalence, ' and likelihood ratios')} from the 2x2 table of the test "
+            "against the reference standard",
+            len(frame),
+        ),
+    )
+    advice: list[Advice] = []
+    sensitivity, false_positives = tp / n_pos, fp / n_neg
+    if sensitivity < false_positives:  # sensitivity + specificity below 100%
+        advice.append(
+            Advice(
+                "caution",
+                other_way_words(
+                    f"{as_code(test)} = {as_code(positive)}", sensitivity, false_positives
+                ),
+            )
+        )
+    for n, what in ((n_pos, "sensitivity"), (n_neg, "specificity")):
+        if n < LEVEL_MIN:
+            advice.append(
+                Advice(
+                    "caution",
+                    f"{what.capitalize()} rests on {n:,} participant{'s' if n != 1 else ''}: its interval is "
+                    "wide.",
+                )
+            )
+    if fp == 0 and fn == 0 and min(n_pos, n_neg) >= LEVEL_MIN:
+        advice.append(
+            Advice(
+                "info",
+                "The test agrees with the reference standard in every participant: the same measurement, or a part "
+                "of the reference standard?",
+            )
+        )
+    recorded = df[test].notna()
+    share = n_pos / (n_pos + n_neg)
+    unequal = verification(
+        (df[test].map(category) == category(positive)).where(recorded), df[outcome]
+    )
+    if unequal.partial:
+        advice.append(Advice("caution", verification_words(unequal, share)))
+    if sampling == TWO_GATE:
+        advice.append(Advice("info", TWO_GATE_SPECTRUM))
+    advice.append(Advice("info", predictive_words(share, prevalence, sampling, unequal.partial)))
+    advice += _left_out(
+        df,
+        [outcome, test],
+        len(frame),
+        "If the test failed or was indeterminate in rows without it, report how many."
+        if int(df[test].isna().sum())
+        else "",
+    )
+    return ModelPlan(rows, steps, tuple(advice))
 
 
 # ----------------------------------------------------------------------------- agreement of two measurements
@@ -1421,6 +1779,19 @@ DESIGN_SENTENCE: dict[str, str] = {
     "cross-sectional": "Participants at one point in time (cross-sectional): prevalences, not risks.",
     "case-control": "Participants taken by their outcome (case-control): odds ratios only.",
 }
+# "How to read this" of a yes/no index test (the score keeps its own, with the AUC)
+ACCURACY_READING = (
+    "Sensitivity is the share of participants with the condition whom the test calls positive; specificity, the "
+    "share of those without it whom the test calls negative. Both describe the test in the participants studied, "
+    "and change with who those participants are (how advanced the condition, which other conditions). Predictive "
+    "values say what a result means for the person tested and change with how common the condition is: read them at "
+    "the share in the data only for a series of participants, otherwise at the prevalence of the setting. "
+    "Likelihood ratios turn the odds of the condition before the test into the odds after it, whatever the "
+    "prevalence. The intervals count one test result per participant. A yes/no test has one sensitivity and one "
+    "specificity: there is no curve, and no area under one. Two tests on the same participants are compared on "
+    "their pairs (Paired measurements, Yes or no); two readers of one test, by their agreement (Agreement of two "
+    "raters)."
+)
 # "How to read this" of the stratified analysis, by design (Knol et al. 2008 for the case-control reading;
 # Thompson, Myers & Kriebel 1998 for prevalences)
 _COHORT_READING = (
@@ -1757,6 +2128,7 @@ def check_expected(observed: int | None, expected: float | None) -> tuple[bool, 
 __all__ = [
     "ABSOLUTE",
     "ACCURACY",
+    "ACCURACY_READING",
     "AGREEMENT",
     "BLAND_ALTMAN",
     "CALCULATIONS",
@@ -1800,11 +2172,15 @@ __all__ = [
     "PAIRED",
     "PAIRED_ENTRIES",
     "PERSON_TIME",
+    "PREVALENCE_BOUNDS",
     "QUADRATIC",
     "RATERS",
     "RATES",
     "RATIO_NAMES",
     "RATIO_READING",
+    "SAMPLING_LABELS",
+    "SAMPLING_SENTENCE",
+    "SAMPLING_SETTING",
     "SCALES",
     "SHARE",
     "SHARE_READING",
@@ -1812,6 +2188,8 @@ __all__ = [
     "SOURCES",
     "STRATA",
     "SUMMARIES",
+    "TEST_RESULTS",
+    "TWO_GATE_SPECTRUM",
     "TWO_RATES",
     "TYPED",
     "T_TEST",
@@ -1830,6 +2208,11 @@ __all__ = [
     "measurements",
     "paired_values",
     "plan_accuracy",
+    "other_way_words",
+    "prevalence_text",
+    "plan_accuracy_yes_no",
+    "predictive_words",
+    "verification_words",
     "plan_measurements",
     "plan_one_mean",
     "plan_paired",

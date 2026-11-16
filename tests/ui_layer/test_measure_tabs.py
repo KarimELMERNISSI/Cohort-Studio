@@ -16,6 +16,7 @@ import re
 from typing import Any
 
 import numpy as np
+import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -146,9 +147,15 @@ def test_the_question_and_its_choices_are_kept_while_another_is_open(app: AppTes
 
 
 def _accuracy(
-    app: AppTest, mode: str, cutoff: float | None = None, prevalence: float | None = None
+    app: AppTest,
+    mode: str,
+    cutoff: float | None = None,
+    prevalence: float | None = None,
+    sampling: str = "series",
 ) -> dict:
-    _open(app, DIAGNOSTIC, m.ACCURACY)
+    """The accuracy of the tutorial's troponin as a score; ``sampling``: how the participants entered the study (a
+    series reads the predictive values at the share in the data; the page starts at "not_stated")."""
+    _open(app, DIAGNOSTIC, m.ACCURACY, diag_result=m.NUMBER)
     _pick(app, "diag_outcome", "mi_adjudicated")
     assert (
         app.selectbox(key="diag_pos").value == "Yes"
@@ -158,7 +165,11 @@ def _accuracy(
     app.radio(key="diag_mode").set_value(mode).run()
     if mode == m.FIXED:
         _type(app, "diag_cut", cutoff)
-    _type(app, "diag_prev", prevalence)
+    if mode != m.NO_CUTOFF:
+        # asked with a cut-off only (the curve and its AUC do not depend on them); the sampling is kept for the
+        # same reference standard (it is a statement about the study): set here
+        app.radio(key="diag_sampling").set_value(sampling).run()
+        _type(app, "diag_prev", prevalence)
     _run(app, "diag_run")
     return _stored(app, "diagnostic")
 
@@ -176,6 +187,9 @@ def test_accuracy_without_a_cut_off_gives_the_curve_and_its_area(app: AppTest) -
     assert result["acc"] is None and result["cutoff"] is None and result["youden"] is None
     assert _metrics(app)["Area under the ROC curve (AUC)"] == "0.927"
     assert "Sensitivity" not in _metrics(app)  # no cut-off, no table: none was asked
+    # nor the sampling and the prevalence, which only a table reads
+    assert "diag_sampling" not in {radio.key for radio in app.radio}
+    assert "diag_prev" not in {field.key for field in app.number_input}
 
 
 def test_accuracy_at_a_cut_off_found_on_the_data(app: AppTest) -> None:
@@ -196,6 +210,49 @@ def test_accuracy_at_a_cut_off_found_on_the_data(app: AppTest) -> None:
     shown = _metrics(app)
     assert (shown["Sensitivity"], shown["Specificity"]) == ("86.1%", "84.8%")
     assert "exploratory" in _texts(app)  # a cut-off found on the data it is judged on
+    assert (
+        "Predictive values at the share with the condition in these participants (10.9%, a series)"
+        in _texts(app)
+    )
+
+
+def test_the_sampling_decides_where_the_predictive_values_are_read(app: AppTest) -> None:
+    """Not stated (where the question starts), or sampled apart: no predictive value at the share in the data, which
+    is then the sampling's; at a prevalence given, whatever the sampling, with an interval."""
+    _open(app, DIAGNOSTIC, m.ACCURACY)
+    # a statement about the study's reference standard: asked again for another, kept for the same
+    _pick(app, "diag_outcome", "diabetes")
+    app.radio(key="diag_mode").set_value(m.FIXED).run()
+    radio = app.radio(key="diag_sampling")
+    assert radio.value == "not_stated" and list(radio.options) == list(m.SAMPLING_LABELS.values())
+    result = _accuracy(app, m.FIXED, cutoff=40.0, sampling="not_stated")
+    acc = result["acc"]
+    assert acc.sampling == "not_stated" and math.isnan(acc.ppv) and math.isnan(acc.accuracy)
+    text = _texts(app)
+    assert (
+        "No predictive values: if the participants were taken as they came (a series), say so to read them at the "
+        "share in these data (10.9%); otherwise give the prevalence where the test will be used. Then run again."
+    ) in text
+    assert "at the share in these data" not in " ".join(
+        str(name) for d in app.dataframe for name in d.value.get("Measure", [])
+    )
+    result = _accuracy(app, m.FIXED, cutoff=40.0, prevalence=0.05, sampling="two_gate")
+    acc = result["acc"]
+    assert math.isnan(acc.ppv) and acc.ppv_at_prevalence == pytest.approx(
+        0.31266540642722124, **TIGHT
+    )
+    assert acc.ppv_at_prevalence_ci is not None
+    text = _texts(app)
+    assert (
+        "Not at the share with the condition here (10.9%): those with and without it were sampled apart."
+        in text
+    )
+    assert "At a prevalence of 5%: positive 31.3% (95% CI" in text and "taken as known" in text
+    # the settings name the sampling in words (the dossier's line), never its id
+    from ui.results import describe_settings
+
+    stored = app.session_state["_results"]["diagnostic"]
+    assert describe_settings(stored.config).endswith("sampled apart (two-gate)")
 
 
 def test_accuracy_at_a_cut_off_fixed_beforehand_with_another_prevalence(app: AppTest) -> None:
@@ -221,7 +278,7 @@ def test_accuracy_at_a_cut_off_fixed_beforehand_with_another_prevalence(app: App
     measures = tables[0].set_index("Measure")
     assert measures.loc["Sensitivity", "Estimate"] == _metrics(app)["Sensitivity"] == "75.2%"
     assert measures.loc["Sensitivity", "95% CI"] == "66.0% to 82.6%"
-    assert measures.loc["Positive predictive value, at a prevalence of 5.0%", "Estimate"] == "31.3%"
+    assert measures.loc["Positive predictive value, at a prevalence of 5%", "Estimate"] == "31.3%"
     assert measures.loc["Positive likelihood ratio (LR+)", "Estimate"] == "8.64"
     assert measures.loc["Positive likelihood ratio (LR+)", "95% CI"] == "6.75 to 11.07"
     assert "Method: " in " ".join(
@@ -650,6 +707,82 @@ def test_a_share_against_a_reference_read_from_the_dataset(app: AppTest) -> None
     assert app.session_state["_results"]["proportion"].stamp.n_analysed == len(column)
 
 
+# ----------------------------------------------------------------------------- a yes/no index test
+
+
+def test_a_yes_no_test_is_assessed_against_the_reference_standard_from_two_columns(
+    app: AppTest,
+) -> None:
+    """A test whose result is already positive or negative could not be chosen: the list held numbers of three
+    values or more. The tutorial has no such test: a yes/no characteristic stands for one here."""
+    from manage.report_tables import result_blocks
+    from ui.results import describe_settings
+
+    _open(app, DIAGNOSTIC, m.ACCURACY, diag_result=m.YES_NO)
+    assert "diag_score" not in {
+        s.key for s in app.selectbox
+    }  # the score's fields are another form's
+    _pick(app, "diag_outcome", "mi_adjudicated")
+    assert app.selectbox(key="diag_pos").value == "Yes"
+    assert app.selectbox(key="diag_test_pos").disabled  # the test first
+    assert "mi_adjudicated" not in app.selectbox(key="diag_test").options
+    assert "troponin_ng_l" not in app.selectbox(key="diag_test").options  # a number is a score
+    assert app.button(key="diag_run_yes_no").disabled
+    _pick(app, "diag_test", "diabetes")
+    assert (
+        app.selectbox(key="diag_test_pos").value == "Yes"
+    )  # the value that reads as positive, offered
+    assert "positive when `Yes`, negative when `No`" in _texts(app)  # both values named before Run
+    app.radio(key="diag_sampling").set_value("series").run()
+    _type(app, "diag_prev", None)  # shared with the score's form, for the same reference standard
+    _run(app, "diag_run_yes_no")
+    result = _stored(app, "diagnostic")
+    acc = result["acc"]
+    data = app.session_state["data"]
+    crossed = pd.crosstab(data["diabetes"], data["mi_adjudicated"])
+    assert (acc.tp, acc.fp, acc.fn, acc.tn) == (
+        crossed.loc["Yes", "Yes"],
+        crossed.loc["Yes", "No"],
+        crossed.loc["No", "Yes"],
+        crossed.loc["No", "No"],
+    )
+    assert (acc.tp + acc.fn, acc.fp + acc.tn, result["n"]) == (101, 827, 928)
+    assert result["index_form"] == m.YES_NO and result["auc"] is None and result["fig"] is None
+    shown = _metrics(app)
+    assert list(shown) == ["Sensitivity", "Specificity", "Participants"]
+    assert shown["Participants"] == "928"
+    assert not app.get("plotly_chart")  # one point: no curve
+    text = _texts(app)
+    assert (
+        "`diabetes` = `Yes` counted as a positive test, against `mi_adjudicated` = `Yes`. Participants taken as "
+        "they came, before the condition was known (a series)." in text
+    )
+    assert (
+        "Rows: `diabetes` (the test). Columns: `mi_adjudicated` (the reference standard)." in text
+    )
+    assert (
+        "Predictive values at the share with the condition in these participants (10.9%, a series)"
+        in text
+    )
+    assert "Computed on" in text
+    tables = [d.value for d in app.dataframe]
+    counts = next(t for t in tables if "Total" in t.columns)
+    assert list(counts.index) == ["Test positive (Yes)", "Test negative (No)", "Total"]
+    assert list(counts.columns) == ["Condition present (Yes)", "Condition absent (No)", "Total"]
+    measures = next(t for t in tables if list(t.columns)[:2] == ["Measure", "Estimate"])
+    assert "Share classified correctly" in list(measures["Measure"])
+    stored = app.session_state["_results"]["diagnostic"]
+    assert describe_settings(stored.config) == (
+        "mi_adjudicated, diabetes, Yes, positive when Yes, a yes/no test, a series of participants"
+    )
+    # it goes to the dossier: a result without an AUC stopped the whole Word download
+    blocks = result_blocks(result)
+    assert blocks.tables[0][0] == "diabetes = Yes (positive) for mi_adjudicated = Yes"
+    # one result is kept for the entry: the score's form says whose it is, and shows none of it
+    _open(app, DIAGNOSTIC, m.ACCURACY, diag_result=m.NUMBER)
+    assert not app.metric and "Last result here" in _texts(app)
+
+
 # ----------------------------------------------------------------------------- an association within strata
 
 
@@ -1067,6 +1200,7 @@ def test_every_entry_of_the_two_tabs_can_be_linked_to() -> None:
         PAIRED: {e.label for e in m.PAIRED_ENTRIES},
     }
     seconds = {
+        m.ENTRY[m.ACCURACY].label: set(m.TEST_RESULTS.values()),
         m.ENTRY[m.PAIRED].label: set(m.MEASURES.values()),
         m.ENTRY[m.ONE_GROUP].label: set(m.COMPARED.values()),
         m.ENTRY[m.RATES].label: set(m.CALCULATIONS.values()),

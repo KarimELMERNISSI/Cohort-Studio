@@ -6,6 +6,7 @@ population), and the Word study dossier that documents them.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pandas as pd
@@ -33,6 +34,8 @@ from ui.results import (
 )
 from ui.state import get_state
 from utils.environment import environment_text
+
+logger = logging.getLogger(__name__)
 
 # steps of the trace with a section of their own (the source, the population, the multiple imputation), or that
 # only document; the data handling lists the others
@@ -241,15 +244,23 @@ def session_parts(state, items: list[ReportItem], *, include_stale: bool) -> dic
 
 def finish_input(parts: dict[str, Any], *, title: str, author: str):
     """The DossierInput from the session parts: result tables, figures and references (no session needed)."""
-    from manage.dossier import METHOD_REFERENCES, DossierInput, DossierResult
+    from manage.dossier import METHOD_REFERENCES, NOT_WRITTEN, DossierInput, DossierResult
     from manage.flow_figure import flow_png
-    from manage.report_tables import result_blocks
+    from manage.report_tables import ResultBlocks, result_blocks
 
     results = []
     references: list[str] = [METHOD_REFERENCES["strobe"]]
     pooled = parts["mi"] is not None
     for item, status in parts["kept"]:
-        blocks = result_blocks(item.value)
+        try:
+            blocks = result_blocks(item.value)
+        except Exception as exc:
+            # one result's block must not stop the download of every section; the stored key and the type only,
+            # never the message (it can hold a value of the data)
+            logger.warning(
+                "the block of %s could not be written in the dossier: %s", item.key, type(exc).__name__
+            )
+            blocks = ResultBlocks(lines=[NOT_WRITTEN])
         references.extend(blocks.references)
         pooled = pooled or imputations_of(item.value) is not None
         results.append(

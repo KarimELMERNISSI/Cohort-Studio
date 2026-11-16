@@ -324,11 +324,15 @@ pick the columns, read the plan, then **Run analysis**.
 
 On the **Diagnostic accuracy & agreement** tab:
 
-- **Accuracy of a test (ROC):** reference standard `mi_adjudicated` (the condition present when it is *Yes*), test
+- **Accuracy of a test:** reference standard `mi_adjudicated` (the condition present when it is *Yes*), test
   `troponin_ng_l`, the condition more likely when the test is *higher*. **Run analysis**: **AUC about 0.93**. Then
   set the cut-off to *Found on these data* and run again to read the sensitivity and specificity at 30.9 ng/L. A
   cut-off found on the data it is judged on is optimistic: the page says so, and a value fixed beforehand is the
-  one to report.
+  one to report. Then set **How did the participants enter the study?** to *As they came, before the condition
+  was known (a series, consecutive or random)* and run again: the trial took its participants whether or not they
+  went on to have a myocardial infarction, so the share with one (10.9%) is a prevalence, and the predictive values
+  are read at it (positive about 41%, negative about 98%). Had the participants been sampled by their condition,
+  the page would read them only at a prevalence you give.
 - **Agreement of two measurements:** office `sbp_baseline` and `sbp_ambulatory`. Office readings are about
   **6 mmHg higher** (the white-coat effect), with limits of agreement of about -8 to +20 mmHg. The same Run gives
   the ICC. For two echo readers, choose `lvef_pct` and `lvef_reader2_pct` (reader 2 about 1 point higher): the ICC

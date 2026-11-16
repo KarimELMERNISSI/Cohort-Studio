@@ -235,14 +235,24 @@ def test_a_share_s_test_and_interval_that_disagree_give_the_end_of_the_interval(
 def test_a_cut_off_that_calls_no_one_or_everyone_positive_is_no_division_by_zero() -> None:
     """A marker that points the other way, or a cut-off above every score, leaves a row of the 2x2 table empty: the
     predictive value at a prevalence was 0 / 0, the page said "could not be computed", and the caution written for
-    that case was lost with the result."""
+    that case was lost with the result. Neither result then has a predictive value at a prevalence: the one of the
+    result everyone has would be the prevalence itself (a likelihood ratio of 1 by construction, which is not given
+    either), written as if it were exact."""
     everyone = diagnostic_accuracy(tp=302, fp=626, fn=0, tn=0, prevalence=0.325)
-    assert everyone.npv_at_prevalence is None
-    assert everyone.ppv_at_prevalence == pytest.approx(0.325)
-    assert any("everyone is called positive" in said for said in everyone.warnings)
+    assert everyone.npv_at_prevalence is None and everyone.ppv_at_prevalence is None
+    assert everyone.ppv_at_prevalence_ci is None and everyone.lr_positive is None
+    assert any(
+        said.startswith("everyone is called positive")
+        and said.endswith("a positive result says nothing beyond the prevalence")
+        for said in everyone.warnings
+    )
     no_one = diagnostic_accuracy(tp=0, fp=0, fn=101, tn=827, prevalence=0.5)
-    assert no_one.ppv_at_prevalence is None and no_one.npv_at_prevalence == pytest.approx(0.5)
-    assert any("no one is called positive" in said for said in no_one.warnings)
+    assert no_one.ppv_at_prevalence is None and no_one.npv_at_prevalence is None
+    assert any(
+        said.startswith("no one is called positive")
+        and said.endswith("a negative result says nothing beyond the prevalence")
+        for said in no_one.warnings
+    )
     # a cut-off inside the scores: the same numbers as before, and no such warning
     usual = diagnostic_accuracy(tp=87, fp=126, fn=14, tn=701, prevalence=0.02)
     sens, spec = 87 / 101, 701 / 827

@@ -130,7 +130,7 @@ def test_a_cut_off_is_checked_against_the_test(df: pd.DataFrame) -> None:
     found = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.YOUDEN, None, None)
     assert found.status == "caution" and "exploratory" in _text(found)
     typed = m.plan_accuracy(df, "ill", "Yes", "marker", m.HIGHER, m.FIXED, 45.0, 0.02)
-    assert "the prevalence typed (2.0%)" in _text(typed)
+    assert "the prevalence typed (2%)" in _text(typed)
 
 
 def test_a_reference_standard_holds_two_values(df: pd.DataFrame) -> None:

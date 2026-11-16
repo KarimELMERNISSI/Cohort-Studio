@@ -633,6 +633,10 @@ class AnalysisKind:
     result's numbers. A kind without them has its titles only. ``optional`` names, per optional library, the parts
     (``"ph:"``) and numbers (``"model/concordance"``) that only it computes: where it is absent on one side of a
     comparison, they cannot be compared.
+
+    A kind may declare its roles and options before its runner (for its record's labels). Its request id then moves
+    with the declaration until the first spec of the kind is written (by its runner, a typed source or the package
+    writer); from then on, a change of the declaration moves ``version``.
     """
 
     id: str
@@ -1469,6 +1473,169 @@ def _record_survival(result: Any) -> tuple[list[Part], None]:
     return parts, None
 
 
+def _with_interval(value: Any, ci: Any, *, scale: float | None) -> tuple[Number, ...]:
+    """An estimate, the ends of its interval and the interval's method, when it has one."""
+    numbers = [Number("estimate", value, DETERMINISTIC, scale=scale)]
+    if ci is not None:
+        numbers += [
+            Number("lower", ci.lower, DETERMINISTIC, scale=scale),
+            Number("upper", ci.upper, DETERMINISTIC, scale=scale),
+            Number("method", str(ci.method), EXACT),
+        ]
+    return tuple(numbers)
+
+
+def _record_diagnostic(result: Any) -> tuple[list[Part], None]:
+    """
+    The accuracy of a test against a reference standard, as the page keeps it: a mapping with ``acc`` (the measures
+    of the 2x2 table; None for a score without a cut-off), ``auc`` (a score), ``youden`` (a cut-off found on the
+    data) and ``index_form`` (``number``, a score, when it is absent; ``yes_no``). One record for the forms.
+
+    A part per measure, present when the result holds it: predictive values at the share in the data and the share
+    classified correctly for a series only, those at a prevalence when one was given, a likelihood ratio and the
+    diagnostic odds ratio when both test results occur. Each part of the table carries the four cells as its
+    support, which a shared package's rule reads. A cut-off found on the data is an observed score, and the ends of
+    its range are resampled scores: marked as one participant's. The part of the reference standard done unequally
+    counts, in its support, the participants without the reference standard by test result: the rule judges each
+    count of each support, these two included.
+    """
+    from biostats.diagnostic import FOUND_CUTOFF, SAMPLING_NOT_STATED, SCORE_FORM, reads_share
+
+    acc, auc = result.get("acc"), result.get("auc")
+    form = str(result.get("index_form") or SCORE_FORM)
+    labels = {
+        "reference": str(result.get("outcome")),
+        "index": str(result.get("score")),
+        "present": str(result.get("pos_label")),
+    }
+    if result.get("positive") is not None:
+        labels["positive"] = str(result["positive"])
+    parts: list[Part] = []
+    if auc is not None:
+        with_it, without = int(auc["n_positive"]), int(auc["n_negative"])
+        parts.append(
+            Part(
+                id="auc",
+                labels=labels,
+                support={
+                    "rows": with_it + without,
+                    "with_condition": with_it,
+                    "without_condition": without,
+                },
+                numbers=(
+                    *_with_interval(auc["auc"], auc.get("ci"), scale=1.0),
+                    Number("variance", auc.get("variance"), DETERMINISTIC, scale=1.0),
+                    Number("with_condition", with_it, EXACT),
+                    Number("without_condition", without, EXACT),
+                ),
+            )
+        )
+    if acc is None:
+        return parts, None
+    cells = {"tp": int(acc.tp), "fp": int(acc.fp), "fn": int(acc.fn), "tn": int(acc.tn)}
+    support = {
+        **cells,
+        "rows": sum(cells.values()),
+        "with_condition": cells["tp"] + cells["fn"],
+        "without_condition": cells["fp"] + cells["tn"],
+        "called_positive": cells["tp"] + cells["fp"],
+        "called_negative": cells["fn"] + cells["tn"],
+    }
+    sampling = str(getattr(acc, "sampling", SAMPLING_NOT_STATED))
+
+    def part(part_id: str, *numbers: Number) -> Part:
+        return Part(id=part_id, labels=labels, support=support, numbers=numbers)
+
+    parts.append(
+        part(
+            "table",
+            *(Number(name, count, EXACT) for name, count in cells.items()),
+            Number("index_form", form, EXACT),
+            Number("sampling", sampling, EXACT),
+        )
+    )
+    parts += [
+        part("sensitivity", *_with_interval(acc.sensitivity, acc.sensitivity_ci, scale=1.0)),
+        part("specificity", *_with_interval(acc.specificity, acc.specificity_ci, scale=1.0)),
+    ]
+    if reads_share(sampling):
+        parts += [
+            part("ppv", *_with_interval(acc.ppv, acc.ppv_ci, scale=1.0)),
+            part("npv", *_with_interval(acc.npv, acc.npv_ci, scale=1.0)),
+            part("accuracy", Number("estimate", acc.accuracy, DETERMINISTIC, scale=1.0)),
+        ]
+    if acc.prevalence_assumed is not None:
+        given = Number("prevalence", float(acc.prevalence_assumed), EXACT)
+        for part_id, value, ci in (
+            ("ppv_at", acc.ppv_at_prevalence, getattr(acc, "ppv_at_prevalence_ci", None)),
+            ("npv_at", acc.npv_at_prevalence, getattr(acc, "npv_at_prevalence_ci", None)),
+        ):
+            if value is not None:
+                parts.append(part(part_id, given, *_with_interval(value, ci, scale=1.0)))
+    if acc.lr_positive is not None:
+        parts.append(
+            part("lr_positive", *_with_interval(acc.lr_positive, acc.lr_positive_ci, scale=None))
+        )
+    if acc.lr_negative is not None:
+        parts.append(
+            part("lr_negative", *_with_interval(acc.lr_negative, acc.lr_negative_ci, scale=None))
+        )
+    if acc.dor is not None:
+        parts.append(
+            part(
+                "dor",
+                *_with_interval(acc.dor, acc.dor_ci, scale=None),
+                Number("corrected", bool(getattr(acc, "dor_corrected", False)), EXACT),
+            )
+        )
+    parts.append(part("youden", Number("estimate", acc.youden, DETERMINISTIC, scale=1.0)))
+    if form == SCORE_FORM:
+        found = result.get("mode") == FOUND_CUTOFF
+        numbers = [
+            Number("mode", str(result.get("mode")), EXACT),
+            Number("direction", str(result.get("direction")), EXACT),
+            # found on the data, it is a participant's score; typed beforehand, it is nobody's
+            Number("value", result.get("cutoff"), EXACT, fine=found),
+        ]
+        youden = result.get("youden") or {}
+        if found and youden.get("ci") is not None:
+            numbers += [
+                Number("range_lower", youden["ci"].lower, SEEDED, fine=True),
+                Number("range_upper", youden["ci"].upper, SEEDED, fine=True),
+                Number("resamples", int(youden.get("resamples") or 0), EXACT),
+            ]
+        parts.append(part("cutoff", *numbers))
+    unequal = result.get("verified")
+    if unequal is not None and (
+        unequal.positive_with_reference < unequal.positive
+        or unequal.negative_with_reference < unequal.negative
+    ):
+        # the rows that hold the test, by its result, and those of them that hold the reference standard; the
+        # support counts those without it too: with 10 or more in each of the four numbers, 2 participants could
+        # have tested positive without the reference standard
+        counts = {
+            "positive": int(unequal.positive),
+            "positive_with_reference": int(unequal.positive_with_reference),
+            "negative": int(unequal.negative),
+            "negative_with_reference": int(unequal.negative_with_reference),
+        }
+        parts.append(
+            Part(
+                id="verification",
+                labels=labels,
+                support={
+                    **counts,
+                    "positive_without_reference": counts["positive"]
+                    - counts["positive_with_reference"],
+                    "negative_without_reference": counts["negative"]
+                    - counts["negative_with_reference"],
+                },
+                numbers=tuple(Number(name, count, EXACT) for name, count in counts.items()),
+            )
+        )
+    return parts, None
+
+
 def _record_cox(result: Any) -> tuple[list[Part], None]:
     whole = {
         "rows": int(result.n),
@@ -1955,7 +2122,27 @@ KINDS: dict[str, AnalysisKind] = {
         AnalysisKind("one_sample", "One-sample test", "One-sample t-test, pooled"),
         AnalysisKind("mcnemar", "McNemar's test"),
         AnalysisKind("mantel_haenszel", "Mantel-Haenszel stratified analysis"),
-        AnalysisKind("diagnostic", "Diagnostic accuracy"),
+        AnalysisKind(
+            "diagnostic",
+            "Diagnostic accuracy",
+            # declared for its record; its runner comes with those of the other remaining kinds. The values of
+            # index_form, direction, mode and sampling are the ids of biostats.diagnostic (INDEX_FORMS, DIRECTIONS,
+            # CUTOFF_MODES, SAMPLINGS), held equal by tests/test_accuracy_yes_no.py: that module imports this
+            # one's types, so the two defaults are written here
+            roles=("reference", "index"),
+            options={
+                "alpha": 0.05,
+                "present": None,
+                "index_form": "number",  # SCORE_FORM; or YES_NO_FORM
+                "positive": None,  # the value of a yes/no test read as positive
+                "direction": None,
+                "mode": None,
+                "cutoff": None,
+                "prevalence": None,
+                "sampling": "not_stated",  # SAMPLING_NOT_STATED
+            },
+            record=_record_diagnostic,
+        ),
         AnalysisKind("bland_altman", "Bland-Altman agreement"),
         AnalysisKind("icc", "Intraclass correlation"),
         AnalysisKind("kappa", "Cohen's kappa"),

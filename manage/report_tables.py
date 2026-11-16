@@ -524,6 +524,240 @@ def _pooled_comparison_blocks(value: dict) -> ResultBlocks:
     return blocks
 
 
+# how the participants of an accuracy study entered it, as the dossier writes it beside the predictive values (the
+# ids are biostats.diagnostic's)
+SAMPLING_WORDS: dict[str, str] = {
+    "series": "The participants entered the study as a series, taken before the condition was known (consecutive or "
+    "random)",
+    "two_gate": "Participants with and without the condition were sampled apart (two-gate)",
+    "not_stated": "How the participants entered the study is not stated",
+}
+# sampled apart, the spectrum of the participants is not the setting's (Lijmer et al. 1999)
+TWO_GATE_SPECTRUM = (
+    "Sampled apart, those with the condition are often clearer cases and those without healthier than where the "
+    "test will be used: sensitivity and specificity may read higher."
+)
+
+
+def sampling_line(sampling: str, prevalence: Any = None, *, read: bool = True) -> str:
+    """How the participants entered the study, and where the predictive values of the block are read: said by what
+    was written (a line that sent the reader to "a prevalence given" stood over a table without one). ``read``:
+    whether the predictive values at the prevalence given have a value (a test that calls everyone, or no one,
+    positive has none)."""
+    from biostats.diagnostic import SERIES, TWO_GATE
+
+    stem = SAMPLING_WORDS[sampling]
+    given = None if prevalence is None or not read else f"{_num(100 * float(prevalence))}%"
+    caveat = f" {TWO_GATE_SPECTRUM}" if sampling == TWO_GATE else ""
+    if sampling == SERIES:
+        also = "" if given is None else f", and at the prevalence given ({given})"
+        return f"{stem}: predictive values are read at their share with the condition{also}."
+    if given is None:
+        asked = "" if prevalence is not None else ", none was asked at a prevalence"
+        return f"{stem}: no predictive value is written{asked}.{caveat}"
+    return f"{stem}: predictive values are read at the prevalence given ({given}) only.{caveat}"
+
+
+def _small_side(acc: Any, auc: Any, least: int) -> str:
+    """
+    The side of the reference standard that holds fewer than ``least`` participants ("have the condition", "are
+    without the condition"; "" when both hold enough). Read on the 2x2 table whenever there is one, whatever the
+    index test: a yes/no test has no AUC, and a result without the AUC's counts was read as "enough". Without a
+    table, on the AUC's counts (:func:`_thin_side`).
+    """
+    if acc is not None:
+        if acc.tp + acc.fn < least:
+            return "have the condition"
+        if acc.fp + acc.tn < least:
+            return "are without the condition"
+        return ""
+    return _thin_side(auc, least) if isinstance(auc, dict) else ""
+
+
+def _bounds(ci: Any) -> str:
+    """An interval's two bounds, or nothing when it has none ("n/a to n/a" stood beside a predictive value that no
+    test result gives)."""
+    if ci is None or not all(
+        isinstance(bound, int | float) and math.isfinite(bound) for bound in (ci.lower, ci.upper)
+    ):
+        return ""
+    return _ci(ci)
+
+
+def _ratio_row(name: str, value: Any, ci: Any) -> tuple[str, str, str]:
+    """A likelihood ratio's row: at a zero cell, the one bound the data leave ("0" stood alone, and "inf")."""
+    if value is not None and ci is not None:
+        if math.isinf(float(value)):
+            return name, "no upper bound", f"at least {_num(ci.lower)}"
+        if float(value) == 0 and float(ci.lower) == 0 and math.isfinite(float(ci.upper)):
+            return name, "0", f"at most {_num(ci.upper)}"
+    return name, _num(value), _ci(ci)
+
+
+def _accuracy_blocks(value: dict) -> ResultBlocks:
+    """
+    The accuracy of a test against a reference standard: a score (its AUC; at a cut-off, the 2x2 table and its
+    measures) or a yes/no test (the table and its measures; no AUC).
+
+    One rule for a side of the reference standard, whatever the index test: with fewer than the dossier's threshold
+    on a side, neither the table nor a measure is written (they read those participants one by one), and one line
+    says so. A yes/no test is read as a cut-off typed beforehand: the side it calls does not count, its positive
+    value being a code of the data, not a score found on them. The table goes with the measures: sensitivity,
+    specificity and the predictive values give its cells back, so writing it adds nothing, and holding it back
+    alone would protect nothing.
+    """
+    from biostats.diagnostic import FOUND_CUTOFF, LOWER, YES_NO_FORM, reads_share
+    from biostats.references import cite
+
+    acc, auc = value["acc"], value["auc"]
+    yes_no = value.get("index_form") == YES_NO_FORM
+    lower = value.get("direction") == LOWER
+    least = dossier_min_n()
+    found = value.get("mode") == FOUND_CUTOFF
+    # a side of the reference standard of fewer than ``least`` participants: the AUC and the measures rank them one
+    # by one, and stay on the page
+    thin = _small_side(acc, auc, least)
+    # a cut-off found on these data that calls fewer than ``least`` participants to one side: its value, its
+    # range and the measures at it stay on the page (a typed cut-off is no participant's value)
+    few = _few_called(acc, least) if found and acc is not None and not thin else ""
+    held_back = bool(thin or few)
+    rows: list[tuple[str, str, str]] = []
+    if auc is not None:
+        rows.append(
+            ("AUC (DeLong)", f"not shown: fewer than {least}", "")
+            if thin
+            else ("AUC (DeLong)", _num(auc.get("auc")), _ci(auc.get("ci")))
+        )
+    written = acc is not None and not held_back
+    sampling = getattr(acc, "sampling", "") if acc is not None else ""
+    if written:
+        share = f"{_num(100 * acc.prevalence_observed)}%"
+        rows += [
+            ("Sensitivity", _num(acc.sensitivity), _ci(acc.sensitivity_ci)),
+            ("Specificity", _num(acc.specificity), _ci(acc.specificity_ci)),
+        ]
+        if reads_share(sampling):  # for a series only: sampled apart, that share is the sampling's
+            rows += [
+                (f"PPV, at the share in these data ({share})", _num(acc.ppv), _bounds(acc.ppv_ci)),
+                (f"NPV, at the share in these data ({share})", _num(acc.npv), _bounds(acc.npv_ci)),
+            ]
+        if value.get("prevalence") is not None and acc.ppv_at_prevalence is not None:
+            typed = f"{_num(100 * float(value['prevalence']))}%"
+            rows += [
+                (
+                    f"PPV, at a prevalence of {typed}",
+                    _num(acc.ppv_at_prevalence),
+                    _bounds(getattr(acc, "ppv_at_prevalence_ci", None)),
+                ),
+                (
+                    f"NPV, at a prevalence of {typed}",
+                    _num(acc.npv_at_prevalence),
+                    _bounds(getattr(acc, "npv_at_prevalence_ci", None)),
+                ),
+            ]
+        rows += [
+            _ratio_row("LR+", acc.lr_positive, acc.lr_positive_ci),
+            _ratio_row("LR-", acc.lr_negative, acc.lr_negative_ci),
+        ]
+        if acc.dor is not None:  # its zero-cell warning was written, and not the ratio
+            rows.append(("Diagnostic odds ratio", _num(acc.dor), _ci(acc.dor_ci)))
+    table = pd.DataFrame(rows, columns=["Measure", "Estimate", "95% CI"])
+    # what the numbers are of: the value that means the condition, the way the test points, the cut-off
+    if yes_no:
+        title = f"{value.get('score')} = {value.get('positive')} (positive) for {value.get('outcome')}"
+    else:
+        title = f"{value.get('score')} for {value.get('outcome')}"
+    if value.get("pos_label") is not None:
+        title += f" = {value.get('pos_label')}"
+    called = "Test positive"
+    if yes_no:
+        called += f" ({value.get('positive')})"
+    elif lower:
+        title += ", lower values pointing to the condition"
+    if not yes_no:
+        if acc is None:
+            title += " (no cut-off)"
+        elif found and held_back:
+            title += " (a cut-off found on these data, not written)"
+        else:
+            at = f"at {'most' if lower else 'least'} {_num(value.get('cutoff'))}"
+            title += f" (positive {at})"
+            called += f" ({at})"
+    blocks = ResultBlocks(
+        # a yes/no test beside a side too small has no row to write: its title stands as a line, no empty table
+        tables=[(title, table)] if rows else [],
+        lines=[] if rows else [title],
+        references=([] if not written else list(acc.references))
+        # the caution of partial verification is written with the measures only, and its reference with it
+        + (cite("begg1983") if written and value.get("verification") else [])
+        + ([] if thin or auc is None else list(auc.get("references") or [])),
+    )
+    if written:
+        # the table the measures are read on (STARD item 23): the measures give its cells back, so it is written
+        # wherever they are
+        present = "Condition present" + (
+            f" ({value.get('pos_label')})" if value.get("pos_label") is not None else ""
+        )
+        absent = "Condition absent" + (
+            f" ({value.get('absent')})" if value.get("absent") is not None else ""
+        )
+        negative = "Test negative" + (f" ({value.get('negative')})" if yes_no else "")
+        counts = pd.DataFrame(
+            {
+                "": [called, negative, "Total"],
+                present: [acc.tp, acc.fn, acc.tp + acc.fn],
+                absent: [acc.fp, acc.tn, acc.fp + acc.tn],
+                "Total": [acc.tp + acc.fp, acc.fn + acc.tn, acc.tp + acc.fp + acc.fn + acc.tn],
+            }
+        )
+        blocks.tables.append(
+            ("The 2x2 table (rows: the test; columns: the reference standard)", counts)
+        )
+        if sampling in SAMPLING_WORDS:
+            blocks.lines.append(
+                sampling_line(
+                    sampling, value.get("prevalence"), read=acc.ppv_at_prevalence is not None
+                )
+            )
+    youden = value.get("youden") or {}
+    if thin and yes_no:
+        blocks.lines.append(
+            f"Fewer than {least} participants {thin}: the table and the measures of the test read them one by one, "
+            "and are not written in the dossier; the page shows them."
+        )
+    elif thin:
+        blocks.lines.append(
+            f"Fewer than {least} participants {thin}: the AUC and the measures at a cut-off rank their "
+            "scores among the others one by one, and are not written in the dossier; the page shows them."
+        )
+    elif found and few:
+        # the engine's caution ("1 of 928 is called positive") gives the count: it is not copied either
+        blocks.lines.append(
+            f"The cut-off found on these data calls fewer than {least} participants {few}: its value, its "
+            "range and the measures at it are not written in the dossier; the page shows them."
+        )
+    elif found:
+        # the cut-off was chosen on these data: its range (drawn at random; the settings give the draws) and
+        # the caution that goes with it
+        if youden.get("ci") is not None:
+            blocks.lines.append(_youden_range(youden, least))
+        if youden.get("note"):
+            blocks.lines.append(str(youden["note"]))
+        if "cautions" not in value and youden.get("caution"):  # a result kept before its own words
+            blocks.warnings.append(str(youden["caution"]))
+    # in the words of the direction asked on the page (the engine's are of the marker it was given); they give
+    # the AUC, or shares of the table, which are not written beside a side too small
+    if not thin:
+        blocks.warnings.extend(str(text) for text in value.get("cautions") or ())
+    if written:
+        # the reference standard done unequally by test result: its shares are read at the cut-off, and are written
+        # only where the measures at it are
+        if value.get("verification"):
+            blocks.warnings.append(str(value["verification"]))
+        blocks.warnings.extend(acc.warnings)
+    return blocks
+
+
 def result_blocks(value: Any) -> ResultBlocks:
     """The report blocks of one stored result (unknown types give a short text)."""
     from biostats._types import TestResult
@@ -773,86 +1007,7 @@ def result_blocks(value: Any) -> ResultBlocks:
                 references=list(kappa.references),
             )
         if "acc" in value and "auc" in value:
-            acc, auc = value["acc"], value["auc"]
-            lower = value.get("direction") == "lower"
-            least = dossier_min_n()
-            found = str(value.get("mode") or "").startswith("Youden")
-            # a side of the reference standard of fewer than ``least`` participants: the AUC and the measures at a
-            # cut-off rank them one by one, and stay on the page
-            thin = _thin_side(auc, least)
-            # a cut-off found on these data that calls fewer than ``least`` participants to one side: its value, its
-            # range and the measures at it stay on the page (a typed cut-off is no participant's value)
-            few = _few_called(acc, least) if found and acc is not None and not thin else ""
-            held_back = bool(thin or few)
-            rows = [
-                ("AUC (DeLong)", f"not shown: fewer than {least}", "")
-                if thin
-                else ("AUC (DeLong)", _num(auc.get("auc")), _ci(auc.get("ci")))
-            ]
-            if acc is not None and not held_back:
-                share = f"{_num(100 * acc.prevalence_observed)}%"
-                rows += [
-                    ("Sensitivity", _num(acc.sensitivity), _ci(acc.sensitivity_ci)),
-                    ("Specificity", _num(acc.specificity), _ci(acc.specificity_ci)),
-                    (f"PPV, at the share in these data ({share})", _num(acc.ppv), _ci(acc.ppv_ci)),
-                    (f"NPV, at the share in these data ({share})", _num(acc.npv), _ci(acc.npv_ci)),
-                ]
-                if value.get("prevalence") is not None:
-                    typed = f"{_num(100 * float(value['prevalence']))}%"
-                    rows += [
-                        (f"PPV, at a prevalence of {typed}", _num(acc.ppv_at_prevalence), ""),
-                        (f"NPV, at a prevalence of {typed}", _num(acc.npv_at_prevalence), ""),
-                    ]
-                rows += [
-                    ("LR+", _num(acc.lr_positive), _ci(acc.lr_positive_ci)),
-                    ("LR-", _num(acc.lr_negative), _ci(acc.lr_negative_ci)),
-                ]
-            table = pd.DataFrame(rows, columns=["Measure", "Estimate", "95% CI"])
-            # what the numbers are of: the value that means the condition, the way the test points, the cut-off
-            title = f"{value.get('score')} for {value.get('outcome')}"
-            if value.get("pos_label") is not None:
-                title += f" = {value.get('pos_label')}"
-            if lower:
-                title += ", lower values pointing to the condition"
-            if acc is None:
-                title += " (no cut-off)"
-            elif found and held_back:
-                title += " (a cut-off found on these data, not written)"
-            else:
-                title += f" (positive at {'most' if lower else 'least'} {_num(value.get('cutoff'))})"
-            blocks = ResultBlocks(
-                tables=[(title, table)],
-                references=([] if acc is None or held_back else list(acc.references))
-                + ([] if thin else list(auc.get("references") or [])),
-            )
-            youden = value.get("youden") or {}
-            if thin:
-                blocks.lines.append(
-                    f"Fewer than {least} participants {thin}: the AUC and the measures at a cut-off rank their "
-                    "scores among the others one by one, and are not written in the dossier; the page shows them."
-                )
-            elif found and few:
-                # the engine's caution ("1 of 928 is called positive") gives the count: it is not copied either
-                blocks.lines.append(
-                    f"The cut-off found on these data calls fewer than {least} participants {few}: its value, its "
-                    "range and the measures at it are not written in the dossier; the page shows them."
-                )
-            elif found:
-                # the cut-off was chosen on these data: its range (drawn at random; the settings give the draws) and
-                # the caution that goes with it
-                if youden.get("ci") is not None:
-                    blocks.lines.append(_youden_range(youden, least))
-                if youden.get("note"):
-                    blocks.lines.append(str(youden["note"]))
-                if "cautions" not in value and youden.get("caution"):  # a result kept before its own words
-                    blocks.warnings.append(str(youden["caution"]))
-            # in the words of the direction asked on the page (the engine's are of the marker it was given); they give
-            # the AUC, which is not written beside a side too small
-            if not thin:
-                blocks.warnings.extend(str(text) for text in value.get("cautions") or ())
-            if acc is not None and not held_back:
-                blocks.warnings.extend(acc.warnings)
-            return blocks
+            return _accuracy_blocks(value)
         if "res" in value and "table" in value:
             blocks = _test_blocks(value["res"])
             blocks.tables.insert(0, ("Paired table", value["table"].reset_index()))
@@ -864,4 +1019,12 @@ def result_blocks(value: Any) -> ResultBlocks:
     return ResultBlocks(lines=[f"{type(value).__name__} (no report layout)"])
 
 
-__all__ = ["DOSSIER_MIN_N", "ResultBlocks", "dossier_min_n", "km_png", "result_blocks"]
+__all__ = [
+    "DOSSIER_MIN_N",
+    "SAMPLING_WORDS",
+    "ResultBlocks",
+    "dossier_min_n",
+    "km_png",
+    "result_blocks",
+    "sampling_line",
+]

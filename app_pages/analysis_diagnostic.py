@@ -1,7 +1,7 @@
 """
 Diagnostic accuracy & agreement, a tab of Analyze > Hypothesis tests & epidemiology: three questions, one open at a
-time (ui.guidance.measures): the accuracy of a test against a reference standard (sensitivity, specificity, the ROC
-curve and its AUC), the agreement of two measurements (Bland-Altman limits and the ICC, on one set of columns), and the
+time (ui.guidance.measures): the accuracy of a test against a reference standard (a score, with the ROC curve and its
+AUC, or a yes/no test: sensitivity, specificity, predictive values by the sampling), the agreement of two measurements (Bland-Altman limits and the ICC, on one set of columns), and the
 agreement of two raters on categories (Cohen's kappa).
 
 Each follows the page pattern of Survival & regression (app_pages.analysis_layout): nothing is preselected, the plan
@@ -25,12 +25,22 @@ from app_pages.analysis_layout import Metric
 from biostats._types import CI, YOUDEN_BOOTSTRAP
 from biostats.agreement import SLOPE_READING, SLOPE_WARNING, bland_altman
 from biostats.diagnostic import (
+    KOOPMAN,
+    SAMPLING_NOT_STATED,
+    SAMPLINGS,
+    SCORE_CARRIED,
+    SERIES,
+    TWO_GATE,
     YOUDEN_MIN_CLASS,
     confusion_at,
     delong_auc,
     diagnostic_accuracy,
+    reads_share,
+    verification,
+    yes_no_table,
     youden_cutoff,
 )
+from biostats.references import cite
 from biostats.reliability import (
     NEAR_MISSES,
     cohens_kappa,
@@ -59,6 +69,67 @@ def _rgba(colour: str, alpha: float) -> str:
 
 
 # ----------------------------------------------------------------------------- accuracy of a test
+
+
+# the form of the index test among a result's settings, in words (the dossier's line, "Last result here")
+FORM_SETTING = {m.NUMBER: "a score", m.YES_NO: "a yes/no test"}
+
+
+def accuracy_settings(
+    form: str,
+    present: Any,
+    positive: Any = None,
+    direction: str | None = None,
+    mode: str | None = None,
+    cutoff: float | None = None,
+    prevalence: float | None = None,
+    sampling: str = SAMPLING_NOT_STATED,
+) -> dict[str, Any]:
+    """
+    The options in use of one accuracy analysis, by stored id: those ``biostats.plan.KINDS["diagnostic"]`` declares,
+    so that the identity of a result on the page (its settings, built from these: :func:`_config`) is the identity
+    of its request.
+
+    The form and the value that means the condition, always; the test's positive value for a yes/no test; the
+    direction and the cut-off's mode for a score, the cut-off for one typed beforehand only; the sampling and the
+    prevalence wherever a 2x2 table is read (a yes/no test, a score at a cut-off). An option left out takes its
+    declared default: a score without a cut-off is one analysis whatever the sampling question holds.
+    """
+    settings: dict[str, Any] = {
+        "index_form": form,
+        "present": None if present is None else str(present),
+    }
+    if form == m.YES_NO:
+        settings["positive"] = None if positive is None else str(positive)
+    else:
+        settings["direction"] = direction
+        settings["mode"] = mode
+        if mode == m.FIXED:
+            settings["cutoff"] = None if cutoff is None else float(cutoff)
+    if form == m.YES_NO or mode != m.NO_CUTOFF:
+        settings["sampling"] = sampling
+        settings["prevalence"] = None if prevalence is None else float(prevalence)
+    return settings
+
+
+def _config(columns: Sequence[str | None], settings: dict[str, Any], *more: str) -> tuple:
+    """A result's settings as the page keeps them and the dossier's line writes them: the two columns, then each
+    option in use (:func:`accuracy_settings`), in the words of its id's catalogue."""
+    words: list[Any] = [settings["present"]]
+    if "positive" in settings:
+        positive = settings["positive"]
+        words.append(None if positive is None else f"positive when {positive}")
+    words.append(FORM_SETTING[settings["index_form"]])
+    if "mode" in settings:
+        words += [settings["direction"], m.CUTOFFS[settings["mode"]]]
+    if "cutoff" in settings:
+        words.append(settings["cutoff"])
+    if "sampling" in settings:
+        words += [
+            _prevalence_setting(settings["prevalence"]),
+            m.SAMPLING_SETTING[settings["sampling"]],
+        ]
+    return (*columns, *words, *more)
 
 
 def _as_measured(found: dict) -> dict:
@@ -97,10 +168,12 @@ def accuracy_of(
     mode: str,
     cutoff: float | None,
     prevalence: float | None,
+    sampling: str = SAMPLING_NOT_STATED,
 ) -> dict[str, Any]:
     """
     The accuracy of ``score`` against ``outcome`` = ``present`` on the rows where both are recorded: the AUC always;
-    with a cut-off (fixed beforehand, or found on these data by Youden's J), the 2x2 table and its measures.
+    with a cut-off (fixed beforehand, or found on these data by Youden's J), the 2x2 table and its measures, by the
+    ``sampling`` (predictive values at the share in the data for a series only).
 
     ``direction`` says which way the test points. For "lower", the same functions read the reversed marker, and the
     cut-off is given back on the marker's own scale (positive when the test is at most the cut-off): a marker that
@@ -140,7 +213,12 @@ def accuracy_of(
     if at is not None:
         tp, fp, fn, tn = confusion_at(truth, marker, at, pos_label=present)
         acc = diagnostic_accuracy(
-            tp, fp, fn, tn, prevalence=None if prevalence is None else float(prevalence)
+            tp,
+            fp,
+            fn,
+            tn,
+            prevalence=None if prevalence is None else float(prevalence),
+            sampling=sampling,
         )
     shown = None if at is None else (-at if lower else at)
     point = None if acc is None else (1 - acc.specificity, acc.sensitivity)
@@ -157,7 +235,19 @@ def accuracy_of(
             f"the area under the curve is {auc['auc']:.3f}, below 0.5. Choose {other} above, or check the value "
             "that means the condition is present."
         )
+    verified = None
+    if at is not None:
+        # the reference standard done unequally on the two sides of the cut-off, among the rows that hold the test
+        recorded = pd.to_numeric(df[score], errors="coerce")
+        called = (-recorded >= at if lower else recorded >= at).where(recorded.notna())
+        verified = verification(called, df[outcome])
     return {
+        "index_form": m.NUMBER,
+        "absent": next((v for v in m.levels_of(clean[outcome]) if v != present), None),
+        "verified": verified,
+        "verification": ""
+        if verified is None or acc is None
+        else m.verification_words(verified, acc.prevalence_observed),
         "auc": auc,
         "pairs": _pairs(with_it, values),
         "cautions": cautions,
@@ -273,7 +363,476 @@ def _roc_figure(
     return fig
 
 
+def accuracy_yes_no_of(
+    df: pd.DataFrame,
+    outcome: str,
+    present: Any,
+    test: str,
+    positive: Any,
+    prevalence: float | None,
+    sampling: str = SAMPLING_NOT_STATED,
+) -> dict[str, Any]:
+    """
+    The accuracy of the yes/no ``test`` (positive when it is ``positive``) against ``outcome`` = ``present``, on the
+    rows where both are recorded: the 2x2 table and its measures, by the sampling. A yes/no test has one point on
+    the ROC plane: no curve, no area, no cut-off. The result has the keys of a score's (``score`` names the index
+    test's column, whatever its form), with ``index_form``, the test's two values, and no ``auc``.
+    """
+    tp, fp, fn, tn = yes_no_table(df, outcome, test, present=present, positive=positive)
+    acc = diagnostic_accuracy(
+        tp,
+        fp,
+        fn,
+        tn,
+        prevalence=None if prevalence is None else float(prevalence),
+        sampling=sampling,
+    )
+    frame = df[[outcome, test]].dropna()
+    absent = next(v for v in m.levels_of(frame[outcome]) if v != present)
+    negative = next(v for v in m.levels_of(frame[test]) if v != positive)
+    cautions: list[str] = []
+    if acc.sensitivity < 1 - acc.specificity:  # kept with the result: Guidance off still says it
+        cautions.append(
+            m.other_way_words(f"{test} = {positive}", acc.sensitivity, 1 - acc.specificity)
+        )
+    verified = verification((df[test] == positive).where(df[test].notna()), df[outcome])
+    return {
+        "verified": verified,
+        "verification": m.verification_words(verified, acc.prevalence_observed),
+        "auc": None,
+        "pairs": None,
+        "cautions": cautions,
+        "youden": None,
+        "cutoff": None,
+        "acc": acc,
+        "outcome": outcome,
+        "score": test,
+        "pos_label": present,
+        "absent": absent,
+        "positive": positive,
+        "negative": negative,
+        "index_form": m.YES_NO,
+        "mode": None,
+        "n": len(frame),
+        "direction": None,
+        "prevalence": None if prevalence is None else float(prevalence),
+        "fig": None,
+    }
+
+
+def _reference_standard(df: pd.DataFrame, standards: list[str], first: Any, second: Any) -> tuple:
+    """The reference standard and the value that means the condition is present: asked once for a score and for a
+    yes/no test of the same study (their keys are shared)."""
+    outcome = first.selectbox(
+        "Reference standard",
+        standards,
+        index=None,
+        placeholder="Choose a column with two values",
+        key="diag_outcome",
+        persist_state="page",
+        help=HELP["standard"],
+    )
+    levels = m.levels_of(df[outcome]) if outcome else []
+    layout.depends("diag_pos", (outcome, tuple(map(str, levels))), m.present_value(levels))
+    present = second.selectbox(
+        "Condition present when it is",
+        levels,
+        index=None,
+        format_func=str,
+        placeholder="Choose the value" if outcome else "Choose the reference standard first",
+        disabled=not outcome,
+        key="diag_pos",
+        persist_state="page",
+        help=HELP["present"],
+    )
+    return outcome, present
+
+
+def _sampling_and_prevalence(outcome: str | None, share: float | None) -> tuple[str, float | None]:
+    """
+    How the participants entered the study, and beside it the prevalence where the test will be used: two of the
+    three answers read predictive values only at that prevalence, so it stands in view (it was the one field of a
+    folded "More options"). The question is a statement about who was taken into the study, asked once the reference
+    standard is chosen and again for another; it starts at "Not stated", which reads no predictive value at the share
+    in the data.
+    """
+    layout.depends("diag_sampling", outcome, SAMPLING_NOT_STATED)
+    layout.depends("diag_prev", outcome, None)  # a prevalence is that of one condition
+    wide, side = st.columns([2, 1])  # the labels are sentences: a third of a row cut them
+    sampling = (
+        wide.radio(
+            m.DESIGN_QUESTION,
+            SAMPLINGS,
+            format_func=m.SAMPLING_LABELS.__getitem__,
+            disabled=not outcome,
+            key="diag_sampling",
+            persist_state="page",
+            help=HELP["sampling"],
+        )
+        or SAMPLING_NOT_STATED
+    )
+    # the share in the data is a prevalence for a series only: beside another answer it is the share that answer
+    # has just set aside, and typing it back would read the predictive values withheld
+    hint = f" (in these data: {share:.1%})" if share is not None and sampling == SERIES else ""
+    prevalence = side.number_input(
+        "Prevalence where the test will be used (optional)",
+        min_value=0.0,
+        max_value=1.0,
+        value=None,
+        step=0.01,
+        format="%g",  # as typed: two decimals showed 1 in 2,500 as "0.00"
+        placeholder="for example 0.02" + hint,
+        key="diag_prev",
+        persist_state="page",
+        help=HELP["prevalence"],
+    )
+    return sampling, prevalence
+
+
+def _prevalence_setting(prevalence: float | None) -> str | None:
+    """A prevalence given, among a result's settings: in words (a bare "0.05" stood in the dossier's line), with
+    twelve significant figures (two prevalences a person can type are two results; six kept 0.1234561 and 0.1234564
+    as one)."""
+    return None if prevalence is None else f"at a prevalence of {prevalence:.12g}"
+
+
 def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
+    form = layout.choose(
+        "The test's result is",
+        m.TEST_RESULTS,
+        key="diag_result",
+        help=HELP["test_result"],
+        default=m.NUMBER,
+        depth=2,
+    )
+    panel = _accuracy_score if form == m.NUMBER else _accuracy_yes_no
+    panel(df, mi=mi, guided=guided)
+
+
+def _accuracy_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
+    columns = m.two_valued(df)
+    if len(columns) < 2:
+        empty_state(
+            "No yes/no test in this dataset",
+            "A yes/no test is assessed against a reference standard: two columns with two values each. A test "
+            "recorded as a number can be assessed as a score (A number), or made yes/no on Data > Enrich.",
+            links=(("enrich", "Create new variables", "variables"), ("clean", "Clean categories")),
+        )
+        return
+    c1, c2 = st.columns(2)
+    outcome, present = _reference_standard(df, columns, c1, c2)
+    c3, c4 = st.columns(2)
+    candidates = [c for c in columns if c != outcome]
+    test = c3.selectbox(
+        "Test assessed (index test)",
+        candidates,
+        index=None,
+        placeholder="Choose a column with two values",
+        key="diag_test",
+        persist_state="page",
+        help=HELP["yes_no_test"],
+    )
+    results = m.levels_of(df[test]) if test else []
+    # the value that reads as positive (Positive, Yes, 1 beside 0, Detected...), else to choose: offered again for
+    # another test
+    layout.depends("diag_test_pos", (test, tuple(map(str, results))), m.present_value(results))
+    positive = c4.selectbox(
+        "Test positive when it is",
+        results,
+        index=None,
+        format_func=str,
+        placeholder="Choose the value" if test else "Choose the test first",
+        disabled=not test,
+        key="diag_test_pos",
+        persist_state="page",
+        help=HELP["test_positive"],
+    )
+    share = None
+    if outcome and test and present is not None:
+        held = df[[outcome, test]].dropna()[outcome]
+        share = float((held == present).mean()) if len(held) else None
+    sampling, prevalence = _sampling_and_prevalence(outcome, share)
+    choices = (
+        outcome,
+        None if present is None else str(present),
+        test,
+        None if positive is None else str(positive),
+        prevalence,
+        sampling,
+    )
+    plan = layout.kept(
+        "diag_plan_yes_no",
+        choices,
+        lambda: m.plan_accuracy_yes_no(df, outcome, present, test, positive, prevalence, sampling),
+    )
+    if guided:
+        # a column whose two values are written several ways is cleaned from the plan, and its copy takes its place
+        fields = (
+            (outcome, "diag_outcome", "Use as the reference standard:"),
+            (test, "diag_test", "Use as the test:"),
+        )
+        clean = {
+            column: {"group_key": key, "groupable": columns, "use": use}
+            for column, key, use in fields
+            if column
+        }
+        layout.plan_box(plan, clean=clean)
+    else:
+        layout.checks(plan)
+    if mi is not None:
+        layout.imputed_line(
+            OBSERVED
+            + "the rows where the reference standard and the test are both recorded. Not pooled in this version."
+        )
+    # the form and the sampling in words among the settings (the dossier's line, "Last result here")
+    config = _config(
+        (outcome, test),
+        accuracy_settings(
+            m.YES_NO, present, positive=positive, prevalence=prevalence, sampling=sampling
+        ),
+    )
+    if layout.run_button(
+        "diag_run_yes_no", ready=bool(plan.steps), what="the accuracy of the test", plan=plan
+    ):
+        try:
+            result = accuracy_yes_no_of(df, outcome, present, test, positive, prevalence, sampling)  # type: ignore[arg-type]
+            remember(
+                "diagnostic",
+                result,
+                config=config,
+                n_analysed=result["n"],
+                columns=[outcome, test],  # type: ignore[list-item]
+            )
+            mark_step("analyse", "diagnostic accuracy")
+        except Exception as exc:
+            error_card("The accuracy of the test could not be computed.", exc)
+    result = layout.result_place("diagnostic", config, guided=guided)
+    if result is not None and result.get("index_form") == m.YES_NO:
+        _show_accuracy_yes_no(result)
+        provenance("diagnostic")
+
+
+def _counts_table(table: pd.DataFrame) -> None:
+    """A 2x2 table with its totals, the counts written as the headline writes them ("1,072": the table read "1072"
+    under "667 of 1,072")."""
+    right = {name: st.column_config.TextColumn(alignment="right") for name in table.columns}
+    st.dataframe(table.map(lambda count: f"{int(count):,}"), width="stretch", column_config=right)
+
+
+def _predictive_pair(positive: tuple[Any, Any], negative: tuple[Any, Any]) -> str:
+    """The two predictive values of one line, each with its interval; one that has no value is said with its reason
+    ("negative n/a" stood for a test that called everyone positive)."""
+    said = []
+    for name, nobody, (value, ci) in (
+        ("positive", "no one tested positive", positive),
+        ("negative", "no one tested negative", negative),
+    ):
+        if layout.known(value):
+            said.append(f"{name} {_share(value, ci)}")
+        else:
+            said.append(f"no {name} predictive value: {nobody}")
+    return ", ".join(said)
+
+
+def _predictive_caption(acc: Any, prevalence: float | None, unequal: bool = False) -> str:
+    """The predictive values under the 2x2 table, by the sampling: at the share in the data for a series, at the
+    prevalence given whatever the sampling (its interval carried from the likelihood ratio's, the prevalence taken
+    as known). The numbers first; where none is read, why, with the share named and what to do. ``unequal``: the
+    reference standard was done unequally by test result, and the share among those who had it is then no
+    prevalence, even in a series."""
+    share = layout.percent(acc.prevalence_observed)
+    at = ""
+    if prevalence is not None and acc.ppv_at_prevalence is not None:
+        at = (
+            f"At a prevalence of {m.prevalence_text(prevalence)}: "
+            + _predictive_pair(
+                (acc.ppv_at_prevalence, acc.ppv_at_prevalence_ci),
+                (acc.npv_at_prevalence, acc.npv_at_prevalence_ci),
+            )
+            + ", the prevalence taken as known."
+        )
+    if acc.sampling == TWO_GATE:
+        if at:
+            return (
+                f"{at} Not at the share with the condition here ({share}): those with and without it were sampled "
+                "apart."
+            )
+        return (
+            "No predictive values: those with and without the condition were sampled apart, so the share with it "
+            f"here ({share}) was set by the sampling. Give the prevalence where the test will be used, then run again."
+        )
+    if acc.sampling != SERIES:
+        return at or (
+            "No predictive values: if the participants were taken as they came (a series), say so to read them at "
+            f"the share in these data ({share}); otherwise give the prevalence where the test will be used. Then run "
+            "again."
+        )
+    where = (
+        f"Predictive values among those who had the reference standard ({share} with the condition)"
+        if unequal
+        else f"Predictive values at the share with the condition in these participants ({share}, a series)"
+    )
+    text = f"{where}: {_predictive_pair((acc.ppv, acc.ppv_ci), (acc.npv, acc.npv_ci))}."
+    return f"{text} {at}".strip()
+
+
+def _measure_rows(acc: Any, prevalence: float | None) -> pd.DataFrame:
+    """Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
+    in the data and the share classified correctly for a series only)."""
+    share = layout.percent(acc.prevalence_observed)
+    at_share = reads_share(acc.sampling)
+    rows: list[tuple[str, Any, Any]] = [
+        ("Sensitivity", acc.sensitivity, acc.sensitivity_ci),
+        ("Specificity", acc.specificity, acc.specificity_ci),
+    ]
+    if at_share:
+        rows += [
+            (
+                f"Positive predictive value, at the share in these data ({share})",
+                acc.ppv,
+                acc.ppv_ci,
+            ),
+            (
+                f"Negative predictive value, at the share in these data ({share})",
+                acc.npv,
+                acc.npv_ci,
+            ),
+        ]
+    if prevalence is not None and acc.ppv_at_prevalence is not None:
+        typed = m.prevalence_text(prevalence)
+        rows += [
+            (
+                f"Positive predictive value, at a prevalence of {typed}",
+                acc.ppv_at_prevalence,
+                acc.ppv_at_prevalence_ci,
+            ),
+            (
+                f"Negative predictive value, at a prevalence of {typed}",
+                acc.npv_at_prevalence,
+                acc.npv_at_prevalence_ci,
+            ),
+        ]
+    rows += [
+        ("Positive likelihood ratio (LR+)", acc.lr_positive, acc.lr_positive_ci),
+        ("Negative likelihood ratio (LR-)", acc.lr_negative, acc.lr_negative_ci),
+        ("Diagnostic odds ratio", acc.dor, acc.dor_ci),
+        ("Youden's J", acc.youden, None),
+    ]
+    if at_share:
+        rows.append(("Share classified correctly", acc.accuracy, None))
+    shares = {"Sensitivity", "Specificity", "Share classified correctly"}
+    return pd.DataFrame(
+        [
+            _measure(name, value, ci, share=name in shares or "predictive value" in name)
+            for name, value, ci in rows
+        ],
+        columns=["Measure", "Estimate", "95% CI"],
+    )
+
+
+def _intervals(acc: Any, prevalence: float | None) -> str:
+    """The methods of the intervals, in one line under the table of every measure."""
+    score = any(
+        ci is not None and ci.method == KOOPMAN for ci in (acc.lr_positive_ci, acc.lr_negative_ci)
+    )
+    text = "Intervals: Wilson score for the shares; Simel's log interval for the likelihood ratios"
+    if score:
+        text += ", and the one bound of Koopman's score interval at a zero cell"
+    text += "; Woolf's log interval for the diagnostic odds ratio"
+    if prevalence is not None and acc.ppv_at_prevalence is not None:
+        carried = any(
+            ci is not None and ci.method == SCORE_CARRIED
+            for ci in (acc.ppv_at_prevalence_ci, acc.npv_at_prevalence_ci)
+        )
+        text += (
+            "; a predictive value at the prevalence given carries its likelihood ratio's interval (Mercaldo's logit "
+            "interval"
+            + (
+                "; from the score bound where a likelihood ratio is 0 or has no upper bound"
+                if carried
+                else ""
+            )
+            + "), the prevalence taken as known"
+        )
+    return text + "."
+
+
+def _unequal(res: dict[str, Any]) -> bool:
+    """Whether the reference standard was done unequally by test result in this result."""
+    verified = res.get("verified")
+    return bool(verified is not None and verified.partial)
+
+
+def _methods(res: dict[str, Any], *more: str) -> str:
+    """The references of a result's measures; with the caution of partial verification, its own."""
+    cited = [*res["acc"].references, *more]
+    if res.get("verification"):
+        cited += [text for text in cite("begg1983") if text not in cited]
+    return "Method: " + " | ".join(cited)
+
+
+def _show_accuracy_yes_no(res: dict[str, Any]) -> None:
+    acc = res["acc"]
+    test, outcome = as_code(res["score"]), as_code(res["outcome"])
+    positive, present = as_code(res["positive"]), as_code(res["pos_label"])
+    cautions = [
+        *(res.get("cautions") or []),
+        *([res["verification"]] if res.get("verification") else []),
+        *acc.warnings,
+    ]
+    with_it, without = acc.tp + acc.fn, acc.fp + acc.tn
+    layout.headline(
+        [
+            Metric(
+                "Sensitivity",
+                layout.percent(acc.sensitivity),
+                f"{acc.tp:,} of {with_it:,} · {layout.interval(acc.sensitivity_ci, scale=100, unit='%')}",
+            ),
+            Metric(
+                "Specificity",
+                layout.percent(acc.specificity),
+                f"{acc.tn:,} of {without:,} · {layout.interval(acc.specificity_ci, scale=100, unit='%')}",
+            ),
+            Metric(
+                "Participants",
+                f"{res['n']:,}",
+                f"{with_it:,} with the condition, {without:,} without",
+            ),
+        ],
+        f"{test} = {positive} counted as a positive test, against {outcome} = {present}. "
+        + m.SAMPLING_SENTENCE.get(acc.sampling, ""),
+        len(cautions),
+    )
+    st.caption(f"Rows: {test} (the test). Columns: {outcome} (the reference standard).")
+    table = pd.DataFrame(
+        {
+            f"Condition present ({res['pos_label']})": [acc.tp, acc.fn, with_it],
+            f"Condition absent ({res['absent']})": [acc.fp, acc.tn, without],
+            "Total": [acc.tp + acc.fp, acc.fn + acc.tn, res["n"]],
+        },
+        index=[
+            f"Test positive ({res['positive']})",
+            f"Test negative ({res['negative']})",
+            "Total",
+        ],
+    )
+    _counts_table(table)
+    said = _predictive_caption(acc, res.get("prevalence"), _unequal(res))
+    if said:
+        st.caption(said)
+    layout.warn(cautions)
+    with st.expander("Details: every measure"):
+        st.dataframe(_measure_rows(acc, res.get("prevalence")), hide_index=True, width="stretch")
+        st.caption(
+            _intervals(acc, res.get("prevalence"))
+            + " A yes/no test has one point on the ROC plane: its area would be (sensitivity + specificity) / 2, "
+            "nothing beyond the two shares above."
+        )
+        st.caption(_methods(res))
+    help_popover(m.ACCURACY_READING)
+
+
+def _accuracy_score(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     standards, scores = m.two_valued(df), m.measurements(df)
     if not standards or not scores:
         lacking = "column with two values" if not standards else "numeric column"
@@ -286,29 +845,7 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         )
         return
     c1, c2, c3 = st.columns(3)
-    outcome = c1.selectbox(
-        "Reference standard",
-        standards,
-        index=None,
-        placeholder="Choose a column with two values",
-        key="diag_outcome",
-        persist_state="page",
-        help=HELP["standard"],
-    )
-    levels = m.levels_of(df[outcome]) if outcome else []
-    guess = m.present_value(levels)
-    layout.depends("diag_pos", (outcome, tuple(map(str, levels))), guess)
-    present = c2.selectbox(
-        "Condition present when it is",
-        levels,
-        index=None,
-        format_func=str,
-        placeholder="Choose the value" if outcome else "Choose the reference standard first",
-        disabled=not outcome,
-        key="diag_pos",
-        persist_state="page",
-        help=HELP["present"],
-    )
+    outcome, present = _reference_standard(df, standards, c1, c2)
     score = c3.selectbox(
         "Test or score assessed (index test)",
         [c for c in scores if c != outcome],
@@ -369,19 +906,12 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
                     f"{layout.num(float(held.max()), 4)} (median {layout.num(float(held.median()), 4)})."
                 )
     share = None if medians is None else medians[2] / (medians[2] + medians[3])
-    layout.depends("diag_prev", outcome, None)  # a prevalence is that of one condition
-    with st.expander("More options"):
-        prevalence = st.number_input(
-            "Prevalence where the test will be used (optional)",
-            min_value=0.0,
-            max_value=1.0,
-            value=None,
-            step=0.01,
-            placeholder="as in these data" + (f": {share:.1%}" if share is not None else ""),
-            key="diag_prev",
-            persist_state="page",
-            help=HELP["prevalence"],
-        )
+    # each option is drawn with the analysis that reads it: without a cut-off there is no predictive value to read
+    sampling, prevalence = (
+        (SAMPLING_NOT_STATED, None)
+        if mode == m.NO_CUTOFF
+        else _sampling_and_prevalence(outcome, share)
+    )
     choices = (
         outcome,
         None if present is None else str(present),
@@ -390,11 +920,14 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         mode,
         cutoff,
         prevalence,
+        sampling,
     )
     plan = layout.kept(
         "diag_plan",
         choices,
-        lambda: m.plan_accuracy(df, outcome, present, score, direction, mode, cutoff, prevalence),
+        lambda: m.plan_accuracy(
+            df, outcome, present, score, direction, mode, cutoff, prevalence, sampling
+        ),
     )
     if guided:
         layout.plan_box(plan)
@@ -409,20 +942,34 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     drawn = bool(
         ready and mode == m.YOUDEN and range_drawn(df[[outcome, score]].dropna(), outcome, present)  # type: ignore[index]
     )
-    # the settings in use only: a cut-off typed for another mode is no part of this result
-    config = (
-        outcome,
-        score,
-        None if present is None else str(present),
-        direction,
-        mode,
-        cutoff if mode == m.FIXED else None,
-        prevalence,
+    # the settings in use only: a cut-off typed for another mode is no part of this result, nor the sampling of
+    # a curve read without a cut-off
+    config = _config(
+        (outcome, score),
+        accuracy_settings(
+            m.NUMBER,
+            present,
+            direction=direction,
+            mode=mode,
+            cutoff=cutoff,
+            prevalence=prevalence,
+            sampling=sampling,
+        ),
         *((YOUDEN_BOOTSTRAP.setting,) if drawn else ()),
     )
     if layout.run_button("diag_run", ready=ready, what="the accuracy of the test", plan=plan):
         try:
-            result = accuracy_of(df, outcome, present, score, direction, mode, cutoff, prevalence)  # type: ignore[arg-type]
+            result = accuracy_of(
+                df,
+                outcome,  # type: ignore[arg-type]
+                present,
+                score,  # type: ignore[arg-type]
+                direction,  # type: ignore[arg-type]
+                mode,
+                cutoff,
+                prevalence,
+                sampling,
+            )
             remember(
                 "diagnostic",
                 result,
@@ -433,17 +980,49 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             mark_step("analyse", "diagnostic accuracy")
         except Exception as exc:
             error_card("The accuracy of the test could not be computed.", exc)
-    result = layout.result_place("diagnostic", config, guided=guided, words=m.CUTOFFS)
-    if result is not None:
+    result = layout.result_place("diagnostic", config, guided=guided)
+    if result is not None and result.get("index_form", m.NUMBER) == m.NUMBER:
         _show_accuracy(result)
         provenance("diagnostic")
+
+
+def _share_parts(value: Any, ci: Any) -> tuple[str, str]:
+    """
+    A share and the bounds of its interval, as percentages: one decimal ("40.8%", "34.5% to 47.6%"); "" for an
+    interval without bounds. Bounds that one decimal writes alike take three, and the share with them ("100.0% (95%
+    CI 100.0% to 100.0%)" stood for a negative predictive value at a prevalence of 1 in 2,500). A share below 100%
+    is never written "100.0%" nor one above 0 "0.0%" (the rule of "more than 99 of 100 pairs").
+    """
+    bounded = ci is not None and layout.known(ci.lower) and layout.known(ci.upper)
+    places = 1
+    if (
+        bounded
+        and ci.lower != ci.upper
+        and layout.fixed(100 * ci.lower, 1) == layout.fixed(100 * ci.upper, 1)
+    ):
+        places = 3
+    if not layout.known(value):
+        estimate = "n/a"
+    else:
+        share, least = float(value), 10.0**-places
+        estimate = f"{layout.fixed(100 * share, places)}%"
+        if share < 1 and estimate == f"{layout.fixed(100, places)}%":
+            estimate = f"more than {layout.fixed(100 - least, places)}%"
+        elif share > 0 and estimate == f"{layout.fixed(0, places)}%":
+            estimate = f"less than {layout.fixed(least, places)}%"
+    bounds = (
+        f"{layout.fixed(100 * ci.lower, places)}% to {layout.fixed(100 * ci.upper, places)}%"
+        if bounded
+        else ""
+    )
+    return estimate, bounds
 
 
 def _share(value: Any, ci: Any) -> str:
     """A share with its interval, as a sentence writes it: "40.8% (95% CI 34.5% to 47.6%)", or the share alone when
     it has no interval ("n/a (95% CI n/a% to n/a%)" stood for a predictive value without a value)."""
-    bounds = layout.interval(ci, scale=100, unit="%")
-    return layout.percent(value) + (f" ({bounds})" if bounds else "")
+    estimate, bounds = _share_parts(value, ci)
+    return estimate + (f" (95% CI {bounds})" if bounds else "")
 
 
 def _measure(name: str, value: Any, ci: Any, *, share: bool) -> tuple[str, str, str]:
@@ -451,12 +1030,14 @@ def _measure(name: str, value: Any, ci: Any, *, share: bool) -> tuple[str, str, 
     86.1% and the table 0.861), a ratio to three significant figures; its interval with the same decimals."""
     known = value is not None and bool(np.isfinite(float(value)))
     bounded = ci is not None and all(np.isfinite(float(b)) for b in (ci.lower, ci.upper))
+    if not share and value is not None and ci is not None:
+        # at a zero cell: the one bound the data leave ("0" stood alone, and "n/a" for a ratio without an upper bound)
+        if np.isinf(float(value)):
+            return name, "no upper bound", f"at least {layout.num(ci.lower)}"
+        if float(value) == 0 and float(ci.lower) == 0 and bounded:
+            return name, "0", f"at most {layout.num(ci.upper)}"
     if share:
-        return (
-            name,
-            layout.percent(value) if known else "n/a",
-            layout.span(100 * ci.lower, 100 * ci.upper, unit="%") if bounded else "",
-        )
+        return (name, *_share_parts(value, ci))
     if known and bounded:
         estimate, bounds = layout.with_interval(value, ci)
         return name, estimate, bounds.removeprefix("95% CI ")
@@ -518,7 +1099,10 @@ def _show_accuracy(res: dict[str, Any]) -> None:
                 help="The test is called positive on this side of the cut-off.",
             ),
         ]
+        if res.get("verification"):
+            cautions.append(res["verification"])
         cautions += list(acc.warnings)
+        words += " " + m.SAMPLING_SENTENCE.get(acc.sampling, "")
     layout.headline(metrics, words, len(cautions))
     left, right = st.columns(2)
     left.plotly_chart(res["fig"], width="stretch")
@@ -528,66 +1112,28 @@ def _show_accuracy(res: dict[str, Any]) -> None:
             table = pd.DataFrame(
                 {
                     f"Condition present ({res['pos_label']})": [acc.tp, acc.fn, acc.tp + acc.fn],
-                    "Condition absent": [acc.fp, acc.tn, acc.fp + acc.tn],
+                    "Condition absent"
+                    + (f" ({res['absent']})" if res.get("absent") is not None else ""): [
+                        acc.fp,
+                        acc.tn,
+                        acc.fp + acc.tn,
+                    ],
                     "Total": [acc.tp + acc.fp, acc.fn + acc.tn, acc.tp + acc.fp + acc.fn + acc.tn],
                 },
                 index=[positive, "Test negative", "Total"],
             )
             st.markdown("**At the cut-off**")
-            st.dataframe(table, width="stretch")
-            share = layout.percent(acc.prevalence_observed)
-            st.caption(
-                f"Predictive values at the share with the condition in these data ({share}): positive "
-                f"{_share(acc.ppv, acc.ppv_ci)}, negative {_share(acc.npv, acc.npv_ci)}."
-            )
+            _counts_table(table)
+            said = _predictive_caption(acc, res.get("prevalence"), _unequal(res))
+            if said:
+                st.caption(said)
     layout.warn(cautions)
     if acc is not None:
         with st.expander("Details: every measure"):
-            share = layout.percent(acc.prevalence_observed)
-            rows = [
-                ("Sensitivity", acc.sensitivity, acc.sensitivity_ci),
-                ("Specificity", acc.specificity, acc.specificity_ci),
-                (
-                    f"Positive predictive value, at the share in these data ({share})",
-                    acc.ppv,
-                    acc.ppv_ci,
-                ),
-                (
-                    f"Negative predictive value, at the share in these data ({share})",
-                    acc.npv,
-                    acc.npv_ci,
-                ),
-            ]
-            if res.get("prevalence") is not None:
-                typed = layout.percent(res["prevalence"])
-                rows += [
-                    (
-                        f"Positive predictive value, at a prevalence of {typed}",
-                        acc.ppv_at_prevalence,
-                        None,
-                    ),
-                    (
-                        f"Negative predictive value, at a prevalence of {typed}",
-                        acc.npv_at_prevalence,
-                        None,
-                    ),
-                ]
-            rows += [
-                ("Positive likelihood ratio (LR+)", acc.lr_positive, acc.lr_positive_ci),
-                ("Negative likelihood ratio (LR-)", acc.lr_negative, acc.lr_negative_ci),
-                ("Diagnostic odds ratio", acc.dor, acc.dor_ci),
-                ("Youden's J", acc.youden, None),
-                ("Share classified correctly", acc.accuracy, None),
-            ]
-            shares = {"Sensitivity", "Specificity", "Share classified correctly"}
-            table = pd.DataFrame(
-                [
-                    _measure(name, value, ci, share=name in shares or "predictive value" in name)
-                    for name, value, ci in rows
-                ],
-                columns=["Measure", "Estimate", "95% CI"],
+            st.dataframe(
+                _measure_rows(acc, res.get("prevalence")), hide_index=True, width="stretch"
             )
-            st.dataframe(table, hide_index=True, width="stretch")
+            st.caption(_intervals(acc, res.get("prevalence")))
             if res["mode"] == m.YOUDEN and youden:
                 ci = youden.get("ci")
                 if ci is not None:
@@ -597,14 +1143,15 @@ def _show_accuracy(res: dict[str, Any]) -> None:
                         "interval)."
                     )
                 st.caption(youden["note"])
-            st.caption("Method: " + " | ".join([*acc.references, *auc["references"]]))
+            st.caption(_methods(res, *auc["references"]))
     else:
         with st.expander("Details: the method"):
             st.caption("Method: " + " | ".join(auc["references"]))
     help_popover(
         "Sensitivity and specificity describe the test; predictive values describe what a result means for the "
-        "person tested, and change with how common the condition is. Likelihood ratios turn the odds before the test "
-        "into the odds after it and do not depend on the prevalence. The AUC sums up how well the test separates "
+        "person tested, and change with how common the condition is: read them at the share in the data only for a "
+        "series of participants, otherwise at the prevalence of the setting. Likelihood ratios turn the odds before "
+        "the test into the odds after it and do not depend on the prevalence. The AUC sums up how well the test separates "
         "the two groups over every cut-off; its interval shows how precisely."
     )
 
@@ -1203,4 +1750,12 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer: Any, *, mi: Any = None) 
     panel(df, mi=mi, guided=guided)
 
 
-__all__ = ["QUESTION_KEY", "accuracy_of", "kappa_of", "range_drawn", "run_diagnostic_accuracy"]
+__all__ = [
+    "QUESTION_KEY",
+    "accuracy_of",
+    "accuracy_settings",
+    "accuracy_yes_no_of",
+    "kappa_of",
+    "range_drawn",
+    "run_diagnostic_accuracy",
+]

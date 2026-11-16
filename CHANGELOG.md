@@ -6,6 +6,60 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Accuracy of a test: a yes/no test, and predictive values by the sampling
+
+- **A test whose result is already positive or negative can be assessed** (*Accuracy of a test*, which drops
+  "(ROC)"): "The test's result is: A number / Positive or negative". For a yes/no test, the reference standard, the
+  test's column and the value that means a positive test (offered when one reads so) give the 2x2 table on the
+  rows where both are recorded, with sensitivity, specificity, likelihood ratios and the diagnostic odds ratio. No
+  curve and no AUC: a yes/no test has one point. The list of tests held numbers of three values or more only.
+- **Predictive values are read by how the participants entered the study,** asked for a score and for a yes/no
+  test: at the share with the condition in the data for *a series* only; at a prevalence given whatever the
+  sampling. Before, they were given at the share in the data whatever the sampling: a test of sensitivity 85% and
+  specificity 90%, read on 100 participants with the condition and 100 without, sampled apart, gave a positive
+  predictive value of 89.5%; where 2% have the condition, it is 14.8%. The question starts at *Not stated*: **a
+  result at a cut-off no longer shows predictive values at the share in the data, nor the share classified
+  correctly, until it is answered.**
+- **Numbers that change:**
+  - *A predictive value at a prevalence given has an interval,* carried from its likelihood ratio's (Mercaldo's
+    logit interval), the prevalence taken as known. With no false positive among 8 participants without the
+    condition, it read "100%" at a prevalence of 2% where the data allow 4.9% to 100%.
+  - *A likelihood ratio at a zero cell has the one bound the data leave* (Koopman's score interval, computed by
+    root-finding: the library's own returns complex numbers when a share is 100%). "LR- 0" stood without an
+    interval or a word (now "0, at most 0.142" where 30 of 30 participants with the condition tested positive and
+    24 of 30 without it negative); a ratio without an upper bound read "undefined" (now "no upper bound, at least
+    2.5"). Simel's log interval stays wherever it has a value.
+  - *No likelihood ratio when the test calls no one positive, or everyone:* "LR- 1.00 (1.00 to 1.00)" was written.
+    No diagnostic odds ratio either, nor for a table with no one on a side of the reference standard; and no
+    predictive value at a prevalence given (the prevalence itself was written, without an interval, as if it were
+    exact).
+  - *A prevalence of 0 or 1 is refused* (a predictive value is then 0% or 100% whatever the test).
+- **Partial verification is said from the data:** when those who tested positive had the reference standard more
+  than 1.25 times as often as those who tested negative (or less than 0.8 times), the plan and the result give the
+  counts and which way sensitivity and specificity then err (Begg & Greenes 1983); the likelihood ratios and the
+  predictive values at a prevalence given err with them, and the share with the condition among those who had the
+  reference standard is then no prevalence, even in a series. With few participants they add that the difference
+  may be chance. When one test result never had the reference standard (biopsies after a positive screen only),
+  they say that sensitivity and specificity cannot be read from the data.
+- **A sample taken apart says so in its result:** sensitivity and specificity may read higher than where the test
+  will be used (Lijmer et al. 1999).
+- **Indeterminate results:** the help of a yes/no test and the handbook say how to read them (the test on its
+  definite results, then with them counted as positive, and as negative; Shinkins et al. 2013).
+- **A small prevalence reads as typed** ("0.04%" for 1 in 2,500, which read "0.0%" beside "100.0% (95% CI 100.0%
+  to 100.0%)", now "99.993% (95% CI 99.989% to 99.996%)").
+- **The prevalence where the test will be used** stands beside the question, no longer folded under "More
+  options"; both are asked with a cut-off only (the curve and its AUC do not depend on them).
+- **The study dossier** writes a yes/no test's 2x2 table with its measures, and the table of a score at a cut-off
+  beside its measures (STARD item 23); the diagnostic odds ratio, whose zero-cell warning was written without it;
+  how the participants entered the study, beside the predictive values. One rule for a side of the reference
+  standard, whatever the index test: with fewer than 10 participants on a side, neither the table nor a measure is
+  written (a yes/no column cut from a score would otherwise write what the score's block holds back). A result
+  that cannot be written no longer stops the Word download: a line says so in its place. A character a Word
+  document refuses (a vertical tab pasted into a value, a NUL of a fixed-width export) is replaced, where it
+  stopped the download of every section.
+- **A diagnostic result has its record** (the table, each measure its sampling supports, the AUC, the cut-off): a
+  cut-off found on the data and the ends of its range are marked as one participant's.
+
 ### How the participants entered the study: each analysis reports what the design supports
 
 - **The stratified analysis, the 2x2 panel and the pooled 2x2 of imputed data ask "How did the participants enter

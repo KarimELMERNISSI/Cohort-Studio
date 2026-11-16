@@ -369,10 +369,30 @@ def test_today_s_ids_and_record_json_are_kept() -> None:
     )
     for kind, request_id in (
         ("proportion", "6d63a6a20240efe84020ca819c62b2d51dc14a36cb55042aa7abbecf08bbc469"),
-        ("diagnostic", "1c093fa78c184ef8447313bdf72725b4415f8faa5b1d96046903c435fe4e1eac"),
+        # declared with its roles and options when its record was (the yes/no index test). This id moves with the
+        # declaration until the first spec of the kind is written (its runner, its typed source or the package
+        # writer); after that, a change bumps the kind's version
+        ("diagnostic", "651b0f6002c54b519034c2c4cf97351b9ae263070e1a06cc10bc4d5d5c678eb8"),
         ("mantel_haenszel", "6b756979ab2f1667b5a73d32c61b63f8ef5f1952a537c724509dd41b0b5bc900"),
     ):
         assert specify(kind).request_id == request_id, kind
+    # the canonical form of a request, apart from any kind's declaration: a spec without roles or options, read
+    # back, keeps the id it had before the kind declared its own
+    empty = {
+        "kind": "diagnostic",
+        "kind_version": 1,
+        "pooled": False,
+        "variables": {},
+        "options": {},
+        "random": None,
+        "decided": {},
+        "backend": {},
+        "data": None,
+    }
+    assert (
+        AnalysisSpec.from_dict(empty).request_id
+        == "1c093fa78c184ef8447313bdf72725b4415f8faa5b1d96046903c435fe4e1eac"
+    )
     record = ResultRecord(
         "cox", parts=(Part("p", numbers=(Number("a", 1.5),), support={"arm=drug": 12}),)
     )

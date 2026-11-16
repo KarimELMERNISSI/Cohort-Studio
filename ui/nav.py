@@ -129,7 +129,11 @@ PAGES: tuple[PageDef, ...] = (
         # the labels of app_pages.epidemiology.TABS, then those of ui.guidance.measures (an entry, its second choice)
         tabs=(
             ("analysis", ("Analysis",)),
-            ("accuracy", (_DIAGNOSTIC, "Accuracy of a test (ROC)")),
+            ("accuracy", (_DIAGNOSTIC, "Accuracy of a test")),
+            (
+                "accuracy_yes_no",
+                (_DIAGNOSTIC, "Accuracy of a test", "Positive or negative (yes or no)"),
+            ),
             ("measurements", (_DIAGNOSTIC, "Agreement of two measurements")),
             ("raters", (_DIAGNOSTIC, "Agreement of two raters (kappa)")),
             ("paired_number", (_PAIRED, "Paired measurements", "A number (continuous)")),

@@ -20,6 +20,9 @@ supports these reporting guidelines; it does not certify compliance, and it is n
 
 from __future__ import annotations
 
+import dataclasses
+import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from io import BytesIO
@@ -79,6 +82,45 @@ class DossierInput:
     omitted: list[str] = field(default_factory=list)  # stale results left out
 
 
+logger = logging.getLogger(__name__)
+
+# what a result reads when its block, or its writing, failed: the other sections are still written
+NOT_WRITTEN = "This result could not be written in the dossier; the page shows it."
+# the characters XML 1.0 refuses, which python-docx raises on
+_NOT_IN_XML = re.compile(
+    "[" + "".join(map(chr, [*range(0, 9), 11, 12, *range(14, 32), 0xFFFE, 0xFFFF])) + "]"
+)
+
+
+def _text(value: Any) -> str:
+    """A text as a Word document can hold it: the characters XML 1.0 refuses (a vertical tab pasted from a word
+    processor, a NUL of a fixed-width export) become U+FFFD, so that one value of the data cannot stop the dossier."""
+    return _NOT_IN_XML.sub(chr(0xFFFD), str(value))
+
+
+def _writable(value: Any) -> Any:
+    """``value`` with every text it holds as a Word document can hold it (:func:`_text`): the input of the dossier
+    passes through it once, whatever its section (a title, a settings line, a table's headers and cells, a line, a
+    warning, a reference)."""
+    if isinstance(value, str):
+        return _text(value)
+    if isinstance(value, pd.DataFrame):
+        frame = value.rename(columns=lambda name: _text(name) if isinstance(name, str) else name)
+        return frame.map(lambda cell: _text(cell) if isinstance(cell, str) else cell)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.replace(
+            value, **{f.name: _writable(getattr(value, f.name)) for f in dataclasses.fields(value)}
+        )
+    if isinstance(value, dict):
+        return {_writable(key): _writable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_writable(item) for item in value]
+    if isinstance(value, tuple):
+        items = [_writable(item) for item in value]
+        return type(value)(*items) if hasattr(value, "_fields") else tuple(items)
+    return value
+
+
 def _small(paragraph: Any, text: str, *, italic: bool = True, size: float = 9) -> None:
     run = paragraph.add_run(text)
     run.italic = italic
@@ -90,20 +132,55 @@ def _table(doc: Any, frame: pd.DataFrame) -> None:
     table = doc.add_table(rows=1, cols=len(frame.columns))
     table.style = "Table Grid"
     for cell, name in zip(table.rows[0].cells, frame.columns, strict=True):
-        cell.text = str(name)
+        cell.text = _text(name)
         for run in cell.paragraphs[0].runs:
             run.bold = True
     for _, row in frame.iterrows():
         cells = table.add_row().cells
         for cell, value in zip(cells, row, strict=True):
             cell.text = (
-                "" if value is None or (isinstance(value, float) and pd.isna(value)) else str(value)
+                "" if value is None or (isinstance(value, float) and pd.isna(value)) else _text(value)
             )
     for row in table.rows:
         for cell in row.cells:
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
                     run.font.size = Pt(9)
+
+
+def _write_result(doc: Any, result: DossierResult, figure: int) -> int:
+    """One result of section 5: its title, what it was computed on, its tables, lines, figure and notes. Gives back
+    the number of the last figure written."""
+    doc.add_heading(result.title, level=2)
+    if result.settings:
+        _small(doc.add_paragraph(), f"Settings: {result.settings}")
+    _small(doc.add_paragraph(), result.provenance)
+    if result.stale:
+        p = doc.add_paragraph()
+        run = p.add_run(
+            f"Not current: {result.stale}. Kept at the user's request; run the analysis again to update it."
+        )
+        run.bold = True
+    if result.single_imputed:
+        detail = ", ".join(f"{c}: {n:,}" for c, n in result.single_imputed)
+        _small(
+            doc.add_paragraph(),
+            f"Uses values filled by single imputation ({detail}): standard errors are too small.",
+            italic=False,
+        )
+    for caption, frame in result.blocks.tables:
+        if caption:
+            doc.add_paragraph().add_run(caption).bold = True
+        _table(doc, frame)
+    for line in result.blocks.lines:
+        doc.add_paragraph(line)
+    if result.blocks.figure:
+        figure += 1
+        doc.add_picture(BytesIO(result.blocks.figure), width=Cm(13))
+        _small(doc.add_paragraph(), f"Figure {figure}. {result.title}.")
+    for warning in dict.fromkeys(result.blocks.warnings):
+        _small(doc.add_paragraph(), f"Note: {warning}")
+    return figure
 
 
 def _pairs(doc: Any, rows: list[tuple[str, str]]) -> None:
@@ -153,6 +230,7 @@ def _frozen_criteria(flow: ParticipantFlow) -> list[str]:
 
 
 def build_dossier(inp: DossierInput) -> BytesIO:
+    inp = _writable(inp)
     doc = Document()
     normal = doc.styles["Normal"]
     normal.font.name = "Calibri"
@@ -250,36 +328,17 @@ def build_dossier(inp: DossierInput) -> BytesIO:
     if not inp.results:
         doc.add_paragraph("No result was added to the dossier.")
     figure = 1
-    for result in inp.results:
-        doc.add_heading(result.title, level=2)
-        if result.settings:
-            _small(doc.add_paragraph(), f"Settings: {result.settings}")
-        _small(doc.add_paragraph(), result.provenance)
-        if result.stale:
-            p = doc.add_paragraph()
-            run = p.add_run(
-                f"Not current: {result.stale}. Kept at the user's request; run the analysis again to update it."
+    for position, result in enumerate(inp.results, start=1):
+        try:
+            figure = _write_result(doc, result, figure)
+        except Exception as exc:
+            # one result must not stop the download of every section. What it wrote stays (a document does not
+            # take a paragraph back): the fixed line follows it. The type only, never the message (it can hold a
+            # value of the data), and the result's place, never its title (it names columns)
+            logger.warning(
+                "result %d of the dossier could not be written: %s", position, type(exc).__name__
             )
-            run.bold = True
-        if result.single_imputed:
-            detail = ", ".join(f"{c}: {n:,}" for c, n in result.single_imputed)
-            _small(
-                doc.add_paragraph(),
-                f"Uses values filled by single imputation ({detail}): standard errors are too small.",
-                italic=False,
-            )
-        for caption, frame in result.blocks.tables:
-            if caption:
-                doc.add_paragraph().add_run(caption).bold = True
-            _table(doc, frame)
-        for line in result.blocks.lines:
-            doc.add_paragraph(line)
-        if result.blocks.figure:
-            figure += 1
-            doc.add_picture(BytesIO(result.blocks.figure), width=Cm(13))
-            _small(doc.add_paragraph(), f"Figure {figure}. {result.title}.")
-        for warning in dict.fromkeys(result.blocks.warnings):
-            _small(doc.add_paragraph(), f"Note: {warning}")
+            doc.add_paragraph(NOT_WRITTEN)
     if inp.omitted:
         _small(
             doc.add_paragraph(),
@@ -304,4 +363,11 @@ def exits_text(exit_: FlowExit) -> str:
     return f"{exit_.label} (n = {exit_.n:,})" + (f": {reasons}" if reasons else "")
 
 
-__all__ = ["METHOD_REFERENCES", "DossierInput", "DossierResult", "build_dossier", "exits_text"]
+__all__ = [
+    "METHOD_REFERENCES",
+    "NOT_WRITTEN",
+    "DossierInput",
+    "DossierResult",
+    "build_dossier",
+    "exits_text",
+]

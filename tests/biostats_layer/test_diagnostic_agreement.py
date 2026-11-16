@@ -1,15 +1,24 @@
 """Diagnostic accuracy (Wilson, Simel, DeLong, Youden) and Bland-Altman agreement."""
 
+import math
+
 import numpy as np
 import pytest
 from statsmodels.stats.proportion import proportion_confint
 
 from biostats.agreement import bland_altman
-from biostats.diagnostic import confusion_at, delong_auc, diagnostic_accuracy, youden_cutoff
+from biostats.diagnostic import (
+    SERIES,
+    confusion_at,
+    delong_auc,
+    diagnostic_accuracy,
+    youden_cutoff,
+)
 
 
 def test_diagnostic_accuracy_reference_values() -> None:
-    acc = diagnostic_accuracy(tp=90, fp=10, fn=20, tn=80, prevalence=0.10)
+    # predictive values at the share in the data are a series' (the sampling not stated reads none)
+    acc = diagnostic_accuracy(tp=90, fp=10, fn=20, tn=80, prevalence=0.10, sampling=SERIES)
     assert acc.sensitivity == pytest.approx(90 / 110)
     assert acc.specificity == pytest.approx(80 / 90)
     assert acc.ppv == pytest.approx(0.9) and acc.npv == pytest.approx(0.8)
@@ -32,9 +41,14 @@ def test_diagnostic_accuracy_reference_values() -> None:
 
 
 def test_diagnostic_accuracy_zero_cells_are_flagged_not_crashed() -> None:
+    """No false positive: the likelihood ratio has no upper bound, which is not "undefined" (it read None, with no
+    word on what the eight participants without the condition allow)."""
     acc = diagnostic_accuracy(tp=10, fp=0, fn=2, tn=8)
-    assert acc.lr_positive is None and any("undefined" in w for w in acc.warnings)
-    assert acc.dor is not None and any("Haldane" in w for w in acc.warnings)
+    assert acc.lr_positive == math.inf and acc.lr_positive_ci is not None
+    assert acc.lr_positive_ci.lower == pytest.approx(2.4995, abs=5e-5)
+    assert any("LR+ has no upper bound" in w and "at least 2.5 (" in w for w in acc.warnings)
+    assert acc.dor is not None and acc.dor_corrected
+    assert any("Haldane" in w for w in acc.warnings)
 
 
 def test_delong_auc_toy_reference() -> None:

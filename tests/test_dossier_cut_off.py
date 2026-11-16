@@ -55,12 +55,13 @@ def _written(value: dict[str, Any]) -> str:
 
 
 def _measures(value: dict[str, Any]) -> list[str]:
-    ((_, table),) = result_blocks(value).tables
+    # the first table holds the measures; the 2x2 table follows it wherever the measures are written
+    _, table = result_blocks(value).tables[0]
     return list(table["Measure"])
 
 
 def _auc_cell(value: dict[str, Any]) -> str:
-    ((_, table),) = result_blocks(value).tables
+    _, table = result_blocks(value).tables[0]
     return str(table.loc[table["Measure"] == "AUC (DeLong)", "Estimate"].iloc[0])
 
 
@@ -216,3 +217,23 @@ def test_the_direction_s_caution_is_not_copied_beside_a_small_side() -> None:
     said = _written(value)
     assert "below 0.5" not in said and "0.000" not in said
     assert "Fewer than 10 " + THIN.format(side="have the condition") in said
+
+
+def test_a_found_cut_off_held_back_writes_no_note_of_partial_verification() -> None:
+    """The note of partial verification gives the participants on each side of the cut-off ("1 of 1 against 249 of
+    399"): it is written only where the measures at the cut-off are."""
+    frame = _top(1)
+    frame.loc[frame.index[29:179], "ill"] = None  # 150 low scores without the reference standard
+    value = _found(frame)
+    assert value["acc"].tp + value["acc"].fp == 1
+    assert "had the reference standard" in value["verification"]
+    written = _written(value)
+    assert "are not written in the dossier" in written
+    assert "had the reference standard" not in written and "1 of 1" not in written
+    # ten or more called to each side: the note goes with the measures
+    frame = _top(12)
+    frame.loc[frame.index[40:190], "ill"] = None
+    value = _found(frame)
+    assert value["acc"].tp + value["acc"].fp == 12
+    assert "(12 of 12 against 238 of 388)" in value["verification"]
+    assert "(12 of 12 against 238 of 388)" in _written(value)

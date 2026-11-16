@@ -284,7 +284,7 @@ time; each keeps its choices and its result while another is open.
 
 | Question | You choose | What it gives |
 | --- | --- | --- |
-| **Accuracy of a test (ROC)** | the reference standard and the value that means the condition is present; the test or score; whether the condition is more likely when the test is **higher** or **lower**; the cut-off | the ROC curve and its AUC with the DeLong interval; with a cut-off, the 2x2 table, sensitivity and specificity (Wilson intervals), predictive values, likelihood ratios and the diagnostic odds ratio |
+| **Accuracy of a test** | the reference standard and the value that means the condition is present; whether the test's result is **a number** (a score or a marker) or **positive or negative**; for a number, whether the condition is more likely when it is **higher** or **lower**, and the cut-off; for a yes/no test, its column and the value that means a positive test; **how the participants entered the study** | for a score, the ROC curve and its AUC with the DeLong interval; with a cut-off, or for a yes/no test, the 2x2 table, sensitivity and specificity (Wilson intervals), predictive values where the sampling allows, likelihood ratios and the diagnostic odds ratio |
 | **Agreement of two measurements** | two or more numeric columns measuring the same quantity; which analyses; what counts as agreement for the ICC | Bland-Altman mean difference and limits of agreement with their intervals (two columns), and the intraclass correlation, ICC(2,1) absolute agreement or ICC(3,1) consistency, with the Shrout-Fleiss interval; one Run gives both |
 | **Agreement of two raters (kappa)** | the two raters' columns; whether the categories are names or ordered grades, and for grades their order and how a near miss counts | the share put in the same category, Cohen's kappa (weighted, linear or quadratic, for ordered grades) with its interval, and the cross-table |
 
@@ -294,9 +294,45 @@ time; each keeps its choices and its result while another is open.
 - **The direction is asked, not assumed.** For a marker that falls with the condition (a low ejection fraction),
   choose **lower**: the test is then positive *at most* the cut-off. The plan shows the median of the test with and
   without the condition, and warns when the direction chosen contradicts them.
-- **Predictive values** are given at the share with the condition in the data. That share is the prevalence only when
-  participants were taken as they came; under **More options**, type the prevalence where the test will be used to
-  read them there as well.
+- **A yes/no test** (positive or negative, read from a column of two values) is assessed from the 2x2 table of
+  the test against the reference standard, on the rows where both are recorded. The value that means a positive
+  test is offered when one reads so (*Positive*, *Yes*, 1 beside 0, *Detected*), and both values are named in the
+  plan before Run. A yes/no test has one sensitivity and one specificity: no curve, no AUC, no cut-off.
+- **Indeterminate results.** A column with a third value (indeterminate, not done) is not offered. To read the
+  test on its definite results, make that value missing in a copy (Data > Clean). Then read it again with that
+  value counted as positive, and as negative (two more copies): in use, an indeterminate result is acted on one
+  way or the other, so the accuracy without them is higher than the test's (Shinkins et al. 2013, BMJ
+  346:f2778). Report how many there were (STARD item 15).
+- **In the Word dossier** the 2x2 table and the measures of a test are written, small cells included, unless fewer
+  than 10 participants have the condition, or are without it; a cut-off found on the data that calls fewer than 10
+  participants to one side is not written either. A line then says that the page shows them.
+- **Predictive values follow how the participants entered the study.** *As they came* (a series): every
+  participant eligible in a period, or a random sample of them, taken before anyone knew who had the condition; the
+  share with the condition is then the setting's prevalence, and predictive values are read at it. *Sampled apart*
+  (two-gate): a group known to have the condition and a group known not to; that share was set by the sampling,
+  and the result says that sensitivity and specificity may read higher than where the test will be used (clearer
+  cases, healthier participants without the condition; Lijmer et al. 1999). A
+  test of sensitivity 85% and specificity 90%, read on 100 participants with the condition and 100 without, gives
+  a positive predictive value of 89.5%; where 2% have the condition, it is 14.8%. The question starts at *Not
+  stated*, which reads no predictive value at the share in the data. The prevalence where the test will be used
+  (strictly between 0 and 1), typed beside the question, gives them at it whatever the sampling, with an interval
+  carried from the likelihood ratio's (Mercaldo's logit interval), the prevalence taken as known. A prevalence
+  is written with the figures typed (1 in 2,500 reads "0.04%").
+- **At a zero cell** a likelihood ratio is 0, or has no upper bound: the result gives the one bound the data leave
+  (Koopman's score interval), for example "LR- 0, at most 0.142" when none of 30 participants with the condition
+  tested negative (and 24 of 30 without it did). Elsewhere the interval is Simel's, the one published tables give.
+  The diagnostic odds ratio then adds 0.5 to every cell, and says so. When the test calls no one positive, or
+  everyone, there is no likelihood ratio, and no predictive value at a prevalence: the result everyone has says
+  nothing beyond the prevalence.
+- **Partial verification.** When those who tested positive had the reference standard more than 1.25 times as
+  often as those who tested negative (or less than 0.8 times), the plan and the result say so with the counts: if
+  the reference standard followed the test result, sensitivity reads too high and specificity too low when those
+  who tested positive had it more often, and the other way round when those who tested negative did (Begg & Greenes
+  1983). The likelihood ratios and the predictive values at a prevalence given are read from them, and err with
+  them. The predictive values among those who had the reference standard do not, if it followed the test result
+  alone; their share with the condition is then not the prevalence, even in a series. With few participants the
+  result adds that the difference may be chance. When one test result never had the reference standard (biopsies
+  after a positive screen only), sensitivity and specificity cannot be read from the data, and the plan says so.
 - **Kappa** is computed on the participants rated by both, with the same categories on both sides of the table, so
   that the diagonal is agreement even when one rater never uses a category. Numbers are compared by value (2 and
   2.0 are one grade), and so are texts beside a column of numbers ("2.0" against 2: the plan says which writings
@@ -366,8 +402,14 @@ time; each keeps its choices and its result while another is open.
 - **The matched-pairs rank-biserial r** of a signed-rank test is given as a size, without a sign: read the
   direction on the typical change.
 - **The AUC's interval** (DeLong) is cut at 0 and at 1: next to 1 its upper end reads 1.000.
-- **The test or score of *Accuracy of a test*** is a number of three values or more. A test of two values
-  (positive or negative) against a reference standard is not offered in this version.
+- **Accuracy of a test** takes the reference standard as right: where it errs, sensitivity and specificity measure
+  agreement with it. Two tests on the same participants are compared on their pairs, not as two results side by
+  side: *Paired measurements, Yes or no* on the participants with the condition (a criterion) gives the difference
+  in sensitivity, and on those without it the difference in specificity. Samples of clear cases and healthy
+  controls flatter a test (Lijmer et al. 1999). The index test and the reference standard are each to be read
+  without knowing the other's result (STARD items 13a and 13b), and a reference standard that differs by test
+  result (differential verification) cannot be seen from the data. An ordered result in words (negative, equivocal, positive) is not
+  offered: code it as numbers to read it as a score. A 2x2 table from a paper cannot be typed in this version.
 - **The study design is said in each analysis.** The 2x2 panel and its pooled detail share it, the panel's button
   carries it to the stratified analysis, and another outcome starts at *Not stated*. An individually matched
   case-control study needs a conditional analysis (McNemar's test for pairs), not this one.
