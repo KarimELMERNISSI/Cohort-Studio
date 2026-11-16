@@ -25,7 +25,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
     logit interval), the prevalence taken as known. With no false positive among 8 participants without the
     condition, it read "100%" at a prevalence of 2% where the data allow 4.9% to 100%.
   - *A likelihood ratio at a zero cell has the one bound the data leave* (Koopman's score interval, computed by
-    root-finding: the library's own returns complex numbers when a share is 100%). "LR- 0" stood without an
+    root-finding: the library's own is wrong whenever a share is 100%). "LR- 0" stood without an
     interval or a word (now "0, at most 0.142" where 30 of 30 participants with the condition tested positive and
     24 of 30 without it negative); a ratio without an upper bound read "undefined" (now "no upper bound, at least
     2.5"). Simel's log interval stays wherever it has a value.

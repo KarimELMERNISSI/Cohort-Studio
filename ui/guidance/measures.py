@@ -166,8 +166,8 @@ SAMPLING_SENTENCE = {
 }
 # sampled apart, the spectrum of the participants is not the setting's (Lijmer et al. 1999)
 TWO_GATE_SPECTRUM = (
-    "Sampled apart, those with the condition are often clearer cases and those without healthier than where the test "
-    "will be used: sensitivity and specificity may read higher (Lijmer et al. 1999)."
+    "Sensitivity and specificity may read higher than where the test will be used: sampled apart, those with the "
+    "condition are often clearer cases, and those without healthier (Lijmer et al. 1999)."
 )
 SAMPLING_SETTING = {
     SAMPLING_NOT_STATED: "sampling not stated",
@@ -243,8 +243,9 @@ HELP: dict[str, str] = {
     "yes_no_test": "The test's result for each participant, in two values: positive or negative. A column with a "
     "third value (indeterminate, not done) is not listed. To read the test on its definite results, make that value "
     "missing in a copy (Data > Clean). Then read it again with that value counted as positive, and as negative (two "
-    "more copies): the accuracy without them is higher than the test's in use. Report how many there were (STARD "
-    "item 15).",
+    "more copies): the accuracy without them is not the test's in use (counted as positive, specificity can only "
+    "fall; counted as negative, sensitivity can only fall). Report the three readings, and how many there were "
+    "(STARD item 15).",
     "test_positive": "The value of the test that means a positive result.",
     "sampling": "It decides where predictive values can be read. As they came: every participant eligible in a "
     "period, or a random sample of them, taken before anyone knew who had the condition, then given the reference "
@@ -742,7 +743,7 @@ def plan_accuracy(
                     + (
                         # among the rows with the reference standard only: the scores on the other side of the
                         # cut-off never had it
-                        " " + verification_words(unequal)
+                        " " + verification_words(unequal, with_condition=n_pos)
                         if unequal.one_sided
                         else " The right variable, the right unit?"
                     ),
@@ -765,13 +766,23 @@ def plan_accuracy(
                 )
             )
     share = n_pos / (n_pos + n_neg)
+    lacking = None
+    if mode == YOUDEN:
+        tested = pd.to_numeric(df[score], errors="coerce").notna()
+        without_it = int((tested & df[outcome].isna()).sum())
+        lacking = (without_it, int(tested.sum())) if without_it else None
     if mode == FIXED and cutoff is not None and unequal.partial and not unequal.one_sided:
         advice.append(Advice("caution", verification_words(unequal, share)))
     if mode != NO_CUTOFF:
         if sampling == TWO_GATE:
             advice.append(Advice("info", TWO_GATE_SPECTRUM))
         advice.append(
-            Advice("info", predictive_words(share, prevalence, sampling, unequal.partial))
+            Advice(
+                "info",
+                predictive_words(
+                    share, prevalence, sampling, unequal.partial, unequal.one_sided, lacking
+                ),
+            )
         )
     advice += _left_out(df, [outcome, score], len(frame))
     return ModelPlan(rows, tuple(steps), tuple(advice))
@@ -806,21 +817,37 @@ def prevalence_text(prevalence: float) -> str:
 
 
 def predictive_words(
-    share: float, prevalence: float | None, sampling: str, unequal: bool = False
+    share: float,
+    prevalence: float | None,
+    sampling: str,
+    unequal: bool = False,
+    one_sided: bool = False,
+    lacking: tuple[int, int] | None = None,
 ) -> str:
     """Where the predictive values are read, by how the participants entered the study: at the share with the
     condition in the data for a series only (sampled apart, that share was set by the sampling), at the prevalence
     given whatever the sampling. ``unequal``: the reference standard was done unequally by test result; the share
-    among those who had it is then not the setting's prevalence, even in a series."""
+    among those who had it is then not the setting's prevalence, even in a series. The caution of partial
+    verification says so beside this line; where one test result never had the reference standard (``one_sided``)
+    its words do not, and this line does. ``lacking``: for a cut-off found on the data, the rows with the test
+    that lack the reference standard, and the rows with the test; the check is run at the cut-off, which is not
+    known yet, so the share is called a prevalence on that condition only."""
     at = f"{share:.1%}"
     typed = None if prevalence is None else prevalence_text(prevalence)
     if sampling == SERIES:
         also = "" if typed is None else f" They are also read at the prevalence typed ({typed})."
         if unequal:
             return (
-                f"Predictive values are read among those who had the reference standard ({at} with the condition); "
-                "with the reference standard done unequally, that share is not the prevalence of the setting."
+                f"Predictive values are read among those who had the reference standard ({at} with the condition)"
+                + ("; that share is not the prevalence of the setting." if one_sided else ".")
                 + also
+            )
+        if lacking:
+            return (
+                f"Predictive values are read among those who had the reference standard ({at} with the condition); "
+                f"{lacking[0]:,} of {lacking[1]:,} rows with the test lack it: that share is the prevalence of the "
+                "setting only if the reference standard was not done because of the score (the result checks it at "
+                "the cut-off found)." + also
             )
         if typed is None:
             return (
@@ -867,11 +894,15 @@ def _times(ratio: float) -> str:
     return "more than 10 times" if ratio > 10 else f"{ratio:.1f} times"
 
 
-def verification_words(found: Verification, share: float | None = None) -> str:
+def verification_words(
+    found: Verification, share: float | None = None, with_condition: int | None = None
+) -> str:
     """
     The caution of partial verification, with its counts: the reference standard done unequally by test result
     (Begg & Greenes 1983); "" when it was done alike, or when it cannot be read. ``share``: the share with the
-    condition among those who had the reference standard, which is then not the prevalence.
+    condition among those who had the reference standard, which is then not the prevalence. ``with_condition``:
+    how many of them have the condition; where one test result never had the reference standard, it gives the one
+    predictive value that can be read, as a count.
 
     The likelihood ratios and the predictive values at a prevalence given are read from sensitivity and specificity,
     and err with them (a likelihood ratio of 2.90 for a true 8.00); the predictive values among those who had the
@@ -884,21 +915,33 @@ def verification_words(found: Verification, share: float | None = None) -> str:
     negative = f"{found.negative_with_reference:,} of {found.negative:,}"
     if found.one_sided:
         if found.negative_with_reference == 0:
+            can = (
+                "the share with the condition (the positive predictive value) can."
+                if with_condition is None
+                else f"{with_condition:,} of {found.positive_with_reference:,} had the condition: that share (the "
+                "positive predictive value) can be read."
+            )
             return (
                 f"None of the {found.negative:,} who tested negative had the reference standard, against {positive} "
                 "who tested positive: sensitivity and specificity cannot be read from these data (verification "
-                "bias). Among those who tested positive, the share with the condition (the positive predictive "
-                "value) can."
+                f"bias). Among those who tested positive, {can}"
             )
+        can = (
+            "the share without the condition (the negative predictive value) can."
+            if with_condition is None
+            else f"{found.negative_with_reference - with_condition:,} of {found.negative_with_reference:,} did not "
+            "have the condition: that share (the negative predictive value) can be read."
+        )
         return (
             f"None of the {found.positive:,} who tested positive had the reference standard, against {negative} who "
             "tested negative: sensitivity and specificity cannot be read from these data (verification bias). Among "
-            "those who tested negative, the share without the condition (the negative predictive value) can."
+            f"those who tested negative, {can}"
         )
     among = "" if share is None else f" ({share:.1%})"
     after = (
-        " The likelihood ratios and the predictive values at a prevalence given are read from them, and err with "
-        "them. The predictive values among those who had the reference standard do not, if it followed the test "
+        " The likelihood ratios and the predictive values at a prevalence given are read from sensitivity and "
+        "specificity, and err with them. The predictive values among those who had the reference standard do not, "
+        "if it followed the test "
         f"result alone; their share with the condition{among} is then not the prevalence."
     )
     chance = " With so few participants this may be chance." if found.may_be_chance else ""
@@ -964,11 +1007,16 @@ def plan_accuracy_yes_no(
                 ),
                 df[outcome],
             )
+            # with the condition's value chosen: the one predictive value these data give, as a count
+            named = present is not None and category(present) in {category(v) for v in held}
+            with_it = (
+                int((frame[outcome].map(category) == category(present)).sum()) if named else None
+            )
             return _refused(
                 rows,
                 Advice(
                     "violated",
-                    verification_words(unequal)
+                    verification_words(unequal, with_condition=with_it)
                     if chosen
                     else f"{as_code(test)} holds two values, and one only in the rows where the reference standard "
                     "is recorded: the reference standard was done after one test result only, so sensitivity and "
@@ -2206,13 +2254,10 @@ __all__ = [
     "levels_of",
     "look_alikes",
     "measurements",
+    "other_way_words",
     "paired_values",
     "plan_accuracy",
-    "other_way_words",
-    "prevalence_text",
     "plan_accuracy_yes_no",
-    "predictive_words",
-    "verification_words",
     "plan_measurements",
     "plan_one_mean",
     "plan_paired",
@@ -2220,10 +2265,13 @@ __all__ = [
     "plan_raters",
     "plan_share",
     "plan_strata",
+    "predictive_words",
     "present_value",
+    "prevalence_text",
     "rated",
     "rater_categories",
     "share_counts",
     "strata",
     "two_valued",
+    "verification_words",
 ]

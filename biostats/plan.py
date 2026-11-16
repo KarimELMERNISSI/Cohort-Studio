@@ -2127,8 +2127,8 @@ KINDS: dict[str, AnalysisKind] = {
             "Diagnostic accuracy",
             # declared for its record; its runner comes with those of the other remaining kinds. The values of
             # index_form, direction, mode and sampling are the ids of biostats.diagnostic (INDEX_FORMS, DIRECTIONS,
-            # CUTOFF_MODES, SAMPLINGS), held equal by tests/test_accuracy_yes_no.py: that module imports this
-            # one's types, so the two defaults are written here
+            # CUTOFF_MODES, SAMPLINGS), held equal by tests/test_accuracy_yes_no.py: this module reads every
+            # kind's own module inside its functions, never at import, so the two defaults are written here
             roles=("reference", "index"),
             options={
                 "alpha": 0.05,

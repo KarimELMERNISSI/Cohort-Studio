@@ -26,6 +26,7 @@ from app_pages.analysis_diagnostic import accuracy_of, accuracy_settings, accura
 from biostats import plan
 from biostats.diagnostic import (
     CUTOFF_MODES,
+    DELONG,
     DIRECTIONS,
     INDEX_FORMS,
     KOOPMAN,
@@ -283,9 +284,9 @@ def test_the_reference_standard_done_unequally_by_test_result_is_said_with_its_n
         "Those who tested positive had the reference standard 5.0 times as often as those who tested negative (100 "
         "of 100 against 80 of 400). If that followed the test result, sensitivity is overestimated and specificity "
         "underestimated (verification bias). The likelihood ratios and the predictive values at a prevalence given "
-        "are read from them, and err with them. The predictive values among those who had the reference standard "
-        "do not, if it followed the test result alone; their share with the condition (55.6%) is then not the "
-        "prevalence."
+        "are read from sensitivity and specificity, and err with them. The predictive values among those who had "
+        "the reference standard do not, if it followed the test result alone; their share with the condition "
+        "(55.6%) is then not the prevalence."
     )
     alike = verification(called, pd.Series(["Yes"] * 90 + [None] * 10 + ["No"] * 350 + [None] * 50))
     assert not alike.partial and m.verification_words(alike) == ""
@@ -597,6 +598,13 @@ def test_a_reference_standard_done_after_one_test_result_only_is_said_on_both_pa
         "predictive value) can."
     )
     assert m.verification_words(found) == words
+    # with the count of those with the condition, the one predictive value these data give is written as a count
+    ill = int((df["biopsy"] == "Yes").sum())
+    words = words.replace(
+        "the share with the condition (the positive predictive value) can.",
+        f"{ill:,} of {positives:,} had the condition: that share (the positive predictive value) can be read.",
+    )
+    assert m.verification_words(found, with_condition=ill) == words
     refused = m.plan_accuracy_yes_no(df, "biopsy", "Yes", "screen", "Positive", None, SERIES)
     assert not refused.steps and _text(refused) == words
     # before the positive value is chosen, the column is not blamed either
@@ -610,6 +618,7 @@ def test_a_reference_standard_done_after_one_test_result_only_is_said_on_both_pa
     )
     assert words in score and "The right variable, the right unit?" not in score
     assert "the prevalence of its setting" not in score
+    assert "; that share is not the prevalence of the setting." in score
     result = accuracy_of(df, "biopsy", "Yes", "value", m.HIGHER, m.FIXED, 59.0, None, SERIES)
     assert result["verification"] == words
     # mirrored: no one who tested positive had it
@@ -620,6 +629,10 @@ def test_a_reference_standard_done_after_one_test_result_only_is_said_on_both_pa
     assert m.verification_words(mirrored).startswith(
         "None of the 30 who tested positive had the reference standard, against 70 of 70 who tested negative: "
         "sensitivity and specificity cannot be read from these data (verification bias)."
+    )
+    assert m.verification_words(mirrored, with_condition=4).endswith(
+        "Among those who tested negative, 66 of 70 did not have the condition: that share (the negative "
+        "predictive value) can be read."
     )
     # nobody on a side, or nobody with the reference standard: nothing to compare
     assert not verification(pd.Series([True] * 5), pd.Series(["Yes"] * 5)).partial
@@ -641,17 +654,37 @@ def test_under_partial_verification_a_series_does_not_call_its_share_a_prevalenc
     df = _partly_verified()
     said = _text(m.plan_accuracy_yes_no(df, "ill", "Yes", "rapid", "Positive", None, SERIES))
     assert "Predictive values are read among those who had the reference standard (" in said
-    assert "that share is not the prevalence of the setting" in said
     assert "so that share is the prevalence of its setting" not in said
+    # the caution says that this share is no prevalence, once: the line under it does not repeat it
     assert (
-        "The likelihood ratios and the predictive values at a prevalence given are read from them, and err with "
-        "them. The predictive values among those who had the reference standard do not, if it followed the test "
-        "result alone"
+        said.count("is then not the prevalence") == 1
+        and "that share is not the prevalence" not in said
+    )
+    assert (
+        "The likelihood ratios and the predictive values at a prevalence given are read from sensitivity and "
+        "specificity, and err with them. The predictive values among those who had the reference standard do not, "
+        "if it followed the test result alone"
     ) in said
     result = accuracy_yes_no_of(df, "ill", "Yes", "rapid", "Positive", None, SERIES)
     caption = page._predictive_caption(result["acc"], None, page._unequal(result))
     assert caption.startswith("Predictive values among those who had the reference standard (")
     assert "a series" not in caption
+    # one pair of numbers, one name: the rows of the page and of the dossier, and the dossier's line
+    rows = list(page._measure_rows(result["acc"], None, page._unequal(result))["Measure"])
+    assert any(
+        name.startswith("Positive predictive value, among those who had the reference standard (")
+        for name in rows
+    ) and not any("at the share in these data" in name for name in rows)
+    blocks = result_blocks(result)
+    names = list(blocks.tables[0][1]["Measure"])
+    assert any(
+        name.startswith("PPV, among those who had the reference standard (") for name in names
+    )
+    assert not any("at the share in these data" in name for name in names)
+    assert blocks.lines[-1].endswith(
+        "predictive values are read among those who had the reference standard, whose share with the condition "
+        "is not the prevalence."
+    )
     # the caution's reference goes with it, on the page and in the dossier
     assert "Begg CB" in page._methods(result)
     assert any(ref.startswith("Begg CB") for ref in result_blocks(result).references)
@@ -771,8 +804,8 @@ def test_the_sampling_line_of_the_dossier_says_what_was_written() -> None:
     )
     # sampled apart: the spectrum caveat, whatever is read (Lijmer et al. 1999)
     caveat = (
-        " Sampled apart, those with the condition are often clearer cases and those without healthier than where "
-        "the test will be used: sensitivity and specificity may read higher."
+        " Sensitivity and specificity may read higher than where the test will be used: sampled apart, those with "
+        "the condition are often clearer cases, and those without healthier."
     )
     assert sampling_line(TWO_GATE, 0.02) == (
         "Participants with and without the condition were sampled apart (two-gate): predictive values are read at "
@@ -838,8 +871,9 @@ def test_a_zero_cell_s_bound_is_written_one_way_and_its_method_named() -> None:
 def test_the_methods_a_record_can_hold_are_these_words() -> None:
     """The record holds the method of each interval by its words: a rewording changes what a record says of the same
     numbers, and moves the record's version."""
-    methods = (WILSON, SIMEL, KOOPMAN, WOOLF, WOOLF_CORRECTED, MERCALDO, SCORE_CARRIED)
+    methods = (DELONG, WILSON, SIMEL, KOOPMAN, WOOLF, WOOLF_CORRECTED, MERCALDO, SCORE_CARRIED)
     assert methods == (
+        "DeLong",
         "Wilson",
         "Simel log",
         "Koopman score",
@@ -849,8 +883,13 @@ def test_the_methods_a_record_can_hold_are_these_words() -> None:
         "from the score bound of the likelihood ratio",
     )
     held: set[str] = set()
-    for cells in ((25, 40, 5, 858), (30, 0, 6, 60), (30, 6, 0, 24)):
-        record = plan.record("diagnostic", _yes_no(cells, SERIES, 0.02))
+    results = [
+        _yes_no(cells, SERIES, 0.02) for cells in ((25, 40, 5, 858), (30, 0, 6, 60), (30, 6, 0, 24))
+    ]
+    # a score's record holds the method of its AUC's interval too
+    results.append(accuracy_of(_cohort(), "ill", "Yes", "score", m.HIGHER, m.NO_CUTOFF, None, None))
+    for result in results:
+        record = plan.record("diagnostic", result)
         assert record is not None
         held |= {str(n.value) for part in record.parts for n in part.numbers if n.name == "method"}
     assert held == set(methods)
@@ -1089,3 +1128,89 @@ def test_a_character_a_word_document_refuses_does_not_stop_the_dossier(
         and f"positive when Pos{shown}itive{shown}" in text
     )
     assert "Sensitivity" in text and f"A made-up{shown} study" in text
+
+
+# ----------------------------------------------------------------------------- what the second reads found
+
+
+def test_a_cut_off_found_on_the_data_calls_the_share_a_prevalence_on_a_condition() -> None:
+    """Whether the reference standard followed the test is checked at the cut-off, which the plan of a cut-off found
+    on the data does not know yet. With rows that lack the reference standard, the plan called the share among the
+    others "the prevalence of its setting" (44.4% for a made-up 30%)."""
+    df = _partly_verified()
+    lacking = int(df["ill"].isna().sum())
+    said = _text(m.plan_accuracy(df, "ill", "Yes", "score", m.HIGHER, m.YOUDEN, None, None, SERIES))
+    assert (
+        f"{lacking:,} of {len(df):,} rows with the test lack it: that share is the prevalence of the setting only "
+        "if the reference standard was not done because of the score (the result checks it at the cut-off found)."
+    ) in said
+    assert "so that share is the prevalence of its setting" not in said
+    whole = _text(
+        m.plan_accuracy(_cohort(600), "ill", "Yes", "score", m.HIGHER, m.YOUDEN, None, None, SERIES)
+    )
+    assert "a series, so that share is the prevalence of its setting" in whole
+
+
+def test_a_share_next_to_all_is_written_one_way_on_the_page_and_in_the_dossier() -> None:
+    """2,499 of 2,500 read "100.0%" in the headline and "more than 99.9%" in the table of every measure; at a
+    prevalence of 1 in 2,500 the dossier wrote "NPV | 1 | 1 to 1"; at 1 in 100,000 the page wrote "more than 99.999%
+    (95% CI 100.000% to 100.000%)"."""
+    metric = page._share_metric("Sensitivity", 2499 / 2500, None, 2499, 2500)
+    assert (metric.value, metric.caption) == ("more than 99.9%", "2,499 of 2,500")
+    usual = diagnostic_accuracy(85, 10, 15, 90)
+    metric = page._share_metric("Sensitivity", usual.sensitivity, usual.sensitivity_ci, 85, 100)
+    assert (metric.value, metric.caption) == ("85.0%", "85 of 100 · 95% CI 76.7% to 90.7%")
+    rare = diagnostic_accuracy(48, 3, 2, 947, prevalence=0.00001, sampling=TWO_GATE)
+    estimate, bounds = page._share_parts(rare.npv_at_prevalence, rare.npv_at_prevalence_ci)
+    lower, upper = bounds.split(" to ")
+    # the decimals that tell the two bounds apart; the share itself is never written as all
+    assert lower != upper and not estimate.startswith("100")
+    # the dossier: the decimals that tell a share from 1, and its bounds from each other
+    measures = result_blocks(_yes_no((85, 10, 15, 90), TWO_GATE, 0.0004)).tables[0][1]
+    measures = measures.set_index("Measure")
+    at = measures.loc["NPV, at a prevalence of 0.04%"]
+    lower, upper = (float(end) for end in at["95% CI"].split(" to "))
+    assert 0 < lower < float(at["Estimate"]) < upper < 1
+    # an ordinary share keeps its three significant figures
+    assert measures.loc["Sensitivity"].tolist() == ["0.85", "0.767 to 0.907"]
+
+
+def test_a_bound_in_a_caution_is_written_as_the_table_writes_it_at_any_size() -> None:
+    """A perfect test in 5,000 + 5,000 participants: "at least 1.3e+03" stood over the table's "at least 1,303"."""
+    import re
+
+    perfect = diagnostic_accuracy(5000, 0, 0, 5000)
+    said = " ".join(perfect.warnings)
+    rows = page._measure_rows(perfect, None).set_index("Measure")
+    least = rows.loc["Positive likelihood ratio (LR+)", "95% CI"].removeprefix("at least ")
+    most = rows.loc["Negative likelihood ratio (LR-)", "95% CI"].removeprefix("at most ")
+    assert "," in least and f"it is at least {least} (95% interval)" in said
+    assert f"it may be as large as {most} (95% interval)" in said
+    assert not re.search(r"\de[+-]\d", said)  # no exponent
+
+
+def test_a_dataclass_that_computes_a_field_passes_through_the_writable_text() -> None:
+    """Every text of the dossier's input is cleaned by rebuilding its dataclasses: a field a class computes for
+    itself was handed back to its constructor, which refuses it, before any guard."""
+    import dataclasses
+
+    from manage.dossier import _writable
+
+    @dataclasses.dataclass
+    class Holder:
+        text: str
+        length: int = dataclasses.field(init=False)
+
+        def __post_init__(self) -> None:
+            self.length = len(self.text)
+
+    cleaned = _writable([Holder("a" + chr(11) + "b")])[0]
+    assert cleaned.text == "a" + chr(0xFFFD) + "b" and cleaned.length == 3
+
+
+def test_the_caveat_of_a_sample_taken_apart_is_one_sentence_on_the_page_and_in_the_dossier() -> (
+    None
+):
+    from manage.report_tables import TWO_GATE_SPECTRUM
+
+    assert m.TWO_GATE_SPECTRUM == TWO_GATE_SPECTRUM.removesuffix(".") + " (Lijmer et al. 1999)."

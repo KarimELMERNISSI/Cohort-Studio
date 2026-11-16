@@ -109,7 +109,12 @@ def _writable(value: Any) -> Any:
         return frame.map(lambda cell: _text(cell) if isinstance(cell, str) else cell)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return dataclasses.replace(
-            value, **{f.name: _writable(getattr(value, f.name)) for f in dataclasses.fields(value)}
+            value,
+            **{
+                f.name: _writable(getattr(value, f.name))
+                for f in dataclasses.fields(value)
+                if f.init  # a field the class computes for itself is not its constructor's to take
+            },
         )
     if isinstance(value, dict):
         return {_writable(key): _writable(item) for key, item in value.items()}

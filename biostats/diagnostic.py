@@ -57,6 +57,7 @@ DIRECTIONS = (HIGHER, LOWER)
 WILSON = "Wilson"
 SIMEL = "Simel log"
 KOOPMAN = "Koopman score"
+DELONG = "DeLong"
 WOOLF = "Woolf log"
 WOOLF_CORRECTED = "Woolf log, Haldane-Anscombe 0.5 added"
 MERCALDO = "logit (Mercaldo)"
@@ -116,9 +117,12 @@ def score_ratio_interval(
 
 
 def _short(value: float) -> str:
-    """A bound inside a sentence, with the three significant figures of the table of every measure ("as large as
-    0.13" stood beside "at most 0.126")."""
-    return f"{value:.3g}"
+    """A bound inside a sentence, as the table of every measure writes it: three significant figures, the whole part
+    kept and grouped, no exponent ("as large as 0.13" stood beside "at most 0.126", and "at least 1.3e+03" beside
+    "1,303")."""
+    if abs(value) >= 1000:
+        return f"{value:,.0f}"
+    return np.format_float_positional(value, precision=3, unique=False, fractional=False, trim="-")
 
 
 def _likelihood_ratio(
@@ -494,7 +498,7 @@ def delong_auc(y_true: Sequence, y_score: Sequence, *, pos_label=None, alpha: fl
         lower=float(max(0.0, auc - z * se)),
         upper=float(min(1.0, auc + z * se)),
         level=1 - alpha,
-        method="DeLong",
+        method=DELONG,
     )
     return {
         "auc": auc,
@@ -630,6 +634,7 @@ def youden_cutoff(
 
 __all__ = [
     "CUTOFF_MODES",
+    "DELONG",
     "DIRECTIONS",
     "FIXED_CUTOFF",
     "FOUND_CUTOFF",

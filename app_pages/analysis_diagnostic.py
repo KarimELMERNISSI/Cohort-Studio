@@ -247,7 +247,7 @@ def accuracy_of(
         "verified": verified,
         "verification": ""
         if verified is None or acc is None
-        else m.verification_words(verified, acc.prevalence_observed),
+        else m.verification_words(verified, acc.prevalence_observed, acc.tp + acc.fn),
         "auc": auc,
         "pairs": _pairs(with_it, values),
         "cautions": cautions,
@@ -398,7 +398,7 @@ def accuracy_yes_no_of(
     verified = verification((df[test] == positive).where(df[test].notna()), df[outcome])
     return {
         "verified": verified,
-        "verification": m.verification_words(verified, acc.prevalence_observed),
+        "verification": m.verification_words(verified, acc.prevalence_observed, acc.tp + acc.fn),
         "auc": None,
         "pairs": None,
         "cautions": cautions,
@@ -471,9 +471,6 @@ def _sampling_and_prevalence(outcome: str | None, share: float | None) -> tuple[
         )
         or SAMPLING_NOT_STATED
     )
-    # the share in the data is a prevalence for a series only: beside another answer it is the share that answer
-    # has just set aside, and typing it back would read the predictive values withheld
-    hint = f" (in these data: {share:.1%})" if share is not None and sampling == SERIES else ""
     prevalence = side.number_input(
         "Prevalence where the test will be used (optional)",
         min_value=0.0,
@@ -481,11 +478,15 @@ def _sampling_and_prevalence(outcome: str | None, share: float | None) -> tuple[
         value=None,
         step=0.01,
         format="%g",  # as typed: two decimals showed 1 in 2,500 as "0.00"
-        placeholder="for example 0.02" + hint,
+        placeholder="for example 0.02",
         key="diag_prev",
         persist_state="page",
         help=HELP["prevalence"],
     )
+    # the share in the data is a prevalence for a series only: beside another answer it is the share that answer
+    # has just set aside, and typing it back would read the predictive values withheld
+    if share is not None and sampling == SERIES:
+        side.caption(f"In these data: {share:.1%} (a series).")
     return sampling, prevalence
 
 
@@ -676,11 +677,17 @@ def _predictive_caption(acc: Any, prevalence: float | None, unequal: bool = Fals
     return f"{text} {at}".strip()
 
 
-def _measure_rows(acc: Any, prevalence: float | None) -> pd.DataFrame:
+def _measure_rows(acc: Any, prevalence: float | None, unequal: bool = False) -> pd.DataFrame:
     """Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
-    in the data and the share classified correctly for a series only)."""
+    in the data and the share classified correctly for a series only). ``unequal``: the reference standard was done
+    unequally by test result, and the rows name that share as the caption does."""
     share = layout.percent(acc.prevalence_observed)
     at_share = reads_share(acc.sampling)
+    where = (
+        f"among those who had the reference standard ({share} with the condition)"
+        if unequal
+        else f"at the share in these data ({share})"
+    )
     rows: list[tuple[str, Any, Any]] = [
         ("Sensitivity", acc.sensitivity, acc.sensitivity_ci),
         ("Specificity", acc.specificity, acc.specificity_ci),
@@ -688,12 +695,12 @@ def _measure_rows(acc: Any, prevalence: float | None) -> pd.DataFrame:
     if at_share:
         rows += [
             (
-                f"Positive predictive value, at the share in these data ({share})",
+                f"Positive predictive value, {where}",
                 acc.ppv,
                 acc.ppv_ci,
             ),
             (
-                f"Negative predictive value, at the share in these data ({share})",
+                f"Negative predictive value, {where}",
                 acc.npv,
                 acc.npv_ci,
             ),
@@ -783,16 +790,8 @@ def _show_accuracy_yes_no(res: dict[str, Any]) -> None:
     with_it, without = acc.tp + acc.fn, acc.fp + acc.tn
     layout.headline(
         [
-            Metric(
-                "Sensitivity",
-                layout.percent(acc.sensitivity),
-                f"{acc.tp:,} of {with_it:,} · {layout.interval(acc.sensitivity_ci, scale=100, unit='%')}",
-            ),
-            Metric(
-                "Specificity",
-                layout.percent(acc.specificity),
-                f"{acc.tn:,} of {without:,} · {layout.interval(acc.specificity_ci, scale=100, unit='%')}",
-            ),
+            _share_metric("Sensitivity", acc.sensitivity, acc.sensitivity_ci, acc.tp, with_it),
+            _share_metric("Specificity", acc.specificity, acc.specificity_ci, acc.tn, without),
             Metric(
                 "Participants",
                 f"{res['n']:,}",
@@ -822,7 +821,11 @@ def _show_accuracy_yes_no(res: dict[str, Any]) -> None:
         st.caption(said)
     layout.warn(cautions)
     with st.expander("Details: every measure"):
-        st.dataframe(_measure_rows(acc, res.get("prevalence")), hide_index=True, width="stretch")
+        st.dataframe(
+            _measure_rows(acc, res.get("prevalence"), _unequal(res)),
+            hide_index=True,
+            width="stretch",
+        )
         st.caption(
             _intervals(acc, res.get("prevalence"))
             + " A yes/no test has one point on the ROC plane: its area would be (sensitivity + specificity) / 2, "
@@ -989,18 +992,17 @@ def _accuracy_score(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
 def _share_parts(value: Any, ci: Any) -> tuple[str, str]:
     """
     A share and the bounds of its interval, as percentages: one decimal ("40.8%", "34.5% to 47.6%"); "" for an
-    interval without bounds. Bounds that one decimal writes alike take three, and the share with them ("100.0% (95%
-    CI 100.0% to 100.0%)" stood for a negative predictive value at a prevalence of 1 in 2,500). A share below 100%
-    is never written "100.0%" nor one above 0 "0.0%" (the rule of "more than 99 of 100 pairs").
+    interval without bounds. Bounds that one decimal writes alike take the decimals that tell them apart (three to
+    six), and the share with them ("100.0% (95% CI 100.0% to 100.0%)" stood for a negative predictive value at a
+    prevalence of 1 in 2,500). A share below 100% is never written "100.0%" nor one above 0 "0.0%" (the rule of
+    "more than 99 of 100 pairs").
     """
     bounded = ci is not None and layout.known(ci.lower) and layout.known(ci.upper)
     places = 1
-    if (
-        bounded
-        and ci.lower != ci.upper
-        and layout.fixed(100 * ci.lower, 1) == layout.fixed(100 * ci.upper, 1)
-    ):
-        places = 3
+    if bounded and ci.lower != ci.upper:
+        for places in (1, 3, 4, 5, 6):
+            if layout.fixed(100 * ci.lower, places) != layout.fixed(100 * ci.upper, places):
+                break
     if not layout.known(value):
         estimate = "n/a"
     else:
@@ -1016,6 +1018,15 @@ def _share_parts(value: Any, ci: Any) -> tuple[str, str]:
         else ""
     )
     return estimate, bounds
+
+
+def _share_metric(label: str, value: Any, ci: Any, count: int, of: int) -> Metric:
+    """A share of the headline, with its count and its interval, written as the table of every measure writes it
+    (2,499 of 2,500 read "100.0%" above and "more than 99.9%" in the table)."""
+    estimate, bounds = _share_parts(value, ci)
+    return Metric(
+        label, estimate, f"{count:,} of {of:,}" + (f" · 95% CI {bounds}" if bounds else "")
+    )
 
 
 def _share(value: Any, ci: Any) -> str:
@@ -1080,17 +1091,11 @@ def _show_accuracy(res: dict[str, Any]) -> None:
         found = res["mode"] == m.YOUDEN
         origin = "found on these data: optimistic" if found else "fixed beforehand"
         metrics += [
-            Metric(
-                "Sensitivity",
-                layout.percent(acc.sensitivity),
-                f"{acc.tp:,} of {acc.tp + acc.fn:,} · "
-                f"{layout.interval(acc.sensitivity_ci, scale=100, unit='%')}",
+            _share_metric(
+                "Sensitivity", acc.sensitivity, acc.sensitivity_ci, acc.tp, acc.tp + acc.fn
             ),
-            Metric(
-                "Specificity",
-                layout.percent(acc.specificity),
-                f"{acc.tn:,} of {acc.tn + acc.fp:,} · "
-                f"{layout.interval(acc.specificity_ci, scale=100, unit='%')}",
+            _share_metric(
+                "Specificity", acc.specificity, acc.specificity_ci, acc.tn, acc.tn + acc.fp
             ),
             Metric(
                 "Cut-off",
@@ -1131,7 +1136,9 @@ def _show_accuracy(res: dict[str, Any]) -> None:
     if acc is not None:
         with st.expander("Details: every measure"):
             st.dataframe(
-                _measure_rows(acc, res.get("prevalence")), hide_index=True, width="stretch"
+                _measure_rows(acc, res.get("prevalence"), _unequal(res)),
+                hide_index=True,
+                width="stretch",
             )
             st.caption(_intervals(acc, res.get("prevalence")))
             if res["mode"] == m.YOUDEN and youden:
@@ -1751,6 +1758,7 @@ def run_diagnostic_accuracy(df: pd.DataFrame, analyzer: Any, *, mi: Any = None) 
 
 
 __all__ = [
+    "FORM_SETTING",
     "QUESTION_KEY",
     "accuracy_of",
     "accuracy_settings",

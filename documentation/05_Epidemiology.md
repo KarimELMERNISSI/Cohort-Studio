@@ -301,8 +301,9 @@ time; each keeps its choices and its result while another is open.
 - **Indeterminate results.** A column with a third value (indeterminate, not done) is not offered. To read the
   test on its definite results, make that value missing in a copy (Data > Clean). Then read it again with that
   value counted as positive, and as negative (two more copies): in use, an indeterminate result is acted on one
-  way or the other, so the accuracy without them is higher than the test's (Shinkins et al. 2013, BMJ
-  346:f2778). Report how many there were (STARD item 15).
+  way or the other, so the accuracy without them is not the test's. Counted as positive, specificity can only
+  fall; counted as negative, sensitivity can only fall. Report the three readings, and how many indeterminate
+  results there were (Shinkins et al. 2013, BMJ 346:f2778; STARD item 15).
 - **In the Word dossier** the 2x2 table and the measures of a test are written, small cells included, unless fewer
   than 10 participants have the condition, or are without it; a cut-off found on the data that calls fewer than 10
   participants to one side is not written either. A line then says that the page shows them.

@@ -534,16 +534,19 @@ SAMPLING_WORDS: dict[str, str] = {
 }
 # sampled apart, the spectrum of the participants is not the setting's (Lijmer et al. 1999)
 TWO_GATE_SPECTRUM = (
-    "Sampled apart, those with the condition are often clearer cases and those without healthier than where the "
-    "test will be used: sensitivity and specificity may read higher."
+    "Sensitivity and specificity may read higher than where the test will be used: sampled apart, those with the "
+    "condition are often clearer cases, and those without healthier."
 )
 
 
-def sampling_line(sampling: str, prevalence: Any = None, *, read: bool = True) -> str:
+def sampling_line(
+    sampling: str, prevalence: Any = None, *, read: bool = True, unequal: bool = False
+) -> str:
     """How the participants entered the study, and where the predictive values of the block are read: said by what
     was written (a line that sent the reader to "a prevalence given" stood over a table without one). ``read``:
     whether the predictive values at the prevalence given have a value (a test that calls everyone, or no one,
-    positive has none)."""
+    positive has none). ``unequal``: the reference standard was done unequally by test result; a series' share with
+    the condition is then that of those who had it, and no prevalence."""
     from biostats.diagnostic import SERIES, TWO_GATE
 
     stem = SAMPLING_WORDS[sampling]
@@ -551,6 +554,11 @@ def sampling_line(sampling: str, prevalence: Any = None, *, read: bool = True) -
     caveat = f" {TWO_GATE_SPECTRUM}" if sampling == TWO_GATE else ""
     if sampling == SERIES:
         also = "" if given is None else f", and at the prevalence given ({given})"
+        if unequal:
+            return (
+                f"{stem}: predictive values are read among those who had the reference standard, whose share with "
+                f"the condition is not the prevalence{also}."
+            )
         return f"{stem}: predictive values are read at their share with the condition{also}."
     if given is None:
         asked = "" if prevalence is not None else ", none was asked at a prevalence"
@@ -582,6 +590,33 @@ def _bounds(ci: Any) -> str:
     ):
         return ""
     return _ci(ci)
+
+
+def _share_row(name: str, value: Any, ci: Any) -> tuple[str, str, str]:
+    """A share's row: three significant figures, and the decimals that tell a share from 0 and from 1, and its two
+    bounds from each other ("1 | 1 to 1" stood for a negative predictive value of 99.993%, 99.989% to 99.996%)."""
+    bounds = _bounds(ci)
+    try:
+        numbers = [float(value), *((float(ci.lower), float(ci.upper)) if bounds else ())]
+    except TypeError, ValueError:
+        return name, _num(value), bounds
+    if not all(math.isfinite(number) for number in numbers):
+        return name, _num(value), bounds
+
+    def clear(written: list[str]) -> bool:
+        inside = all(
+            0 < float(text) < 1
+            for text, number in zip(written, numbers, strict=True)
+            if 0 < number < 1
+        )
+        apart = len(numbers) < 3 or numbers[1] == numbers[2] or written[1] != written[2]
+        return inside and apart
+
+    written, places = [_num(number) for number in numbers], 3
+    while not clear(written) and places < 8:
+        places += 1
+        written = [f"{number:.{places}f}" for number in numbers]
+    return name, written[0], f"{written[1]} to {written[2]}" if bounds else ""
 
 
 def _ratio_row(name: str, value: Any, ci: Any) -> tuple[str, str, str]:
@@ -630,29 +665,37 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
         )
     written = acc is not None and not held_back
     sampling = getattr(acc, "sampling", "") if acc is not None else ""
+    # the reference standard done unequally by test result: the share with the condition is then that of those who
+    # had it, and the rows and the sampling line name it so
+    unequal = bool(getattr(value.get("verified"), "partial", False))
     if written:
         share = f"{_num(100 * acc.prevalence_observed)}%"
         rows += [
-            ("Sensitivity", _num(acc.sensitivity), _ci(acc.sensitivity_ci)),
-            ("Specificity", _num(acc.specificity), _ci(acc.specificity_ci)),
+            _share_row("Sensitivity", acc.sensitivity, acc.sensitivity_ci),
+            _share_row("Specificity", acc.specificity, acc.specificity_ci),
         ]
         if reads_share(sampling):  # for a series only: sampled apart, that share is the sampling's
+            where = (
+                f"among those who had the reference standard ({share} with the condition)"
+                if unequal
+                else f"at the share in these data ({share})"
+            )
             rows += [
-                (f"PPV, at the share in these data ({share})", _num(acc.ppv), _bounds(acc.ppv_ci)),
-                (f"NPV, at the share in these data ({share})", _num(acc.npv), _bounds(acc.npv_ci)),
+                _share_row(f"PPV, {where}", acc.ppv, acc.ppv_ci),
+                _share_row(f"NPV, {where}", acc.npv, acc.npv_ci),
             ]
         if value.get("prevalence") is not None and acc.ppv_at_prevalence is not None:
             typed = f"{_num(100 * float(value['prevalence']))}%"
             rows += [
-                (
+                _share_row(
                     f"PPV, at a prevalence of {typed}",
-                    _num(acc.ppv_at_prevalence),
-                    _bounds(getattr(acc, "ppv_at_prevalence_ci", None)),
+                    acc.ppv_at_prevalence,
+                    getattr(acc, "ppv_at_prevalence_ci", None),
                 ),
-                (
+                _share_row(
                     f"NPV, at a prevalence of {typed}",
-                    _num(acc.npv_at_prevalence),
-                    _bounds(getattr(acc, "npv_at_prevalence_ci", None)),
+                    acc.npv_at_prevalence,
+                    getattr(acc, "npv_at_prevalence_ci", None),
                 ),
             ]
         rows += [
@@ -716,7 +759,10 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
         if sampling in SAMPLING_WORDS:
             blocks.lines.append(
                 sampling_line(
-                    sampling, value.get("prevalence"), read=acc.ppv_at_prevalence is not None
+                    sampling,
+                    value.get("prevalence"),
+                    read=acc.ppv_at_prevalence is not None,
+                    unequal=unequal,
                 )
             )
     youden = value.get("youden") or {}
@@ -1022,6 +1068,7 @@ def result_blocks(value: Any) -> ResultBlocks:
 __all__ = [
     "DOSSIER_MIN_N",
     "SAMPLING_WORDS",
+    "TWO_GATE_SPECTRUM",
     "ResultBlocks",
     "dossier_min_n",
     "km_png",
