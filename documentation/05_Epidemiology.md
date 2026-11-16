@@ -306,7 +306,9 @@ time; each keeps its choices and its result while another is open.
   results there were (Shinkins et al. 2013, BMJ 346:f2778; STARD item 15).
 - **In the Word dossier** the 2x2 table and the measures of a test are written, small cells included, unless fewer
   than 10 participants have the condition, or are without it; a cut-off found on the data that calls fewer than 10
-  participants to one side is not written either. A line then says that the page shows them.
+  participants to one side is not written either. A line then says that the page shows them. A cut-off typed
+  beforehand that calls fewer than 10 participants to one side is written with its table and its measures, without
+  its value: typed among the largest scores, it is one of theirs.
 - **Predictive values follow how the participants entered the study.** *As they came* (a series): every
   participant eligible in a period, or a random sample of them, taken before anyone knew who had the condition; the
   share with the condition is then the setting's prevalence, and predictive values are read at it. *Sampled apart*

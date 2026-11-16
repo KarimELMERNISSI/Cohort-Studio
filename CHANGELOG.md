@@ -6,6 +6,15 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### The study dossier: a typed cut-off that calls few participants is written without its value
+
+- **A cut-off typed beforehand that calls fewer than 10 participants to one side** is written in the Word dossier
+  with its 2x2 table and its measures, and no longer with its value: typed at the largest score of 400
+  participants, "3,987" was that participant's score, in the result's title ("positive at least 3,987"), in the
+  table's row and, as "3987", in the settings line. The three now read "a cut-off fixed beforehand, not written: it
+  calls fewer than 10 participants positive", "Test positive" and "not written". A cut-off that calls 10 or more
+  to each side is written as before, and so is a yes/no test, whose positive value is a code of the data.
+
 ### Accuracy of a test: a yes/no test, and predictive values by the sampling
 
 - **A test whose result is already positive or negative can be assessed** (*Accuracy of a test*, which drops

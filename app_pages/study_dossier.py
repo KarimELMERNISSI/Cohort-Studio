@@ -246,7 +246,7 @@ def finish_input(parts: dict[str, Any], *, title: str, author: str):
     """The DossierInput from the session parts: result tables, figures and references (no session needed)."""
     from manage.dossier import METHOD_REFERENCES, NOT_WRITTEN, DossierInput, DossierResult
     from manage.flow_figure import flow_png
-    from manage.report_tables import ResultBlocks, result_blocks
+    from manage.report_tables import ResultBlocks, result_blocks, settings_written
 
     results = []
     references: list[str] = [METHOD_REFERENCES["strobe"]]
@@ -266,7 +266,7 @@ def finish_input(parts: dict[str, Any], *, title: str, author: str):
         results.append(
             DossierResult(
                 title=item.title,
-                settings=item.settings,
+                settings=settings_written(item.settings, blocks),
                 provenance=item.stamp.caption,
                 blocks=blocks,
                 stale=None if status == CURRENT else _stale_text(status),

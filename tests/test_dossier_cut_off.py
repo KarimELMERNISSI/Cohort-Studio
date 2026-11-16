@@ -147,14 +147,29 @@ def test_a_cut_off_that_calls_few_participants_negative_is_not_written_either() 
 
 
 def test_a_cut_off_typed_beforehand_is_written_with_its_measures() -> None:
-    """A cut-off fixed before the analysis is no participant's value: it is written, and so are its measures, even
-    when it calls two participants positive."""
+    """A cut-off fixed before the analysis is written with its measures, even when it calls two participants
+    positive: its measures and its table then, not its value (typed among the largest scores, it is one of
+    theirs)."""
+    frame = _top(12)
+    cut = float(frame["score"].iloc[-12])
+    value = _typed(frame, cut)
+    assert value["acc"].tp + value["acc"].fp == 12
+    blocks = result_blocks(value)
+    assert "Sensitivity" in _measures(value) and not blocks.held_settings
+    assert blocks.tables[0][0].endswith(f"(positive at least {cut:,.0f})")
+    assert blocks.tables[1][1].iloc[0, 0] == f"Test positive (at least {cut:,.0f})"
     frame = _top(2)
     cut = float(frame["score"].iloc[-2])
     value = _typed(frame, cut)
     assert value["acc"].tp + value["acc"].fp == 2
-    assert "Sensitivity" in _measures(value)
-    assert result_blocks(value).tables[0][0].endswith(f"(positive at least {cut:,.0f})")
+    blocks = result_blocks(value)
+    assert "Sensitivity" in _measures(value) and len(blocks.tables) == 2
+    assert blocks.tables[0][0].endswith(
+        "(a cut-off fixed beforehand, not written: it calls fewer than 10 participants positive)"
+    )
+    assert blocks.tables[1][1].iloc[0].tolist() == ["Test positive", 2, 0, 2]
+    assert blocks.held_settings == (f"{cut:g}",)
+    assert f"{cut:,.0f}" not in _written(value) and f"{cut:g}" not in _written(value)
 
 
 def test_a_result_kept_before_its_range_s_ends_were_counted_writes_no_range() -> None:
@@ -201,11 +216,21 @@ def test_a_typed_cut_off_beside_a_small_side_is_written_without_its_measures() -
     """The cut-off typed beforehand is no participant's value; sensitivity at it, with three participants with the
     condition, says which of them it calls positive."""
     frame = _top(2, ill=3)
-    cut = float(frame["score"].iloc[-2])
+    cut = float(
+        frame["score"].iloc[200]
+    )  # in the middle of the scores: it calls 200 participants positive
     value = _typed(frame, cut)
     assert _measures(value) == ["AUC (DeLong)"] and _auc_cell(value) == "not shown: fewer than 10"
     assert result_blocks(value).tables[0][0].endswith(f"(positive at least {cut:,.0f})")
     assert "Sensitivity" not in _written(value)
+    # typed at the second-largest score, it calls two participants positive: its value is not written either
+    cut = float(frame["score"].iloc[-2])
+    value = _typed(frame, cut)
+    said = _written(value)
+    assert _measures(value) == ["AUC (DeLong)"] and "Sensitivity" not in said
+    assert "a cut-off fixed beforehand, not written" in said
+    assert f"{cut:,.0f}" not in said and f"{cut:g}" not in said
+    assert result_blocks(value).held_settings == (f"{cut:g}",)
 
 
 def test_the_direction_s_caution_is_not_copied_beside_a_small_side() -> None:
@@ -237,3 +262,89 @@ def test_a_found_cut_off_held_back_writes_no_note_of_partial_verification() -> N
     assert value["acc"].tp + value["acc"].fp == 12
     assert "(12 of 12 against 238 of 388)" in value["verification"]
     assert "(12 of 12 against 238 of 388)" in _written(value)
+
+
+def _document(value: dict[str, Any], settings: str) -> str:
+    """The whole Word dossier of one kept result, read back: its paragraphs and the cells of its tables."""
+    from types import SimpleNamespace
+
+    from docx import Document
+
+    from app_pages import study_dossier
+    from core.attrition import FlowBox, ParticipantFlow
+    from manage.dossier import build_dossier
+    from ui.results import CURRENT
+
+    item = SimpleNamespace(
+        key="diagnostic",
+        value=value,
+        title="Diagnostic accuracy",
+        settings=settings,
+        stamp=SimpleNamespace(caption="computed on made-up rows", single_imputed=()),
+    )
+    parts = {
+        # no figure of the flow: the test reads the text
+        "flow": None,
+        "kept": [(item, CURRENT)],
+        "omitted": [],
+        "population_label": "all rows",
+        "provenance": [("Dataset", "made-up")],
+        "criteria": None,
+        "data_steps": [],
+        "missing": None,
+        "single_imputed": {},
+        "exact_imputed": {},
+        "mi": None,
+    }
+    inp = study_dossier.finish_input(parts, title="A made-up study", author="a")
+    inp.flow = ParticipantFlow(main=(FlowBox("loaded", "Loaded: made-up", 400, "loaded"),))
+    doc = Document(build_dossier(inp))
+    cells = [cell.text for table in doc.tables for row in table.rows for cell in row.cells]
+    return "\n".join([*(paragraph.text for paragraph in doc.paragraphs), *cells])
+
+
+def _settings(cut: float) -> str:
+    """The settings line of a score at a cut-off typed beforehand, as the page keeps it."""
+    from app_pages.analysis_diagnostic import _config, accuracy_settings
+    from ui.results import describe_settings
+
+    settings = accuracy_settings(m.NUMBER, "Yes", direction=m.HIGHER, mode=m.FIXED, cutoff=cut)
+    return describe_settings(_config(("ill", "score"), settings))
+
+
+def test_a_typed_cut_off_that_calls_few_participants_is_nowhere_in_the_document() -> None:
+    """The largest score of 400 participants, typed as a cut-off fixed beforehand: the dossier wrote it twice with
+    its separator (the title, the 2x2 table's row) and once without ("3987", in the settings line), beside "Test
+    positive | 1 | 0 | 1"."""
+    for frame in (
+        _top(1),
+        _top(2, ill=3),
+    ):  # then beside a side of the reference standard too small
+        cut = float(frame["score"].iloc[-1])
+        assert cut >= 1000 and f"{cut:g}" in _settings(cut)
+        text = _document(_typed(frame, cut), _settings(cut))
+        assert f"{cut:,.0f}" not in text and f"{cut:g}" not in text
+        assert (
+            "a cut-off fixed beforehand, not written: it calls fewer than 10 participants positive"
+            in text
+        )
+        assert (
+            "Settings: ill, score, Yes, a score, higher, A value fixed beforehand, not written"
+            in text
+        )
+    # the table and the measures are written with the cut-off that calls one participant positive
+    text = _document(_typed(_top(1), float(_top(1)["score"].iloc[-1])), "")
+    assert "Sensitivity" in text and "Test positive\n1\n0\n1" in text
+    # ten or more on each side: the value in its three places, as before
+    frame = _top(12)
+    cut = float(frame["score"].iloc[-12])
+    text = _document(_typed(frame, cut), _settings(cut))
+    assert (
+        f"(positive at least {cut:,.0f})" in text and f"Test positive (at least {cut:,.0f})" in text
+    )
+    assert f"A value fixed beforehand, {cut:g}" in text
+    # a cut-off below nearly every score calls few participants negative: the same rule
+    frame = _top(12)
+    low = float(frame["score"].iloc[3])
+    text = _document(_typed(frame, low), _settings(low))
+    assert "not written: it calls fewer than 10 participants negative" in text

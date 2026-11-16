@@ -24,6 +24,8 @@ class ResultBlocks:
     references: list[str] = field(default_factory=list)
     figure: bytes | None = None  # PNG
     warnings: list[str] = field(default_factory=list)
+    # the words of the result's settings line that the block holds back (:func:`settings_written`)
+    held_settings: tuple[str, ...] = ()
 
 
 
@@ -240,6 +242,17 @@ def _not_drawn(count: int) -> str:
     return (
         f"{count} group{'s' if count != 1 else ''} of fewer than {dossier_min_n()} "
         f"{'are' if count != 1 else 'is'} not drawn."
+    )
+
+
+def settings_written(settings: str, blocks: ResultBlocks) -> str:
+    """A result's settings line as the dossier writes it: the words its block holds back replaced by "not written"
+    (a cut-off whose value the block does not write stood in the settings line, as "3987" beside a title without
+    "3,987")."""
+    if not blocks.held_settings:
+        return settings
+    return ", ".join(
+        "not written" if word in blocks.held_settings else word for word in settings.split(", ")
     )
 
 
@@ -717,11 +730,23 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
         called += f" ({value.get('positive')})"
     elif lower:
         title += ", lower values pointing to the condition"
+    # a cut-off typed beforehand that calls fewer than ``least`` participants to one side stands among their scores
+    # (typed at the largest score, it is the score of the one called positive): its value is not written, in the
+    # title, in the table's row or in the settings line. The table and the measures are, as for any typed cut-off;
+    # a yes/no test's positive value is a code of the data, and is out of this
+    typed_few = _few_called(acc, least) if acc is not None and not yes_no and not found else ""
+    held_settings: tuple[str, ...] = ()
     if not yes_no:
         if acc is None:
             title += " (no cut-off)"
         elif found and held_back:
             title += " (a cut-off found on these data, not written)"
+        elif typed_few:
+            title += (
+                f" (a cut-off fixed beforehand, not written: it calls fewer than {least} participants "
+                f"{typed_few})"
+            )
+            held_settings = (f"{float(value.get('cutoff')):g}",)  # as the settings line spells a number
         else:
             at = f"at {'most' if lower else 'least'} {_num(value.get('cutoff'))}"
             title += f" (positive {at})"
@@ -730,6 +755,7 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
         # a yes/no test beside a side too small has no row to write: its title stands as a line, no empty table
         tables=[(title, table)] if rows else [],
         lines=[] if rows else [title],
+        held_settings=held_settings,
         references=([] if not written else list(acc.references))
         # the caution of partial verification is written with the measures only, and its reference with it
         + (cite("begg1983") if written and value.get("verification") else [])
@@ -1074,4 +1100,5 @@ __all__ = [
     "km_png",
     "result_blocks",
     "sampling_line",
+    "settings_written",
 ]
