@@ -4028,6 +4028,16 @@ No description available.
 
 No description available.
 
+### def `settings_written` (report_tables.py)
+
+- **Arguments**: `settings: str, blocks: ResultBlocks`
+
+- **Returns**: `str`
+
+A result's settings line as the dossier writes it: the words its block holds back replaced by "not written"
+(a cut-off whose value the block does not write stood in the settings line, as "3987" beside a title without
+"3,987").
+
 ### def `_few_called` (report_tables.py)
 
 - **Arguments**: `acc: Any, least: int`
@@ -4110,7 +4120,8 @@ No description available.
 How the participants entered the study, and where the predictive values of the block are read: said by what
 was written (a line that sent the reader to "a prevalence given" stood over a table without one). ``read``:
 whether the predictive values at the prevalence given have a value (a test that calls everyone, or no one,
-positive has none).
+positive has none). ``unequal``: the reference standard was done unequally by test result; a series' share with
+the condition is then that of those who had it, and no prevalence.
 
 ### def `_small_side` (report_tables.py)
 
@@ -4131,6 +4142,15 @@ table, on the AUC's counts (:func:`_thin_side`).
 
 An interval's two bounds, or nothing when it has none ("n/a to n/a" stood beside a predictive value that no
 test result gives).
+
+### def `_share_row` (report_tables.py)
+
+- **Arguments**: `name: str, value: Any, ci: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+A share's row: three significant figures, and the decimals that tell a share from 0 and from 1, and its two
+bounds from each other ("1 | 1 to 1" stood for a negative predictive value of 99.993%, 99.989% to 99.996%).
 
 ### def `_ratio_row` (report_tables.py)
 

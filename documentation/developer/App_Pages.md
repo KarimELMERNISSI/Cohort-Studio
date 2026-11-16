@@ -275,12 +275,13 @@ prevalence, even in a series.
 
 ### def `_measure_rows` (analysis_diagnostic.py)
 
-- **Arguments**: `acc: Any, prevalence: ComplexType`
+- **Arguments**: `acc: Any, prevalence: ComplexType, unequal: bool`
 
 - **Returns**: `pd.DataFrame`
 
 Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
-in the data and the share classified correctly for a series only).
+in the data and the share classified correctly for a series only). ``unequal``: the reference standard was done
+unequally by test result, and the rows name that share as the caption does.
 
 ### def `_intervals` (analysis_diagnostic.py)
 
@@ -329,9 +330,19 @@ No description available.
 - **Returns**: `tuple[ComplexType]`
 
 A share and the bounds of its interval, as percentages: one decimal ("40.8%", "34.5% to 47.6%"); "" for an
-interval without bounds. Bounds that one decimal writes alike take three, and the share with them ("100.0% (95%
-CI 100.0% to 100.0%)" stood for a negative predictive value at a prevalence of 1 in 2,500). A share below 100%
-is never written "100.0%" nor one above 0 "0.0%" (the rule of "more than 99 of 100 pairs").
+interval without bounds. Bounds that one decimal writes alike take the decimals that tell them apart (three to
+six), and the share with them ("100.0% (95% CI 100.0% to 100.0%)" stood for a negative predictive value at a
+prevalence of 1 in 2,500). A share below 100% is never written "100.0%" nor one above 0 "0.0%" (the rule of
+"more than 99 of 100 pairs").
+
+### def `_share_metric` (analysis_diagnostic.py)
+
+- **Arguments**: `label: str, value: Any, ci: Any, count: int, of: int`
+
+- **Returns**: `Metric`
+
+A share of the headline, with its count and its interval, written as the table of every measure writes it
+(2,499 of 2,500 read "100.0%" above and "more than 99.9%" in the table).
 
 ### def `_share` (analysis_diagnostic.py)
 
