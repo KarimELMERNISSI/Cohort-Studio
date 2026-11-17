@@ -238,13 +238,20 @@ def test_a_typed_cut_off_beside_a_small_side_is_written_without_its_measures() -
 
 
 def test_the_direction_s_caution_is_not_copied_beside_a_small_side() -> None:
-    """The caution of a marker read the wrong way gives the AUC ("the area under the curve is 0.000"): with one
-    participant with the condition, at the smallest score, that is their rank."""
-    frame = _scored(["Yes"] + ["No"] * 399)
+    """The caution of a marker read the wrong way gives the AUC ("the area under the curve is 0.000"): with two
+    participants with the condition, at the two smallest scores, that is their ranks."""
+    frame = _scored(["Yes"] * 2 + ["No"] * 398)
     value = _found(frame)
     assert value["cautions"] and "below 0.5" in value["cautions"][0]
     said = _written(value)
     assert "below 0.5" not in said and "0.000" not in said
+    assert "Fewer than 10 " + THIN.format(side="have the condition") in said
+    # one participant with the condition: no direction is read from them, and the caution that says why the area
+    # has no interval, which counts them, is not copied either
+    alone = _found(_scored(["Yes"] + ["No"] * 399))
+    assert [text[:38] for text in alone["cautions"]] == ["Only one participant has the condition"]
+    said = _written(alone)
+    assert "Only one participant" not in said and "below 0.5" not in said
     assert "Fewer than 10 " + THIN.format(side="have the condition") in said
 
 

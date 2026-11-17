@@ -235,7 +235,9 @@ def accuracy_of(
     with_it = np.asarray([v == present for v in truth])
     values = np.asarray(marker, dtype=float)
     cautions: list[str] = []
-    if auc["ci"].upper < 0.5:
+    missing = auc_interval_missing(auc)
+    # with one participant in a group the interval reads far too narrow: no direction is read on it
+    if missing != ONE_IN_A_GROUP and auc["ci"].upper < 0.5:
         # in the words of the direction asked above: the functions read the reversed marker for "lower", and their
         # own caution then said the opposite ("higher values go with the other level") and advised to take the
         # other level as positive, which gives the accuracy for the absence of the condition
@@ -245,7 +247,6 @@ def accuracy_of(
             f"the area under the curve is {area_parts(auc['auc'])[0]}, below 0.5. Choose {other} above, or check "
             "the value that means the condition is present."
         )
-    missing = auc_interval_missing(auc)
     if missing:
         cautions.append(_no_interval(auc, lower, missing))
     verified = None

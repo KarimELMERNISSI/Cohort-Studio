@@ -1398,3 +1398,41 @@ def test_an_area_has_no_interval_when_a_group_holds_one_participant() -> None:
     # two in each group: the interval is written
     two = {**auc, "n_positive": 2}
     assert auc_interval_missing(two) == "" and auc_row(two)[2].endswith(" (DeLong)")
+
+
+def test_no_direction_is_read_from_one_participant() -> None:
+    """The plan quoted "95% CI 0.22 to 0.58" for one participant with the condition among 30, and with that one
+    participant below everyone else it said that the data contradict the direction chosen: an interval that reads
+    far too narrow says neither."""
+    frame = pd.DataFrame({"ill": ["Yes"] + ["No"] * 30, "score": [11.5, *range(30)]}).astype(
+        {"score": float}
+    )
+    said = _text(
+        m.plan_accuracy(frame, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES)
+    )
+    assert (
+        "Only one participant with the condition: these data cannot show which way the test points."
+        in said
+    )
+    assert "95% CI" not in said and "do not show which way" not in said
+    # the one participant below every other: no "contradict", in the plan or in the result
+    below = frame.assign(score=[-5.0, *range(30)])
+    said = _text(
+        m.plan_accuracy(below, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES)
+    )
+    assert "Only one participant with the condition" in said and "Check the direction" not in said
+    result = accuracy_of(below, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES)
+    assert not any("contradict the direction" in text for text in result["cautions"])
+    assert any("Only one participant has the condition here" in text for text in result["cautions"])
+    # the other side, in its own words
+    other = frame.assign(ill=["No"] + ["Yes"] * 30)
+    said = _text(
+        m.plan_accuracy(other, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES)
+    )
+    assert "Only one participant without the condition:" in said
+    # two with the condition: the direction is read again
+    two = pd.DataFrame(
+        {"ill": ["Yes"] * 2 + ["No"] * 30, "score": [-5.0, -4.0, *range(30)]}
+    ).astype({"score": float})
+    said = _text(m.plan_accuracy(two, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES))
+    assert "Check the direction" in said and "Only one participant" not in said

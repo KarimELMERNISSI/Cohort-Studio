@@ -693,7 +693,18 @@ def plan_accuracy(
     oriented = -frame["x"] if lower else frame["x"]
     labels = [category(v) == category(present) for v in frame["y"]]
     auc = delong_auc(labels, oriented.tolist(), pos_label=True)
-    if auc["ci"].upper < 0.5:
+    if min(auc["n_positive"], auc["n_negative"]) < 2:
+        # the DeLong interval needs two participants in each group: with one it reads far too narrow, and neither
+        # "they contradict the direction" nor "they do not show it" can be read on it ("95% CI 0.22 to 0.58" stood
+        # for one participant with the condition among 30)
+        side = "with the condition" if auc["n_positive"] < 2 else "without the condition"
+        advice.append(
+            Advice(
+                "info",
+                f"Only one participant {side}: these data cannot show which way the test points.",
+            )
+        )
+    elif auc["ci"].upper < 0.5:
         other = "lower" if not lower else "higher"
         # the medians are said when they show it: "higher (median 2 against 2)" stood for a score of few values
         medians = (

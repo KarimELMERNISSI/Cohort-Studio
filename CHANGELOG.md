@@ -48,7 +48,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   (AUC)*, with the interval's method beside its bounds.
 - **No interval either for an area where one group holds a single participant:** the DeLong interval needs two in
   each group, and read far too narrow ("0.400 (95% CI 0.222 to 0.578)" for one participant with the condition among
-  30 without). A warning says so.
+  30 without). A warning says so. Nor is the direction of the test read from that one participant: the plan said
+  that the data contradicted the direction chosen, or quoted that interval; it now says that these data cannot
+  show which way the test points.
 - **A ratio with a very wide interval keeps three figures for each number:** a diagnostic odds ratio read "441.0
   (8.0 to 24,372.7)", and now reads "441 (7.98 to 24,373)".
 
