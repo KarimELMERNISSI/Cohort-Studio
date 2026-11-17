@@ -56,10 +56,16 @@ def test_an_administrator_can_lower_the_smallest_count_shared_to_five(
 
     env.setenv("CMP_DISCLOSURE_MIN", "5")
     floor = cfg.get_settings().sharing.disclosure_min
-    assert floor == 5 and DisclosurePolicy.for_study(5, floor=floor).k == 5
+    assert floor == 5
+    assert DisclosurePolicy.for_study(5, floor=floor, floor_set_by="deployment").k == 5
     env.setenv("CMP_DISCLOSURE_MIN", "20")
-    policy = DisclosurePolicy.for_study(None, floor=cfg.get_settings().sharing.disclosure_min)
-    assert policy.to_dict() == {"k": 20, "asked": 10, "floor": 20, "version": 2}
+    policy = DisclosurePolicy.for_study(
+        None, floor=cfg.get_settings().sharing.disclosure_min, floor_set_by="deployment"
+    )
+    # the study asked none: the default, raised by the installation's floor, and the block says all of it
+    block = policy.block().to_dict()
+    assert (block["k"], block["k_asked"], block["k_default"], block["floor"]) == (20, None, 10, 20)
+    assert block["floor_set_by"] == "deployment"
 
 
 def test_values_are_read_as_their_readers_read_them(env: pytest.MonkeyPatch) -> None:

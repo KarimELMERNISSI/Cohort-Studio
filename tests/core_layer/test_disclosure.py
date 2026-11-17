@@ -62,29 +62,62 @@ def test_k_is_ten_unless_the_study_says_otherwise_and_never_below_five() -> None
     assert (DEFAULT_K, FLOOR_K) == (10, 5)
     assert DisclosurePolicy().k == 10 and DisclosurePolicy(5).k == 5
     # a study's k on an installation: the larger of what the study asks for and of the installation's floor
-    assert DisclosurePolicy.for_study(None, floor=5).k == 10
-    assert DisclosurePolicy.for_study(5, floor=5).k == 5
-    assert DisclosurePolicy.for_study(5, floor=10).k == 10
-    assert DisclosurePolicy.for_study(20, floor=10).k == 20
+    assert DisclosurePolicy.for_study(None, floor=5, floor_set_by="deployment").k == 10
+    assert DisclosurePolicy.for_study(5, floor=5, floor_set_by="deployment").k == 5
+    assert DisclosurePolicy.for_study(5, floor=10, floor_set_by="deployment").k == 10
+    assert DisclosurePolicy.for_study(20, floor=10, floor_set_by="deployment").k == 20
     for k in (4, 0, -1):
         with pytest.raises(ValueError, match="never below 5"):
             DisclosurePolicy(k)
     with pytest.raises(ValueError, match="never below 5"):
-        DisclosurePolicy.for_study(4, floor=5)
+        DisclosurePolicy.for_study(4, floor=5, floor_set_by="deployment")
     with pytest.raises(ValueError, match="floor is never below 5"):
-        DisclosurePolicy.for_study(10, floor=3)
+        DisclosurePolicy.for_study(10, floor=3, floor_set_by="deployment")
     for floor in (float("nan"), 7.5, True, None):
         with pytest.raises(ValueError, match="floor is a whole number"):
-            DisclosurePolicy.for_study(5, floor=floor)  # type: ignore[arg-type]
+            DisclosurePolicy.for_study(5, floor=floor, floor_set_by="deployment")  # type: ignore[arg-type]
     with pytest.raises(TypeError):  # no floor: the package would follow no installation
         DisclosurePolicy.for_study(5)  # type: ignore[call-arg]
     with pytest.raises(ValueError, match="whole number"):
         DisclosurePolicy(7.5)  # type: ignore[arg-type]
-    assert DisclosurePolicy(5).to_dict() == {"k": 5, "version": 2}
-    # a package says why its k is not the study's
-    raised = DisclosurePolicy.for_study(5, floor=10)
-    assert raised.to_dict() == {"k": 10, "asked": 5, "floor": 10, "version": 2}
+    # a package says why its k is what it is: what the study asked, the default, the floor and who set it
+    raised = DisclosurePolicy.for_study(5, floor=10, floor_set_by="deployment")
+    assert (raised.k, raised.asked, raised.floor) == (10, 5, 10)
     assert raised == DisclosurePolicy(10)  # the same rule, whatever it was made for
+    block = raised.block().to_dict()
+    assert block == {
+        "rules": "on",
+        "version": 2,
+        "k": 10,
+        "k_asked": 5,
+        "k_default": 10,
+        "floor": 10,
+        "floor_set_by": "deployment",
+        "cap": 0.05,
+        "cap_set_by": "code",
+        "followed_to_the_event": [],
+        "rows_not_people": None,
+        "rows_word": "participants",
+        "overrides": [],
+    }
+    # a study that asked none is not one that asked the default: a later default must stay readable
+    none = DisclosurePolicy.for_study(None, floor=5, floor_set_by="deployment")
+    ten = DisclosurePolicy.for_study(10, floor=5, floor_set_by="deployment")
+    assert (none.k, none.asked) == (10, None) and (ten.k, ten.asked) == (10, 10)
+    assert none.block().to_dict()["k_asked"] is None
+    assert ten.block().to_dict()["k_asked"] == 10
+    # the block is a package's: a policy that was not made for a study, on an installation, has none
+    with pytest.raises(ValueError, match="made for a study"):
+        DisclosurePolicy(5).block()
+    # who set the floor is recorded with it, once: a level of the closed list, never a name, and never forgotten
+    with pytest.raises(ValueError, match="is a level"):
+        DisclosurePolicy.for_study(5, floor=10, floor_set_by="the administrator")
+    with pytest.raises(TypeError):
+        DisclosurePolicy.for_study(5, floor=10)  # type: ignore[call-arg]
+    assert raised.floor_set_by == "deployment"
+    assert (
+        DisclosurePolicy.for_study(5, floor=10, floor_set_by="code").block().floor_set_by == "code"
+    )
 
 
 def test_a_count_is_exact_or_fewer_than_k_and_zero_is_shown() -> None:
@@ -2433,7 +2466,7 @@ def test_a_count_term_does_not_count_the_rows_without_an_event_and_the_model_wri
     record = plan.record("count", done.result)
     plain = disclose_record(record, K10, spec=done.spec, analysis=_in_the_flow(record))
     assert plain.record is None and plain.withheld == (MODEL_WITHHELD,)
-    declared = Policy(declared=(FollowedToTheEvent("visits", reason="every participant is seen"),))
+    declared = Policy(declared=(FollowedToTheEvent("visits"),))
     lifted = disclose_record(record, declared, spec=done.spec, analysis=_in_the_flow(record))
     assert lifted.record is not None and "term:nyha#2" in _ids(lifted)
     said = lifted.record.part("declaration")
@@ -2806,12 +2839,7 @@ def test_an_outcome_declared_followed_to_the_event_writes_its_small_counts_witho
         return disclose_record(of, policy, spec=done.spec, analysis=_in_the_flow(of))
 
     assert shown(K10).record is None
-    declaration = FollowedToTheEvent(
-        "died",
-        reason="deaths are read in the national register",
-        role="investigator",
-        date="2026-11-14",
-    )
+    declaration = FollowedToTheEvent("died")
     declared = Policy(declared=(declaration,))
     written = shown(declared)
     groups = {p.labels["group"]: p for p in written.record.parts if p.id.startswith("curve#")}
@@ -2831,19 +2859,23 @@ def test_an_outcome_declared_followed_to_the_event_writes_its_small_counts_witho
     # without the declaration nothing of the result is written: it changed it, and the part says so
     assert said.number("changed").value is True
     assert written.withheld == () and written.told == ()
-    # the policy block of the package and its reading notes say it
-    block = declared.to_dict()["declared"]
-    assert block == [
-        {
-            "outcome": "died",
-            "declared": "followed to the event",
-            "reason": "deaths are read in the national register",
-            "role": "investigator",
-            "date": "2026-11-14",
-            "cap": 0.05,
-            "beyond_the_cap": False,
-        }
-    ]
+    # the policy block of the package and its reading notes say it: the outcome and the override, and nothing
+    # typed by a person (no reason in words, no role, no date: the revision and the export's log say who and when)
+    assert declaration.to_dict() == {"outcome": "died", "beyond_the_cap": False}
+    with pytest.raises(TypeError):
+        FollowedToTheEvent("died", reason="deaths are read in the national register")  # type: ignore[call-arg]
+    made = Policy.for_study(
+        None,
+        floor=10,
+        floor_set_by="code",
+        declared=(FollowedToTheEvent("visits", True), declaration),
+    )
+    block = made.block().to_dict()
+    assert block["followed_to_the_event"] == [
+        {"outcome": "died", "beyond_the_cap": False},
+        {"outcome": "visits", "beyond_the_cap": True},
+    ]  # sorted by outcome, whatever the order declared; the cap once, for the package
+    assert block["cap"] == 0.05 and block["cap_set_by"] == "code"
     assert "followed to died" in reading_notes(declared)[-1] and len(reading_notes(declared)) == 12
     assert "to died" not in " ".join(reading_notes(K10))
     # its Cox model as a whole likewise (13 rows without the event are enough; with 7, the model needed it)
@@ -2918,7 +2950,7 @@ def test_a_declaration_holds_beyond_its_cap_only_by_an_explicit_override_that_ea
     assert said.number("rows_without_the_event").value == 27
     assert said.number("share_without_the_event").value == 27 / 500
     assert said.number("cap").value == 0.05
-    assert asked.to_dict()["declared"][0]["beyond_the_cap"] is True
+    assert asked.declared[0].to_dict() == {"outcome": "died", "beyond_the_cap": True}
     # under the cap, the override changes nothing and nothing warns
     under = _classes({"A": (200, 5), "B": (150, 5), "C": (150, 3)})
     curves = plan.run(specify("survival", time="days", event="died", group="nyha"), under)

@@ -238,13 +238,20 @@ from biostats.plan import (
 from core.attrition import DATA, LOADED, SOURCE, AnalysisCount, FlowBox, ParticipantFlow
 from core.expressions.errors import WorkerUnavailable
 from core.expressions.safe_eval import DEFAULT_POLICY, evaluate_tree
+from core.package import ON as RULES_ON
+from core.package import SET_BY
+from core.package import Policy as PolicyBlock
 
 # the default and the floor of k live with the study's privacy choices, which a study file reads without this module
-from core.privacy import DEFAULT_K, FLOOR_K
+from core.privacy import (
+    DEFAULT_K,
+    FLOOR_K,
+    MOST_WITHOUT_THE_EVENT,
+    ROWS_DEFAULT,
+    StudyPrivacy,
+)
 
 POLICY_VERSION = 2  # of the rules below: a package records it with its k
-# the share of a result's rows without the event above which its outcome is not one followed to the event
-MOST_WITHOUT_THE_EVENT = 0.05
 
 
 @dataclass(frozen=True)
@@ -266,15 +273,14 @@ class FollowedToTheEvent:
     ``declaration`` of what is written: a reader of the result finds it there, beside the policy that records
     the override).
 
-    ``outcome`` is the event variable, or the count; ``reason`` the declaring person's own words (a text of
-    the user's: the finder reads it), ``role`` who declares, ``date`` when. A package writes the declaration
-    with its policy, says it in its reading notes, and logs the results it changed.
+    ``outcome`` is the event variable, or the count. A declaration holds nothing else: no reason in words, no
+    role and no date. The study's section carries none (``core.privacy``), a field kept empty would invite free
+    text into a package, and who declared, and when, are said by the revision and by the export's log. A package
+    writes the declaration with its policy (:meth:`DisclosurePolicy.block`; the cap is written there once), says
+    it in its reading notes, and logs the results it changed.
     """
 
     outcome: str
-    reason: str = ""
-    role: str = ""
-    date: str = ""
     beyond_the_cap: bool = False
 
     def __post_init__(self) -> None:
@@ -286,29 +292,26 @@ class FollowedToTheEvent:
             )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "outcome": self.outcome,
-            "declared": "followed to the event",
-            "reason": self.reason,
-            "role": self.role,
-            "date": self.date,
-            "cap": MOST_WITHOUT_THE_EVENT,
-            "beyond_the_cap": self.beyond_the_cap,
-        }
+        """As the policy block of a package holds it: the outcome, and whether the override was asked for."""
+        return {"outcome": self.outcome, "beyond_the_cap": self.beyond_the_cap}
 
 
 @dataclass(frozen=True)
 class DisclosurePolicy:
     """
     The smallest count of participants a shared document gives (``k``), and the version of the rules. A policy made
-    for a study (:meth:`for_study`) also records the k the study asked for and the installation's floor, so that a
-    package says why its k is not the study's.
+    for a study (:meth:`for_study`, :func:`policy_of`) also records the installation's ``floor`` and the k the study
+    asked for (``asked``; None when it asked none, which is not the same as asking the default: a later change of
+    the default must stay readable), so that a package says why its k is what it is (:meth:`block`). ``floor`` is
+    None for a policy that was not made for a study.
     """
 
     k: int = DEFAULT_K
     version: int = POLICY_VERSION
     asked: int | None = field(default=None, compare=False)
     floor: int | None = field(default=None, compare=False)
+    # who set the floor: a level of ``core.package.SET_BY`` (the code, the deployment's setting), never an account
+    floor_set_by: str | None = field(default=None, compare=False)
     declared: tuple[
         FollowedToTheEvent, ...
     ] = ()  # the outcomes the study declares followed to the event
@@ -325,20 +328,36 @@ class DisclosurePolicy:
 
     @classmethod
     def for_study(
-        cls, k: int | None, *, floor: int, declared: Sequence[FollowedToTheEvent] = ()
+        cls,
+        k: int | None,
+        *,
+        floor: int,
+        floor_set_by: str,
+        declared: Sequence[FollowedToTheEvent] = (),
     ) -> DisclosurePolicy:
         """
         The policy of a study that asks for ``k`` (None: the default, 10) on an installation whose floor is
         ``floor``: the larger of the two. The floor has no default: the caller reads it from the installation's
-        settings (``CMP_DISCLOSURE_MIN``), and a package written without it would follow no installation. A k or a
-        floor below 5, or that is not a whole number, is refused.
+        settings (``CMP_DISCLOSURE_MIN``), and a package written without it would follow no installation. Nor has
+        ``floor_set_by``, who set that floor (``code`` when it is the code's own, ``deployment`` when the
+        installation's setting gave it): it is recorded here, beside the floor, so that every document made
+        from the policy says the same. A k or a floor below 5, or that is not a whole number, is refused.
         """
+        if floor_set_by not in SET_BY:
+            raise ValueError("who set an installation's floor is a level: " + ", ".join(SET_BY))
         if isinstance(floor, bool) or not isinstance(floor, int):
             raise ValueError("an installation's floor is a whole number")
         if floor < FLOOR_K:
             raise ValueError(f"an installation's floor is never below {FLOOR_K}")
-        asked = cls(DEFAULT_K if k is None else k).k
-        return cls(max(asked, floor), asked=asked, floor=floor, declared=tuple(declared))
+        asked = None if k is None else cls(k).k  # a k that is no k is refused as any policy's
+        wanted = DEFAULT_K if asked is None else asked
+        return cls(
+            max(wanted, floor),
+            asked=asked,
+            floor=floor,
+            floor_set_by=floor_set_by,
+            declared=tuple(declared),
+        )
 
     def declaration(self, outcome: str | None) -> FollowedToTheEvent | None:
         """The study's declaration that its participants are followed to ``outcome``, when there is one."""
@@ -352,13 +371,51 @@ class DisclosurePolicy:
         """Whether a count of participants is given: none, or at least k."""
         return count == 0 or count >= self.k
 
-    def to_dict(self) -> dict[str, Any]:
-        """``{"k": 10, "asked": 5, "floor": 10, "version": 2}``; without ``asked`` and ``floor`` for a policy that
-        was not made for a study; with ``declared``, the outcomes declared followed to the event, when there
-        are any."""
-        made_for = {} if self.asked is None else {"asked": self.asked, "floor": self.floor}
-        declared = {"declared": [one.to_dict() for one in self.declared]} if self.declared else {}
-        return {"k": self.k, **made_for, "version": self.version, **declared}
+    def block(self) -> PolicyBlock:
+        """
+        The policy as a package records it, under ``rules: "on"`` (``core.package.Policy``, the one shape and the
+        one writing of a policy): the k applied, the k asked (None when the study asked none) with the default
+        beside it, the floor and who set it, the cap of "followed to the event" once (the code's, in this
+        version), the declarations sorted by outcome, and the word this version's texts use for the rows
+        ("participants"). It takes nothing from its caller: a package and the dossier's sharing mode, made from
+        one policy, then record the same. ValueError for a policy that was not made for a study
+        (:meth:`for_study`): a package follows an installation's floor.
+        """
+        if self.floor is None or self.floor_set_by is None:
+            raise ValueError("a package's policy is made for a study, on an installation")
+        return PolicyBlock(
+            rules=RULES_ON,
+            version=self.version,
+            k=self.k,
+            k_asked=self.asked,
+            k_default=DEFAULT_K,
+            floor=self.floor,
+            floor_set_by=self.floor_set_by,
+            cap=MOST_WITHOUT_THE_EVENT,
+            cap_set_by="code",
+            followed_to_the_event=tuple(
+                sorted((one.outcome, one.beyond_the_cap) for one in self.declared)
+            ),
+            rows_word=ROWS_DEFAULT,
+        )
+
+
+def policy_of(choices: StudyPrivacy, floor: int, *, floor_set_by: str) -> DisclosurePolicy:
+    """
+    The policy of a study's privacy choices (``core.privacy.StudyPrivacy``, the section of its definition) on an
+    installation whose floor is ``floor``: the one function that gives a package and the dossier's sharing mode
+    their k and their declarations, so that the two documents cannot disagree. The floor is passed in, with who
+    set it (``floor_set_by``, a level: see :meth:`DisclosurePolicy.for_study`): nothing
+    here reads a setting. The declaration that the study's rows are not people, and the word for its rows, are not
+    applied by this version: the rules stay on.
+    """
+    declared = tuple(
+        FollowedToTheEvent(one.outcome, beyond_the_cap=one.beyond_the_cap)
+        for one in choices.followed_to_the_event
+    )
+    return DisclosurePolicy.for_study(
+        choices.k, floor=floor, floor_set_by=floor_set_by, declared=declared
+    )
 
 
 @dataclass(frozen=True)
@@ -3962,6 +4019,7 @@ __all__ = [
     "outcome_of",
     "pair_gives_back",
     "part_of",
+    "policy_of",
     "rare_values",
     "reading_notes",
     "recoverable",

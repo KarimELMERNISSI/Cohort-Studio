@@ -45,6 +45,9 @@ PRIVACY_KEY = "privacy"  # the section's key in a study definition's body
 
 DEFAULT_K = 10  # the smallest count a shared document gives, when a study asks none
 FLOOR_K = 5  # nothing lower is accepted, whatever a study or an installation asks
+# The cap of "followed to the event": the share of a result's rows without the event above which its outcome is not
+# one followed to the event. An installation may lower it, never raise it; a package's reader refuses a larger one.
+MOST_WITHOUT_THE_EVENT = 0.05
 
 # the section's keys, in the order written
 K = "k"
@@ -95,14 +98,50 @@ def _is_count(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+# Characters that show nothing and are neither control nor format characters: the fillers, the variation selectors
+# and the other code points a display ignores, and the blank of the Braille patterns. A fixed list: a name holding
+# one reads as another name ("site" + U+3164 + "A").
+INVISIBLE = (
+    (0x034F, 0x034F),
+    (0x115F, 0x1160),
+    (0x17B4, 0x17B5),
+    (0x180B, 0x180D),
+    (0x180F, 0x180F),
+    (0x2800, 0x2800),
+    (0x3164, 0x3164),
+    (0xFE00, 0xFE0F),
+    (0xFFA0, 0xFFA0),
+    (0xE0100, 0xE01EF),
+)
+# control, format, half of a surrogate pair (no writer can encode one), line and paragraph separators
+_UNSEEN = ("Cc", "Cf", "Cs", "Zl", "Zp")
+
+
+def unseen(char: str) -> bool:
+    """Whether ``char`` shows nothing, or changes how what follows is shown."""
+    return unicodedata.category(char) in _UNSEEN or any(
+        low <= ord(char) <= high for low, high in INVISIBLE
+    )
+
+
+def hidden(text: str) -> int:
+    """How many characters of ``text`` no name of a study and no text of a package may hold: the control
+    characters other than a line feed, the format characters (the marks that change the direction of a text,
+    the joiners), the line and paragraph separators, a lone surrogate, and the characters of ``INVISIBLE``,
+    which show nothing. One rule for the study's section and for the package (``core.package``): a study can
+    then never declare a name that a package refuses."""
+    return sum(1 for char in text if char != "\n" and unseen(char))
+
+
 def _is_outcome(value: Any) -> bool:
-    """A variable's name: a text of 1 to ``OUTCOME_MAX`` characters that is not blank and holds no control or
-    format character."""
+    """A variable's name: a text of 1 to ``OUTCOME_MAX`` characters on one line, not blank, without a character
+    that shows nothing or changes the direction of a text (:func:`hidden`)."""
     return (
         isinstance(value, str)
         and 0 < len(value) <= OUTCOME_MAX
         and bool(value.strip())
-        and not any(unicodedata.category(c) in ("Cc", "Cf") for c in value)
+        and "\n" not in value
+        and not hidden(value)
     )
 
 
@@ -274,8 +313,10 @@ __all__ = [
     "DEFAULT_K",
     "FLOOR_K",
     "FOLLOWED",
+    "INVISIBLE",
     "K",
     "LATER_VALUE",
+    "MOST_WITHOUT_THE_EVENT",
     "NOT_PEOPLE",
     "NOT_PEOPLE_REASONS",
     "NOT_READ",
@@ -287,6 +328,8 @@ __all__ = [
     "SECTION_KEYS",
     "Declared",
     "StudyPrivacy",
+    "hidden",
     "study_privacy",
+    "unseen",
     "with_privacy",
 ]

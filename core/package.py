@@ -21,7 +21,8 @@ or an infinite number, a nest too deep, a number too long, a member over its siz
 key or a closed value it does not know reads as written by a later version, counted and never named, and a reason
 quotes nothing of a file (a key or a value of a received package can hold anything).
 
-**No text of a package holds a control or a direction character, nor one that shows nothing** (:func:`hidden`):
+**No text of a package holds a control or a direction character, nor one that shows nothing**
+(``core.privacy.hidden``, the rule of a study's own names):
 such a character can make a name read as another. The writer refuses to write one and the reader refuses a member
 that holds one; a line feed inside a text is the one exception (where a text is shown, it must not pass for a
 line of its own). :func:`shown` is for what does not come from a member (a file's name, an argument of a command).
@@ -40,12 +41,21 @@ import hashlib
 import json
 import math
 import re
-import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
-from core.privacy import FLOOR_K, NOT_PEOPLE_REASONS, OUTCOME_MAX, ROWS_DEFAULT, ROWS_WORDS
+from core.privacy import (
+    FLOOR_K,
+    INVISIBLE,
+    MOST_WITHOUT_THE_EVENT,
+    NOT_PEOPLE_REASONS,
+    OUTCOME_MAX,
+    ROWS_DEFAULT,
+    ROWS_WORDS,
+    hidden,
+    unseen,
+)
 
 # ----------------------------------------------------------------------------- tiers and members (stored ids)
 
@@ -144,38 +154,6 @@ def _is_count(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
-# Characters that show nothing and are neither control nor format characters: the fillers, the variation selectors
-# and the other code points a display ignores, and the blank of the Braille patterns. A fixed list: a name holding
-# one reads as another name ("site" + U+3164 + "A").
-INVISIBLE = (
-    (0x034F, 0x034F),
-    (0x115F, 0x1160),
-    (0x17B4, 0x17B5),
-    (0x180B, 0x180D),
-    (0x180F, 0x180F),
-    (0x2800, 0x2800),
-    (0x3164, 0x3164),
-    (0xFE00, 0xFE0F),
-    (0xFFA0, 0xFFA0),
-    (0xE0100, 0xE01EF),
-)
-# control, format, half of a surrogate pair (no writer can encode one), line and paragraph separators
-_UNSEEN = ("Cc", "Cf", "Cs", "Zl", "Zp")
-
-
-def _unseen(char: str) -> bool:
-    return unicodedata.category(char) in _UNSEEN or any(
-        low <= ord(char) <= high for low, high in INVISIBLE
-    )
-
-
-def hidden(text: str) -> int:
-    """How many characters of ``text`` no text of a package may hold: the control characters other than a line
-    feed, the format characters (the marks that change the direction of a text, the joiners), the line and
-    paragraph separators, a lone surrogate, and the characters of ``INVISIBLE``, which show nothing."""
-    return sum(1 for char in text if char != "\n" and _unseen(char))
-
-
 REPLACED = chr(0xFFFD)  # stands for a character that is not shown
 CUT = chr(0x2026)  # the mark of a text cut short
 
@@ -184,7 +162,7 @@ def shown(text: object, limit: int = 120) -> str:
     """A text that does not come from a member (a file's name, an argument of a command), as a terminal or a page
     may show it: on one line, each character no package may hold (a line feed too) replaced by U+FFFD, cut at
     ``limit`` characters."""
-    cleaned = "".join(REPLACED if _unseen(char) else char for char in str(text))
+    cleaned = "".join(REPLACED if unseen(char) else char for char in str(text))
     return cleaned if len(cleaned) <= limit else cleaned[: max(0, limit - 1)] + CUT
 
 
@@ -540,9 +518,8 @@ class Policy:
             if self.k_asked is not None and not _is_k(self.k_asked):
                 return [NOT_A_POLICY]
             cap = self.cap
-            if (
-                not isinstance(cap, float) or not 0 < cap <= 1
-            ):  # a share, written as one: never the whole number 1
+            # a share, written as one (a float), and never above the code's: the cap is lowered, never raised
+            if not isinstance(cap, float) or not 0 < cap <= MOST_WITHOUT_THE_EVENT:
                 return [NOT_A_POLICY]
             for setter in setters:
                 if not isinstance(setter, str):

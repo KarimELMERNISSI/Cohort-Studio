@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from core.disclosure import DEFAULT_K, FLOOR_K, DisclosurePolicy, FollowedToTheEvent
+from core.disclosure import DEFAULT_K, FLOOR_K, DisclosurePolicy, FollowedToTheEvent, policy_of
 from core.population import configuration_for_sharing
 from core.privacy import (
     BELOW_THE_FLOOR,
@@ -46,6 +46,7 @@ from core.protocol import (
 from manage.protocol_store import ProtocolUnchanged, WorkspaceProtocolStore
 
 PLANTED = "P-0042 Jane"
+HIDDEN = "dea" + chr(0x200B) + "th"  # a zero-width space inside a name: it reads as "death"
 K_ONLY = {"k": 20}
 FOLLOWED = {"followed_to_the_event": {"death": {}, "visits": {"beyond_the_cap": True}}}
 NOT_PEOPLE = {"rows_not_people": "animal_data", "rows_word": "animals"}
@@ -154,7 +155,13 @@ def test_equal_choices_have_one_writing_and_one_checksum() -> None:
 def test_choices_that_no_file_could_hold_are_not_built(bad: dict) -> None:
     with pytest.raises(ValueError):
         StudyPrivacy(**bad)
-    for outcome in ("", "   ", "x" * 257, "dea​th", "dea\nth", 3):
+    # one rule for a name, in the study's section and in a package: a name the section took and the package's
+    # block then refused ("death" with a filler that shows nothing) stopped the export with a reader's words
+    unseen = [
+        HIDDEN,
+        *("dea" + chr(code) + "th" for code in (0x3164, 0xFE0F, 0x2800, 0x2028, 0xD800)),
+    ]
+    for outcome in ("", "   ", "x" * 257, *unseen, "dea\nth", 3):
         with pytest.raises(ValueError):
             Declared(outcome)  # type: ignore[arg-type]
     with pytest.raises(ValueError):
@@ -190,7 +197,7 @@ def test_choices_that_no_file_could_hold_are_not_built(bad: dict) -> None:
         ({"followed_to_the_event": {"death": True}}, NOT_READ),
         ({"followed_to_the_event": {"": {}}}, NOT_READ),
         ({"followed_to_the_event": {"x" * 257: {}}}, NOT_READ),
-        ({"followed_to_the_event": {"dea​th": {}}}, NOT_READ),
+        ({"followed_to_the_event": {HIDDEN: {}}}, NOT_READ),
         ({"followed_to_the_event": {"death": {"beyond_the_cap": "yes"}}}, NOT_READ),
         ({"rows_not_people": 3}, NOT_READ),
         ({"rows_word": ["animals"]}, NOT_READ),
@@ -233,33 +240,61 @@ def test_a_k_looser_than_an_installation_s_floor_is_read_as_asked() -> None:
     reader reads no setting, and the larger of the two is applied where an output is made, with both recorded."""
     read, problems = StudyProtocol.from_file(_file({"k": 5}))
     assert read is not None and problems == [] and study_privacy(read.body).k == 5
-    policy = DisclosurePolicy.for_study(study_privacy(read.body).k, floor=10)
+    policy = policy_of(study_privacy(read.body), floor=10, floor_set_by="deployment")
     assert (policy.k, policy.asked, policy.floor) == (10, 5, 10)
-    stricter = DisclosurePolicy.for_study(study_privacy(_body(K_ONLY)).k, floor=10)
+    stricter = policy_of(study_privacy(_body(K_ONLY)), floor=10, floor_set_by="deployment")
     assert (stricter.k, stricter.asked, stricter.floor) == (20, 20, 10)
     # a study that asks nothing: the default, raised by the floor
-    assert DisclosurePolicy.for_study(study_privacy(_body()).k, floor=15).k == 15
+    assert policy_of(study_privacy(_body()), floor=15, floor_set_by="deployment").k == 15
     # no maximum in the format: a huge k only withholds more, and is carried in whole numbers
     huge = 10**400
     data = json.loads(json.dumps(_file({"k": huge})))
     read, problems = StudyProtocol.from_file(data)
     assert read is not None and study_privacy(read.body).k == huge
-    assert DisclosurePolicy.for_study(huge, floor=10).k == huge
+    assert DisclosurePolicy.for_study(huge, floor=10, floor_set_by="deployment").k == huge
 
 
 def test_the_declarations_reach_the_policy_and_the_reserved_keys_change_nothing_of_it() -> None:
     """This version applies the study's k and its declarations where a package is made. The declaration that the
     rows are not people and the word for the rows are read and kept, and applied by nothing: the stricter reading."""
     choices = study_privacy(_body(EVERYTHING))
-    declared = tuple(
-        FollowedToTheEvent(one.outcome, beyond_the_cap=one.beyond_the_cap)
-        for one in choices.followed_to_the_event
+    # the one function a package and the sharing dossier ask
+    policy = policy_of(choices, floor=10, floor_set_by="deployment")
+    assert policy == DisclosurePolicy.for_study(
+        choices.k,
+        floor=10,
+        floor_set_by="deployment",
+        declared=tuple(
+            FollowedToTheEvent(one.outcome, beyond_the_cap=one.beyond_the_cap)
+            for one in choices.followed_to_the_event
+        ),
     )
-    policy = DisclosurePolicy.for_study(choices.k, floor=10, declared=declared)
+    assert (policy.k, policy.asked, policy.floor) == (20, 20, 10)
     assert policy.followed("death") and policy.followed("visits") and not policy.followed("stroke")
     assert [one.beyond_the_cap for one in policy.declared] == [False, True]
-    # nothing typed reaches the policy from the study: no reason, no role, no date
-    assert all((one.reason, one.role, one.date) == ("", "", "") for one in policy.declared)
+    # the block a package records: what applied, and of the study's k what was asked. Nothing typed reaches it
+    # (no reason, no role, no date), and the two reserved choices are not applied: the rules are on, the word is
+    # the default's, and no declaration that the rows are not people is named
+    block = policy.block().to_dict()
+    assert (block["rules"], block["rows_not_people"], block["rows_word"]) == (
+        "on",
+        None,
+        "participants",
+    )
+    assert block["followed_to_the_event"] == [
+        {"outcome": "death", "beyond_the_cap": False},
+        {"outcome": "visits", "beyond_the_cap": True},
+    ]
+    assert "animal" not in json.dumps(block)
+    # a study that asks nothing: the default applies, raised by the floor, and the block says it asked none
+    nothing = policy_of(study_privacy(_body()), floor=12, floor_set_by="deployment")
+    assert (nothing.k, nothing.asked, nothing.floor) == (12, None, 12)
+    asked_none = nothing.block().to_dict()
+    assert (asked_none["k"], asked_none["k_asked"], asked_none["k_default"]) == (
+        12,
+        None,
+        DEFAULT_K,
+    )
     without = study_privacy(_body({**K_ONLY, **FOLLOWED}))
     assert (without.k, without.followed_to_the_event) == (choices.k, choices.followed_to_the_event)
     # kept when a revision is written, as asked

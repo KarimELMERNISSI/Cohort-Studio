@@ -771,9 +771,45 @@ the Data privacy settings to come change no study file.
   (`app_pages.data_monitoring.whole_configuration`). An uploaded configuration's `privacy` key is dropped, with a
   notice, and the session's own choices stay as they were: whoever opens a study chooses for their own data.
 - **What applies is decided where an output is made,** never in the section, which holds what was asked:
-  `core.disclosure.DisclosurePolicy.for_study` takes the `k` asked, the declarations and the installation's floor.
-  `rows_not_people` and `rows_word` are read and kept, and applied by nothing in this version: the rules stay on and
-  the documents say "participants".
+  `core.disclosure.policy_of(choices, floor, floor_set_by=...)` gives the policy of a study's choices on an
+  installation (the larger of the `k` asked, or the default, and the floor; who set that floor, as a level; the
+  declarations), and is the one function a package and the dossier's sharing mode ask, so that the two cannot
+  disagree. `rows_not_people` and `rows_word` are read and kept, and applied by nothing in this version: the rules
+  stay on and the documents say "participants".
+
+#### The study package's formats
+
+`core/package.py` holds what a study package (`.cstudio.zip`) is made of, before any writer or reader: nothing
+builds a package yet. It imports the standard library and `core.privacy` only, so that a package can be read
+without the engine, numpy or pandas (a test loads it in a fresh interpreter).
+
+- **The members**, in the zip's order (`MEMBERS`): `package.json`, `protocol.json`, `results.json`, `README.md`,
+  `uv.lock` when the installation has one, `MANIFEST.sha256`. Each tier has its own file name (`package_name`).
+- **One writer.** `dumps(member, payload)` is the only writer of a JSON member: an envelope `format` + `schema`,
+  keys sorted, two spaces, UTF-8 without a byte order mark, line feeds. The body of `protocol.json` keeps the
+  order it is given, since the order of the families and of their rules is part of the study. Two builds of one
+  study are the same bytes.
+- **A strict reader.** `loads(data, cap)` refuses what the writer never writes (a byte order mark, a key written
+  twice, NaN or an infinite number, a nest of more than `DEPTH` levels, a member over its size), and
+  `read_envelope` another member's format or a later schema. A reason quotes nothing of a file: it counts.
+- **The text rule.** `core.privacy.hidden(text)` counts the characters that no name of a study and no text of a
+  package may hold: control characters other than a line feed, format characters (the marks that change the
+  direction of a text), line and paragraph separators, a lone surrogate, and the characters that show nothing
+  (`INVISIBLE`). One rule for the study's section and for the package: a study never declares a name that its
+  package would refuse. The writer refuses to write such a character and the reader refuses a member that holds
+  one. `shown(text)` is for what does not come from a member. A source file never holds such a character itself:
+  a test that needs one builds it with `chr()`.
+- **The manifest and the hash.** `manifest_of` lists the SHA-256 of every other member; **the package's hash is
+  the SHA-256 of the manifest's bytes** (`package_hash`).
+- **The policy block.** `Policy` is what `package.json` records of the privacy rules a package was made under:
+  one closed shape with every key always written, for `rules` `on` (what this version writes), `off` and `none`.
+  It records what applied, and of the study's k what was asked: `k_asked` is null when the study asked none, with
+  `k_default` beside it; the cap of "followed to the event" once, never above the code's (it is lowered, never
+  raised). `DisclosurePolicy.block()` writes it, from what the policy itself holds; nothing else does. An override
+  names its place by the format's own names and by positions (`is_place`), never by a text.
+
+A key or a closed value that a reader does not know reads as written by a later version, and every id here (the
+tiers, the members, the values of `rules`, the levels of `*_set_by`) is a stored id: never renamed.
 
 ### Settings, preferences and API keys
 

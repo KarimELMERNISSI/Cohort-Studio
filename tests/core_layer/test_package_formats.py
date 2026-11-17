@@ -345,6 +345,9 @@ def test_the_policy_block_has_one_closed_shape_with_every_key_written() -> None:
     # "asked none" and "asked 10" read differently, and a later change of the default stays readable
     asked = pk.Policy.from_dict(_on(k_asked=10))[0]
     assert asked is not None and asked.to_dict()["k_asked"] == 10 and asked != policy
+    # an installation may lower the cap: read, with who set it
+    lowered = pk.Policy.from_dict(_on(cap=0.02, cap_set_by="administrator"))[0]
+    assert lowered is not None and (lowered.cap, lowered.cap_set_by) == (0.02, "administrator")
     # the k applied is the larger of what was asked (or the default) and the floor
     for k, k_asked, floor in ((20, 20, 10), (10, 5, 10), (12, None, 12), (10, None, 5)):
         assert pk.Policy.from_dict(_on(k=k, k_asked=k_asked, floor=floor))[1] == []
@@ -419,6 +422,10 @@ def test_the_policy_block_has_one_closed_shape_with_every_key_written() -> None:
         (_on(cap="5%"), pk.NOT_A_POLICY),
         (_on(cap=True), pk.NOT_A_POLICY),
         (_on(cap=1), pk.NOT_A_POLICY),  # a share is written as one: a second writing of 1.0
+        # the cap of "followed to the event" is lowered, never raised: a block that claims a larger one is refused
+        (_on(cap=0.5), pk.NOT_A_POLICY),
+        (_on(cap=1.0), pk.NOT_A_POLICY),
+        (_on(cap=0.0500001), pk.NOT_A_POLICY),
         (_on(rows_word=3), pk.NOT_A_POLICY),
         (_on(followed_to_the_event={"death": {}}), pk.NOT_A_POLICY),
         (_on(followed_to_the_event=[{"outcome": "death"}]), pk.NOT_A_POLICY),
