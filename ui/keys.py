@@ -313,6 +313,13 @@ KEYS: tuple[Key, ...] = (
         note="the calculations from numbers typed added to the study dossier (JSON): never stale, gone with it",
     ),
     Key(
+        "_held_tables",
+        "ui.results",
+        "dataset",
+        note="the four counts (sorted, no name) of each accuracy result whose table the dossier does not write: a "
+        "table typed that copies one is not written either",
+    ),
+    Key(
         "workflow_marks",
         "ui.progress",
         "dataset",

@@ -284,7 +284,7 @@ time; each keeps its choices and its result while another is open.
 
 | Question | You choose | What it gives |
 | --- | --- | --- |
-| **Accuracy of a test** | the reference standard and the value that means the condition is present; whether the test's result is **a number** (a score or a marker) or **positive or negative**; for a number, whether the condition is more likely when it is **higher** or **lower**, and the cut-off; for a yes/no test, its column and the value that means a positive test; **how the participants entered the study** | for a score, the ROC curve and its AUC with the DeLong interval; with a cut-off, or for a yes/no test, the 2x2 table, sensitivity and specificity (Wilson intervals), predictive values where the sampling allows, likelihood ratios and the diagnostic odds ratio |
+| **Accuracy of a test** | the reference standard and the value that means the condition is present; whether the test's result is **a number** (a score or a marker) or **positive or negative**; for a number, whether the condition is more likely when it is **higher** or **lower**, and the cut-off; for a yes/no test, its column and the value that means a positive test, or the four counts of a 2x2 table you type; **how the participants entered the study** | for a score, the ROC curve and its AUC with the DeLong interval; with a cut-off, or for a yes/no test, the 2x2 table, sensitivity and specificity (Wilson intervals), predictive values where the sampling allows, likelihood ratios and the diagnostic odds ratio |
 | **Agreement of two measurements** | two or more numeric columns measuring the same quantity; which analyses; what counts as agreement for the ICC | Bland-Altman mean difference and limits of agreement with their intervals (two columns), and the intraclass correlation, ICC(2,1) absolute agreement or ICC(3,1) consistency, with the Shrout-Fleiss interval; one Run gives both |
 | **Agreement of two raters (kappa)** | the two raters' columns; whether the categories are names or ordered grades, and for grades their order and how a near miss counts | the share put in the same category, Cohen's kappa (weighted, linear or quadratic, for ordered grades) with its interval, and the cross-table |
 
@@ -298,6 +298,20 @@ time; each keeps its choices and its result while another is open.
   the test against the reference standard, on the rows where both are recorded. The value that means a positive
   test is offered when one reads so (*Positive*, *Yes*, 1 beside 0, *Detected*), and both values are named in the
   plan before Run. A yes/no test has one sensitivity and one specificity: no curve, no AUC, no cut-off.
+- **The 2x2 table of a paper** (*Counts from: Numbers I type*) is a calculator. Its four fields are laid out as
+  the table: the test's result in the rows, the condition by the reference standard in the columns (a paper's
+  table may be the other way round). Once the four counts are typed, their margins are written under them, to
+  compare with the source's, and the result follows the numbers: no plan, no Run, and the analysis population and
+  the imputation do not apply. How the participants entered the study and the prevalence where the test will be
+  used are asked as for a test of the dataset, and kept apart from its answers. A table without participants with
+  the condition, or without it, is refused, and so is a test that is always positive or always negative. A test
+  positive more often without the condition than with it *points the other way*: its two rows, or its two columns,
+  may be exchanged. A table typed the other way round (the condition in its rows) is not flagged by any measure:
+  compare the totals written under the grid with the paper's. With fewer than 10 participants on a side, the page
+  says that the study dossier will write the table without its counts and measures (see below).
+  The table is taken as counting each participant once: counts of lesions, segments or readings, several
+  per participant, give intervals that are too narrow. A table has no ROC curve, and nothing can be said from it of
+  who the participants were, or of a reference standard done for some of them only.
 - **Indeterminate results.** A column with a third value (indeterminate, not done) is not offered. To read the
   test on its definite results, make that value missing in a copy (Data > Clean). Then read it again with that
   value counted as positive, and as negative (two more copies): in use, an indeterminate result is acted on one
@@ -308,7 +322,12 @@ time; each keeps its choices and its result while another is open.
   than 10 participants have the condition, or are without it; a cut-off found on the data that calls fewer than 10
   participants to one side is not written either. A line then says that the page shows them. A cut-off typed
   beforehand that calls fewer than 10 participants to one side is written with its table and its measures, without
-  its value: typed among the largest scores, it is one of theirs.
+  its value: typed among the largest scores, it is one of theirs. A 2x2 table you type follows the rule of a table
+  of the dataset, its counts being counted as participants': with fewer than 10 on a side of the reference
+  standard, the dossier writes its title and its source, and neither its four counts nor a measure. Nor does it
+  write a table typed that holds the four counts, in any order, of a table it does not write: the table of an
+  accuracy result computed on this dataset since it was loaded, or another table typed that is held back (the same
+  counts typed again with rows and columns exchanged).
 - **Predictive values follow how the participants entered the study.** *As they came* (a series): every
   participant eligible in a period, or a random sample of them, taken before anyone knew who had the condition; the
   share with the condition is then the setting's prevalence, and predictive values are read at it. *Sampled apart*
@@ -358,7 +377,8 @@ time; each keeps its choices and its result while another is open.
 
 - **Rates is a calculator.** It reads the numbers you type, not the dataset: its fields start empty, it has no Run
   button, and its result follows the numbers and says where they came from. The analysis population and the
-  imputation do not apply to it. The typed share of *One group against a reference* works the same way.
+  imputation do not apply to it. The typed share of *One group against a reference* and the typed table of
+  *Accuracy of a test* work the same way.
 - **A calculator's result can go into the study dossier.** Under the result, the line *From the numbers typed*
   writes them with their names, and **Add to the study dossier** keeps the calculation. *Where the numbers come
   from (optional)* takes a publication and its table, a report, a count of your own and its date: it is written
@@ -368,8 +388,8 @@ time; each keeps its choices and its result while another is open.
   read no data: it is never stale, the participant flow does not count it, and the Word dossier writes it in a
   section of its own, *Calculations from numbers typed by hand*, computed again from its numbers when the document
   is built. It is written as typed: the dossier's rules for small groups read the results of the dataset, not
-  numbers you type. A calculation stays with the dataset loaded: loading another clears it, as it clears the
-  results.
+  numbers you type, with one exception, the 2x2 table of *Accuracy of a test* (see above). A calculation stays
+  with the dataset loaded: loading another clears it, as it clears the results.
 - **How the participants entered the study.** The stratified analysis and the 2x2 panel ask it, once the outcome
   is chosen, and show only what the design supports. *Not stated* (where they start) gives the odds ratio only:
   it means the same whatever the sampling. *Followed over time* (a cohort, or a randomised trial whose groups were

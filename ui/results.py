@@ -31,7 +31,12 @@ from typing import Any
 import streamlit as st
 
 from biostats.plan import AnalysisSpec, ComputedOn, read_spec, titles
-from manage.report_tables import typed_numbers
+from manage.report_tables import (
+    TABLE_KIND,
+    result_title,
+    table_held_back,
+    typed_numbers,
+)
 from ui.components.text import plain
 
 logger = logging.getLogger(__name__)
@@ -39,6 +44,8 @@ logger = logging.getLogger(__name__)
 RESULTS_KEY = "_results"
 REPORT_KEY = "_report"  # the results added to the study dossier
 TYPED_KEY = "_report_typed"  # the calculations from numbers typed added to it: JSON only
+# the four counts, sorted, of each accuracy result whose 2x2 table the dossier does not write (counts only)
+HELD_TABLES_KEY = "_held_tables"
 NOTE_MAX = 200  # characters of "Where the numbers come from"
 CURRENT, STALE_DATA, STALE_POPULATION, STALE_CONFIG, MISSING = (
     "current",
@@ -212,7 +219,36 @@ def remember(
             logger.warning("the spec of %s could not be recorded: %s", key, type(exc).__name__)
             spec = None
     _store()[key] = StoredResult(value, stamp, config, spec)
+    if key == TABLE_KIND:
+        _keep_held_table(value)
     return stamp
+
+
+def _keep_held_table(value: Any) -> None:
+    """
+    Keep, for the session's dataset, the four counts of an accuracy result whose 2x2 table the dossier does not
+    write (``manage.report_tables.table_held_back``): sorted, without a name, cleared with the dataset. The page
+    keeps one accuracy result at a time, so that the next run replaced it, and its table typed into the calculator
+    afterwards was written in the dossier, with the predictive value "1 of 1" the dossier holds back.
+    """
+    try:
+        cells = table_held_back(value)
+    except Exception:  # a result of a shape this version does not read: nothing of it to keep
+        cells = None
+    if cells is None:
+        return
+    kept = st.session_state.get(HELD_TABLES_KEY)
+    kept = list(kept) if isinstance(kept, list) else []
+    if cells not in kept:
+        kept.append(cells)
+    st.session_state[HELD_TABLES_KEY] = kept
+
+
+def held_tables_kept() -> list[tuple[int, ...]]:
+    """The four counts, sorted, of each accuracy result computed on the session's dataset whose table the dossier
+    does not write (:func:`_keep_held_table`)."""
+    kept = st.session_state.get(HELD_TABLES_KEY)
+    return [tuple(cells) for cells in kept] if isinstance(kept, list) else []
 
 
 def _computed_on(
@@ -376,7 +412,9 @@ def add_to_report(key: str) -> None:
     _report()[item_id] = ReportItem(
         id=item_id,
         key=key,
-        title=RESULT_TITLES.get(key, key.replace("_", " ").capitalize()),
+        title=result_title(
+            key, stored.value, RESULT_TITLES.get(key, key.replace("_", " ").capitalize())
+        ),
         settings=describe_settings(stored.config),
         value=stored.value,
         stamp=stored.stamp,
@@ -579,6 +617,14 @@ def stamp_of(key: str) -> ResultStamp | None:
     return stored.stamp if stored is not None else None
 
 
+def stored_value(key: str) -> Any | None:
+    """The result kept under ``key`` as it is, whatever its settings and its age; None without one. For what reads
+    a result without showing it (the dossier compares a table typed with the table of the accuracy result the
+    session holds)."""
+    stored = _store().get(key)
+    return stored.value if stored is not None else None
+
+
 def stored_settings(key: str) -> tuple[str, str] | None:
     """
     The settings of the stored result ``key`` in words, and the time it was computed (hours and minutes); None
@@ -610,6 +656,7 @@ __all__ = [
     "clean_note",
     "config_hash",
     "describe_settings",
+    "held_tables_kept",
     "provenance",
     "recall",
     "remember",
@@ -621,6 +668,7 @@ __all__ = [
     "stamp_of",
     "status",
     "stored_settings",
+    "stored_value",
     "typed_id",
     "typed_note",
     "typed_provenance",

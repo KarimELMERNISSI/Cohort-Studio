@@ -5,7 +5,6 @@ Validates:
 - 2x2 contingency analysis (OR, RR, RD, NNT, Woolf/Katz CIs, Haldane-Anscombe correction)
 - Effect sizes with confidence intervals (Cohen's d, Hedges' g, η², ω²)
 - ANCOVA assumption diagnostics (homogeneity of regression slopes, normality, homoscedasticity)
-- Clinical diagnostic test accuracy metrics (Sensitivity, Specificity, PPV, NPV, Wilson CIs)
 """
 
 import numpy as np
@@ -14,7 +13,6 @@ import pytest
 
 from utils.epidemiology_utils import (
     calculate_2x2_epidemiology_metrics,
-    calculate_diagnostic_accuracy,
     check_ancova_assumptions,
     compute_cohens_d_with_ci,
     compute_eta_and_omega_squared,
@@ -137,29 +135,3 @@ class TestANCOVADiagnostics:
         assert diag.slopes_homogeneous is False
         assert diag.homogeneity_of_slopes_pvalue < 0.05
         assert any("Violation of Parallel Slopes" in w for w in diag.warnings)
-
-
-class TestDiagnosticTestAccuracy:
-    """Tests for diagnostic testing accuracy and Wilson score intervals."""
-
-    def test_diagnostic_accuracy_metrics(self):
-        # 100 diseased: 90 TP, 10 FN -> Sensitivity = 90%
-        # 100 healthy:  85 TN, 15 FP -> Specificity = 85%
-        res = calculate_diagnostic_accuracy(tp=90, fp=15, fn=10, tn=85)
-
-        assert pytest.approx(res.sensitivity, abs=1e-3) == 0.90
-        assert res.sensitivity_ci.lower < 0.90 < res.sensitivity_ci.upper
-
-        assert pytest.approx(res.specificity, abs=1e-3) == 0.85
-        assert res.specificity_ci.lower < 0.85 < res.specificity_ci.upper
-
-        # PPV = 90 / (90 + 15) = 90 / 105 ~ 0.857
-        assert pytest.approx(res.ppv, abs=1e-2) == 0.857
-
-        # NPV = 85 / (85 + 10) = 85 / 95 ~ 0.895
-        assert pytest.approx(res.npv, abs=1e-2) == 0.895
-
-        # Youden index J = 0.90 + 0.85 - 1 = 0.75
-        assert pytest.approx(res.youden_index, abs=1e-2) == 0.75
-        assert res.lr_positive > 1.0
-        assert res.lr_negative < 1.0

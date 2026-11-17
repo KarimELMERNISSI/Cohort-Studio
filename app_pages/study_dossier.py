@@ -7,6 +7,7 @@ population), and the Word study dossier that documents them.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import pandas as pd
@@ -30,10 +31,12 @@ from ui.results import (
     STALE_CODE,
     STALE_DATA,
     ReportItem,
+    held_tables_kept,
     remove_from_report,
     remove_typed,
     report_items,
     report_status,
+    stored_value,
     typed_stored,
 )
 from ui.state import get_state
@@ -249,38 +252,113 @@ def session_parts(state, items: list[ReportItem], *, include_stale: bool) -> dic
         "mi": _mi_section(state),
         # the calculations from numbers typed, as the session keeps them: computed again when the document is built
         "typed": typed_stored(),
+        # what a 2x2 table typed is compared with, read now: the document is built outside the run
+        "held_tables": held_tables(items),
     }
 
 
-def _calculation(stored: dict[str, Any]):
+def held_tables(items: list[ReportItem]) -> list[tuple[int, ...]]:
+    """
+    The four counts of each accuracy result of the session's dataset whose 2x2 table the dossier does not write:
+    every such result computed since the dataset was loaded (``ui.results.held_tables_kept``: a result is replaced
+    on the page by the next run, and its table typed back afterwards was written), the result the page holds, and
+    those of the dossier's list, whatever their age. Counts only, sorted, and no name: a table typed that holds the
+    same four, in any order, is not written either (the plain copy of what is held back).
+    """
+    from manage.report_tables import table_held_back
+
+    found: list[tuple[int, ...]] = list(held_tables_kept())
+    values = [stored_value("diagnostic"), *(item.value for item in items if item.key == "diagnostic")]
+    for value in values:
+        try:
+            cells = table_held_back(value)
+        except Exception:  # a result kept by another version: nothing of it to compare
+            cells = None
+        if cells is not None and cells not in found:
+            found.append(cells)
+    return found
+
+
+def _table_cells(stored: Mapping[str, Any]) -> tuple[int, ...] | None:
+    """The four counts, sorted, of a 2x2 table typed, from what the session keeps of it; None for another kind of
+    calculation, or for an item that cannot be read."""
+    from manage.report_tables import TABLE_KIND
+
+    asked = stored.get("spec")
+    if not isinstance(asked, Mapping) or asked.get("kind") != TABLE_KIND:
+        return None
+    numbers = asked.get("typed")
+    try:
+        return tuple(sorted(int(numbers[cell]) for cell in ("tp", "fp", "fn", "tn")))  # type: ignore[index]
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+
+
+def calculations_of(typed: Sequence[dict[str, Any]], held: Sequence[tuple[int, ...]] = ()) -> list:
+    """
+    The calculations of the dossier, in the order they were added, for the Word file and for the page's list
+    (:func:`_calculation` of each).
+
+    A table typed that a side too small holds back is held back in every arrangement of its four counts: typed
+    again with its rows and its columns exchanged (an ordinary correction of a table read the other way round) it
+    has other sides, and was written whole, counts and measures. So the tables held back join what every table is
+    compared with, whatever the order they were added in.
+    """
+    first = [_calculation(stored, held) for stored in typed]
+    own = [
+        cells
+        for stored, found in zip(typed, first, strict=True)
+        if found.blocks.held_numbers and (cells := _table_cells(stored)) is not None
+    ]
+    if not own:
+        return first
+    wider = [*held, *own]
+    return [_calculation(stored, wider) for stored in typed]
+
+
+def _calculation(stored: dict[str, Any], held: Sequence[tuple[int, ...]] = ()):
     """
     A calculation from numbers typed for the Word dossier and for the page's list, from what the session keeps of
     it (JSON): computed again from its numbers, its words and its blocks written afresh from its spec and its
     record. One that this version cannot read or compute any more keeps its place with a fixed line, and its
-    numbers in words: those of its spec when it reads, else as they were when it was added.
+    numbers in words: those of its spec when it reads, else as they were when it was added. A 2x2 table that the
+    dossier holds back (``held``: :func:`held_tables`) keeps its title and its source, without the line of its
+    numbers: the four counts are the table.
+
+    The numbers of a kind the dossier may hold back are written only once its rule has read them: a table that
+    cannot be read or computed again writes none, the words kept with it included (the rule cannot judge them,
+    and they are the four counts).
     """
     from biostats import plan
     from manage.dossier import CALCULATION_NOT_COMPUTED, DossierCalculation
     from manage.report_tables import (
         CALCULATION,
+        RECORD_BLOCKS,
         ResultBlocks,
-        record_blocks,
+        calculation_blocks,
         typed_numbers,
         typed_title,
     )
 
     note, added = str(stored.get("note") or ""), str(stored.get("added_at") or "")
-    title, numbers = CALCULATION, str(stored.get("words") or "")
+    asked = stored.get("spec")
+    kind = asked.get("kind") if isinstance(asked, Mapping) else None
+    # written as typed, whatever its numbers: a share, rates, a standardised ratio
+    as_typed = isinstance(kind, str) and kind in RECORD_BLOCKS
+    title, numbers = CALCULATION, str(stored.get("words") or "") if as_typed else ""
     try:
-        spec, _ = plan.read_spec(stored.get("spec"))
+        spec, _ = plan.read_spec(asked)
         if spec is None or spec.typed is None:
             raise ValueError("not a calculation this version reads")
-        title, numbers = typed_title(spec), typed_numbers(spec)
+        title, words = typed_title(spec), typed_numbers(spec)
+        if as_typed:
+            numbers = words
         done = plan.run(spec)
         record = plan.record_of(done.spec, done.result)
         if record is None:
             raise ValueError("the calculation has no record")
-        blocks = record_blocks(record)
+        blocks = calculation_blocks(done.spec, done.result, record, held=held)
+        numbers = "" if blocks.held_numbers else words
     except Exception as exc:
         # the type only, never the message: it can hold a number typed
         logger.warning(
@@ -341,7 +419,7 @@ def finish_input(parts: dict[str, Any], *, title: str, author: str):
         references += [
             METHOD_REFERENCES[k] for k in ("rubin1987", "barnard1999", "vanbuuren2018", "white2011", "sterne2009")
         ]
-    calculations = [_calculation(stored) for stored in parts.get("typed") or []]
+    calculations = calculations_of(parts.get("typed") or [], parts.get("held_tables") or ())
     for calculation in calculations:
         references.extend(calculation.blocks.references)
     flow = parts["flow"]
@@ -432,15 +510,15 @@ def app() -> None:
         CALCULATION_NOT_COMPUTED,  # with the Word writer, loaded when the page runs
     )
 
-    for stored in typed:
-        # computed again, as the Word dossier will: the page and the document then say the same of each
-        calculation = _calculation(stored)
+    # computed again, as the Word dossier will: the page and the document then say the same of each
+    for stored, calculation in zip(typed, calculations_of(typed, held_tables(items)), strict=True):
+        # the list is the user's own: a calculation the Word dossier writes without its numbers (a table it holds
+        # back, or one it cannot compute again) keeps them here, as added; two such cards would read alike without
+        held_back = calculation.blocks.held_numbers
+        numbers = calculation.numbers or str(stored.get("words") or "")
         with st.container(border=True):
             head, chip, remove = st.columns(_CARD_COLUMNS, vertical_alignment="center")
-            head.markdown(
-                f"**{calculation.title}**"
-                + (f" · {calculation.numbers}" if calculation.numbers else "")
-            )
+            head.markdown(f"**{calculation.title}**" + (f" · {numbers}" if numbers else ""))
             with chip:
                 st.badge("typed", icon=":material/edit_note:", color="grey")
             remove.button(
@@ -457,6 +535,9 @@ def app() -> None:
                 else SOURCE_NOT_GIVEN
             )
             st.caption(f":material/edit_note: {source} Added at {calculation.added_at[11:16]}.")
+            if held_back and calculation.blocks.lines:
+                # why the Word dossier writes neither the table nor its measures, in the document's own words
+                st.caption(f":material/visibility_off: {calculation.blocks.lines[-1]}")
             if calculation.blocks.lines == [CALCULATION_NOT_COMPUTED]:
                 st.caption(
                     ":material/warning: This version of CohortStudio cannot compute this calculation again; the "

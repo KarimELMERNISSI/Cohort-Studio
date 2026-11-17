@@ -332,7 +332,10 @@ On the **Diagnostic accuracy & agreement** tab:
   was known (a series, consecutive or random)* and run again: the trial took its participants whether or not they
   went on to have a myocardial infarction, so the share with one (10.9%) is a prevalence, and the predictive values
   are read at it (positive about 41%, negative about 98%). Had the participants been sampled by their condition,
-  the page would read them only at a prevalence you give.
+  the page would read them only at a prevalence you give. To read the 2x2 table of a paper the same way, choose
+  *Positive or negative*, then *Numbers I type*, and type its four counts: with those of the table at 30.9 (test
+  positive: 87 with the condition and 126 without; test negative: 14 and 701), the calculator gives the same
+  sensitivity (86.1%) and specificity (84.8%), with no Run; with *As they came*, the predictive values too.
 - **Agreement of two measurements:** office `sbp_baseline` and `sbp_ambulatory`. Office readings are about
   **6 mmHg higher** (the white-coat effect), with limits of agreement of about -8 to +20 mmHg. The same Run gives
   the ICC. For two echo readers, choose `lvef_pct` and `lvef_reader2_pct` (reader 2 about 1 point higher): the ICC

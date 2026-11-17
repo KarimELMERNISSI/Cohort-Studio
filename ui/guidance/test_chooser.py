@@ -42,6 +42,7 @@ _ANALYSIS = "analysis"  # the Analysis tab of the page "analyze": group comparis
 # the questions the four above cannot reach, and the analysis that answers each (a tab of the page "analyze")
 OTHER_QUESTIONS: tuple[tuple[str, str], ...] = (
     ("How well does a test identify a condition?", "accuracy"),
+    ("Sensitivity and specificity from the 2x2 table of a paper?", "accuracy_typed"),
     ("Can two methods replace each other? How reliable is a measurement?", "measurements"),
     ("Do two raters agree?", "raters"),
     ("What is an association once a third variable is taken into account?", "strata"),

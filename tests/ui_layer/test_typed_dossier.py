@@ -36,6 +36,11 @@ RATIO_WORDS = (
     "person-years"
 )
 NOT_DATA = "Not from the dataset: the analysis population and the imputation do not apply."
+DIAGNOSTIC = "Diagnostic accuracy & agreement"
+TABLE = {"tp": 90, "fp": 30, "fn": 10, "tn": 270}
+TABLE_WORDS = "test positive, 90 with the condition and 30 without; test negative, 10 with the condition and 270 without"
+# a cut-off found on the data that calls one participant positive: its table is not written, typed back or not
+FOUND = {"tp": 1, "fp": 0, "fn": 29, "tn": 370}
 
 
 def _ok(at: AppTest) -> None:
@@ -420,7 +425,382 @@ def test_the_word_dossier_writes_calculations_in_a_section_of_their_own(app: App
     assert NO_CALCULATION in empty and CALCULATIONS_INTRO not in empty
 
 
+# ----------------------------------------------------------------------------- the 2x2 table typed
+
+
+def _table_form(at: AppTest) -> None:
+    """Analyze > Diagnostic accuracy & agreement > Accuracy of a test > Positive or negative > Numbers I type."""
+    at.switch_page(nav.page_path("analyze")).run()
+    at.session_state["epi_tab"] = DIAGNOSTIC
+    at.run()
+    for key, value in (
+        ("diag_question", m.ACCURACY),
+        ("diag_result", m.YES_NO),
+        ("diag_source", m.TYPED),
+    ):
+        if at.segmented_control(key=key).value != value:
+            at.segmented_control(key=key).set_value(value).run()
+    _ok(at)
+
+
+def _table(at: AppTest, tp: int | None, fp: int | None, fn: int | None, tn: int | None) -> None:
+    for key, value in (("diag_tp", tp), ("diag_fp", fp), ("diag_fn", fn), ("diag_tn", tn)):
+        if at.number_input(key=key).value != value:
+            _type(at, key, value)
+
+
+def test_the_table_of_a_paper_is_a_calculator_inside_accuracy_of_a_test(app: AppTest) -> None:
+    _table_form(app)
+    _table(app, None, None, None, None)
+    assert not app.metric and not _buttons(app, "report_typed_")
+    assert "Type the four counts of the table: the result appears here." in _texts(app)
+    assert not [button for button in app.button if button.label == "Run analysis"]  # a calculator
+    _table(app, **TABLE)
+    text = _texts(app)
+    assert (
+        "100 with the condition and 300 without; 120 positive tests and 280 negative; 400 in all."
+        in text
+    )
+    shown = {metric.label: metric.value for metric in app.metric}
+    assert (shown["Sensitivity"], shown["Specificity"], shown["Participants"]) == (
+        "90.0%",
+        "90.0%",
+        "400",
+    )
+    assert f"From the numbers typed: {TABLE_WORDS}. {NOT_DATA}" in text
+    # not stated: no predictive value at the table's share, and no Run to "run again"
+    assert (
+        "No predictive values: if the participants were taken as they came (a series), say so to read them at the "
+        "share in this table (25.0%); otherwise give the prevalence where the test will be used."
+        in text
+    )
+    assert "run again" not in text and "these data" not in text
+    (add,) = _buttons(app, "report_typed_add::typed:diagnostic:")
+    # a series reads them at the table's share, and is another calculation than the same table not stated
+    app.radio(key="diag_sampling_typed").set_value("series").run()
+    _ok(app)
+    text = _texts(app)
+    assert (
+        "Predictive values at the share with the condition in this table (25.0%, a series): positive 75.0%"
+        in text
+    )
+    assert "In this table: 25.0% (a series)." in text
+    (series,) = _buttons(app, "report_typed_add::typed:diagnostic:")
+    assert series != add
+    app.text_input(key="diag_from").input(
+        "Smith 2021, table 2"
+    )  # typed, then the click, in one run
+    app.button(key=series).click().run()
+    _ok(app)
+    item = _basket(app)[-1]
+    assert item["spec"]["kind"] == "diagnostic" and item["spec"]["typed"] == TABLE
+    assert item["spec"]["options"] == {"alpha": 0.05, "prevalence": None, "sampling": "series"}
+    assert item["note"] == "Smith 2021, table 2"
+    assert item["words"] == f"{TABLE_WORDS}; participants taken as they came (a series)"
+    assert _buttons(app, "report_typed_remove::") == [f"report_typed_remove::{item['id']}"]
+    # never a result of the dataset: nothing kept under the accuracy analysis, nothing in its list
+    assert "diagnostic" not in (
+        app.session_state["_results"] if "_results" in app.session_state else {}
+    )
+
+
+def test_a_table_that_cannot_be_one_is_refused_and_one_swapped_is_said(app: AppTest) -> None:
+    _table_form(app)
+    _table(app, 0, 30, 0, 270)  # no one with the condition
+    assert not app.metric and not _buttons(app, "report_typed_")
+    assert (
+        "Type participants with the condition (the first column) and without it (the second)"
+        in _texts(app)
+    )
+    _table(app, 90, 30, 0, 0)  # every test positive
+    assert not app.metric
+    assert "Type tests positive and tests negative: with a row of zeros" in _texts(app)
+    # the condition typed in the rows: the test reads positive more often without the condition than with it
+    _table(app, 10, 270, 90, 30)
+    said = "\n".join(warning.value for warning in app.warning).replace("\\", "")  # shown as text
+    assert (
+        "In this table the test is positive for 10.0% of those with the condition and 90.0% of those without it: "
+        "it points the other way. Check that the two rows, or the two columns, are not exchanged."
+        in said
+    )
+    # fewer than 10 on a side: a wide interval, said before the result; the result is shown all the same
+    _table(app, 3, 30, 4, 270)
+    # and the calculator says what the study dossier will do with it, before it is added
+    assert (
+        "7 participants with the condition: the interval of the sensitivity is wide; added to the study dossier, "
+        "this table is written without its counts and measures." in _texts(app)
+    )
+    # a side of 10 to the dossier, and enough for the interval: nothing is said
+    _table(app, 9, 30, 1, 270)
+    assert "the interval of the sensitivity is wide" not in _texts(app)
+    # a rare condition: its share is written with the decimals that show it
+    _table(app, 20, 500, 4, 49476)
+    assert "In this table: 0.048% (a series)." in _texts(app)
+    assert "in this table (0.048%, a series)" in _texts(app) and "(0.0%" not in _texts(app)
+    assert "Compare these totals with the paper's" in _texts(app)
+    assert {metric.label for metric in app.metric} >= {"Sensitivity", "Specificity"}
+    _table(app, **TABLE)
+
+
+def test_the_dossier_page_lists_a_table_typed_and_says_when_it_is_not_written(
+    app: AppTest,
+) -> None:
+    kept = dict(app.session_state["_report_typed"])
+    small = _stored("diagnostic", {"tp": 3, "fp": 30, "fn": 4, "tn": 270}, note="A register, 2021")
+    whole = _stored("diagnostic", TABLE, sampling="series")
+    app.session_state["_report_typed"] = {small["id"]: small, whole["id"]: whole}
+    app.switch_page(nav.page_path("dossier")).run()
+    _ok(app)
+    text = _texts(app)
+    assert f"**Diagnostic accuracy of a yes/no test (numbers typed)** · {whole['words']}" in text
+    # the table the Word dossier does not write keeps its numbers in the user's own list, with the reason
+    assert f"**Diagnostic accuracy of a yes/no test (numbers typed)** · {small['words']}" in text
+    assert text.count(":material/visibility_off: ") == 1
+    assert (
+        ":material/visibility_off: Fewer than 10 participants have the condition in this table: the t"
+        "able and its measures read them one by one, so the Word dossier writes neither, as f"
+        "or a table of the dataset; the calculator shows them." in text
+    )
+    app.session_state["_report_typed"] = kept
+    app.run()
+    _ok(app)
+
+
 # ----------------------------------------------------------------------------- the words, without a session
+
+
+def test_a_table_typed_is_written_as_the_table_of_a_yes_no_test_of_the_dataset() -> None:
+    """One block for a 2x2 table, whatever its source: the measures, the table and the sampling's line of a table
+    typed are those of a yes/no test of the dataset with the same four counts; only what a table cannot name (a
+    column, a value) is absent, and its share is "this table"'s."""
+    from biostats.diagnostic import diagnostic_accuracy
+    from manage.report_tables import TABLE_NOTE, result_blocks
+
+    typed = _stored(
+        "diagnostic", TABLE, note="Smith 2021, table 2", sampling="series", prevalence=0.02
+    )
+    headings, text = _document(_parts([typed]))
+    assert "Diagnostic accuracy of a yes/no test (numbers typed)" in headings
+    assert (
+        f"Numbers typed: {TABLE_WORDS}; participants taken as they came (a series); predictive values at a "
+        "prevalence of 2%." in text
+    )
+    assert "Source: Smith 2021, table 2. Typed by hand, added on 2026-11-16 at 16:40." in text
+    counted = result_blocks(
+        {
+            "acc": diagnostic_accuracy(90, 30, 10, 270, prevalence=0.02, sampling="series"),
+            "auc": None,
+            "index_form": "yes_no",
+            "outcome": "ill",
+            "score": "rapid",
+            "pos_label": "Yes",
+            "absent": "No",
+            "positive": "Positive",
+            "negative": "Negative",
+            "prevalence": 0.02,
+        }
+    )
+    (_, measures), (caption, _) = counted.tables
+    for row in measures.itertuples(index=False):
+        name = str(row[0]).replace("these data", "this table")
+        assert f"{name}\n{row[1]}\n{row[2]}" in text, name
+    assert caption in text and "Test positive\n90\n30\n120" in text
+    assert "Test negative\n10\n270\n280" in text and "Total\n100\n300\n400" in text
+    for line in counted.lines:
+        assert line in text
+    assert f"Note: {TABLE_NOTE}" in text
+    # nothing of a column or of a value, and nothing that only a result of the dataset can claim
+    for absent in (
+        "rapid",
+        "ill",
+        "(Yes)",
+        "(Positive)",
+        "these data",
+        "Computed on",
+        "N analysed",
+    ):
+        assert absent not in text[text.index("6. Calculations") :], absent
+    references = text[text.index("7. References") :]
+    assert "Simel" in references and "Mercaldo" in references
+
+
+def test_a_table_typed_with_a_side_under_ten_is_not_written_nor_its_numbers() -> None:
+    """Typed numbers are counted as people's under the rule of the document they go into: the accuracy block's
+    rule for a side of the reference standard reads a table typed as it reads one of the dataset. The line of the
+    numbers typed is held back with the table: the four counts are the table."""
+    small = _stored("diagnostic", {"tp": 3, "fp": 30, "fn": 4, "tn": 270}, note="A register, 2021")
+    few_without = _stored("diagnostic", {"tp": 30, "fp": 3, "fn": 270, "tn": 6})
+    whole = _stored("diagnostic", {"tp": 9, "fp": 1, "fn": 1, "tn": 9})  # 10 on each side: written
+    headings, text = _document(_parts([small, few_without, whole]))
+    assert headings.count("Diagnostic accuracy of a yes/no test (numbers typed)") == 3
+    assert (
+        "Fewer than 10 participants have the condition in this table: the table and its measures read them on"
+        "e by one, so the Word dossier writes neither, as for a table of the dataset; the calculator shows them."
+        in text
+    )
+    assert (
+        "Fewer than 10 participants are without the condition in this table: the table and its"
+        in text
+    )
+    assert "Source: A register, 2021. Typed by hand, added on " in text
+    # neither the counts, in any writing, nor a measure of the two tables held back, in a paragraph or in a cell
+    assert text.count("Numbers typed: ") == 1
+    assert "Numbers typed: test positive, 9 with the condition and 1 without" in text
+    for written in ("3 with the condition", "270", "0.429", "42.9", "Test positive\n3\n30"):
+        assert written not in text, written
+    assert text.count("Sensitivity\n") == 1 and "Test positive\n9\n1\n10" in text
+
+
+def test_a_table_typed_that_cannot_be_computed_writes_none_of_its_counts() -> None:
+    """An item this version cannot read keeps the words of its numbers, which the Word file writes in place of its
+    result. For a table they are its four counts, and the rule that would hold them back cannot read an item that
+    does not compute: nothing of such a table is written, where a share or rates keep their words."""
+    from manage.dossier import CALCULATION_NOT_COMPUTED
+
+    small = {"tp": 3, "fp": 30, "fn": 4, "tn": 270}
+    later = _stored("diagnostic", small, note="A register, 2021")
+    later["spec"] = {**later["spec"], "kind_version": 2}
+    broken = _stored("diagnostic", small)
+    broken["spec"] = {**broken["spec"], "typed": {**small, "tp": 0, "fn": 0}}
+    unread = _stored("diagnostic", small)
+    unread["spec"] = "not a spec"
+    rates = _stored("rates", TWO)
+    rates["spec"] = {**rates["spec"], "kind_version": 2}
+    for item in (later, broken, unread):
+        assert item["words"].startswith("test positive, 3 with the condition")
+    headings, text = _document(_parts([later, broken, unread, rates]))
+    assert text.count(CALCULATION_NOT_COMPUTED) == 4
+    assert "3 with the condition" not in text and "270" not in text
+    assert text.count("Numbers typed: ") == 1 and f"Numbers typed: {RATIO_WORDS}." in text
+    assert "Source: A register, 2021. Typed by hand" in text
+    # the one that still reads keeps its title
+    assert headings.count("Diagnostic accuracy of a yes/no test (numbers typed)") == 1
+    assert headings.count("Calculation from numbers typed") == 3
+
+
+def test_a_table_typed_that_copies_a_table_the_dossier_holds_back_is_not_written(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The plain copy: the four counts of a cut-off found on the data that calls one participant positive, typed
+    into the calculator, wrote the positive predictive value "1 of 1" that the dossier holds back with the
+    cut-off. In any order: the rows or the columns swapped are the same four counts."""
+    import app_pages.study_dossier as page
+    from biostats.diagnostic import FOUND_CUTOFF, diagnostic_accuracy
+    from manage.report_tables import TABLE_OF_A_RESULT_HELD_BACK, table_held_back
+
+    result = {
+        "acc": diagnostic_accuracy(**FOUND, sampling="series"),
+        "auc": {"auc": 0.9, "n_positive": 30, "n_negative": 370},
+        "mode": FOUND_CUTOFF,
+        "direction": "higher",
+        "cutoff": 3987.0,
+        "outcome": "ill",
+        "score": "marker",
+        "pos_label": "Yes",
+    }
+    assert table_held_back(result) == (0, 1, 29, 370)
+    # a table the dossier writes is nothing to compare with, nor is a result without a table
+    typed_beforehand = {**result, "mode": "Manual"}
+    assert table_held_back(typed_beforehand) is None
+    assert table_held_back({**result, "acc": None}) is None and table_held_back(object()) is None
+    # what the session holds is read once, as counts: the result on the page and those of the dossier's list
+    monkeypatch.setattr(page, "stored_value", lambda key: result if key == "diagnostic" else None)
+    listed = SimpleNamespace(key="diagnostic", value=typed_beforehand)
+    other = SimpleNamespace(key="cox", value=object())
+    assert page.held_tables([listed, other]) == [(0, 1, 29, 370)]
+    monkeypatch.setattr(page, "stored_value", lambda key: None)
+    assert page.held_tables([listed, other]) == []
+    assert page.held_tables([SimpleNamespace(key="diagnostic", value=result)]) == [(0, 1, 29, 370)]
+
+    copy = _stored("diagnostic", FOUND, sampling="series")
+    swapped = _stored("diagnostic", {"tp": 29, "fp": 370, "fn": 1, "tn": 0})
+    another = _stored("diagnostic", {**FOUND, "tn": 371})
+    parts = _parts([copy, swapped, another])
+    _, free = _document(parts)  # in a session that holds no such result, the three are written
+    assert TABLE_OF_A_RESULT_HELD_BACK not in free and free.count("Numbers typed: ") == 3
+    _, text = _document({**parts, "held_tables": [(0, 1, 29, 370)]})
+    calculations = text[text.index("6. Calculations") : text.index("7. References")]
+    assert calculations.count(TABLE_OF_A_RESULT_HELD_BACK) == 2
+    assert calculations.count("Numbers typed: ") == 1 and "371 without" in calculations
+    assert "29 with the condition" not in calculations.replace(
+        "test negative, 29 with the condition and 371 without", ""
+    )
+
+
+def test_a_table_held_back_is_held_back_however_its_counts_are_typed_again() -> None:
+    """Typed with the condition in its columns (3 and 30, then 4 and 200), a table has a side of 7 and is held back.
+    Typed again with its rows and columns exchanged (3 and 4, then 30 and 200), an ordinary correction of a table
+    read the other way round, it has sides of 33 and 204 and was written whole. Whatever the order they were added
+    in, the second is held back as the copy of the first."""
+    from manage.report_tables import TABLE_OF_A_RESULT_HELD_BACK
+
+    held = _stored("diagnostic", {"tp": 3, "fp": 30, "fn": 4, "tn": 200})
+    again = _stored("diagnostic", {"tp": 3, "fp": 4, "fn": 30, "tn": 200})
+    other = _stored("diagnostic", {"tp": 30, "fp": 40, "fn": 30, "tn": 200})
+    for order in ([held, again, other], [again, other, held]):
+        _, text = _document(_parts(order))
+        assert text.count(TABLE_OF_A_RESULT_HELD_BACK) == 1
+        assert text.count("Fewer than 10 participants have the condition in this table") == 1
+        assert text.count("Numbers typed: ") == 1 and "30 with the condition and 40 without" in text
+        for written in ("3 with the condition", "Test positive\n3\n4", "Test positive\n3\n30"):
+            assert written not in text, written
+    # alone, the table typed the other way is a table like another: its own sides decide
+    _, alone = _document(_parts([again]))
+    assert "Numbers typed: test positive, 3 with the condition and 4 without" in alone
+
+
+def test_the_table_of_a_result_is_kept_once_the_next_run_has_replaced_it() -> None:
+    """The page keeps one accuracy result at a time. A score whose cut-off found on the data calls one participant
+    positive was replaced by the next run, and its four counts typed afterwards were written, with the predictive
+    value "1 of 1" the dossier holds back. Its counts are kept for the dataset, sorted and without a name."""
+    import streamlit as st
+
+    import app_pages.study_dossier as page
+    from biostats.diagnostic import FOUND_CUTOFF, diagnostic_accuracy
+    from ui import results
+
+    found = {
+        "acc": diagnostic_accuracy(**FOUND, sampling="series"),
+        "auc": {"auc": 0.9, "n_positive": 30, "n_negative": 370},
+        "mode": FOUND_CUTOFF,
+    }
+    written = {"acc": diagnostic_accuracy(90, 30, 10, 270), "auc": None, "index_form": "yes_no"}
+    st.session_state.pop(results.HELD_TABLES_KEY, None)
+    try:
+        results._keep_held_table(found)
+        results._keep_held_table(written)  # a table the dossier writes is nothing to keep
+        results._keep_held_table(found)  # once
+        results._keep_held_table(object())  # nor is a result of another shape
+        assert results.held_tables_kept() == [(0, 1, 29, 370)]
+        assert st.session_state[results.HELD_TABLES_KEY] == [
+            (0, 1, 29, 370)
+        ]  # counts, and nothing else
+        # the page now holds another result, and the dossier's list is empty: the copy is still known
+        assert page.held_tables([]) == [(0, 1, 29, 370)]
+    finally:
+        st.session_state.pop(results.HELD_TABLES_KEY, None)
+
+
+def test_an_interval_ends_at_none_or_all_exactly_and_a_result_is_titled_by_its_form() -> None:
+    """For 12 of 12 the Wilson bound was 0.9999999999999999, which the Word block read as a share strictly below 1
+    and wrote "1.00000000 (0.75750599 to 1.00000000)"."""
+    from biostats.diagnostic import diagnostic_accuracy
+    from manage.report_tables import result_title
+
+    all_right = diagnostic_accuracy(12, 0, 0, 12)
+    assert all_right.sensitivity_ci.upper == 1.0 and all_right.specificity_ci.upper == 1.0
+    none_right = diagnostic_accuracy(0, 5, 12, 12)
+    assert none_right.sensitivity_ci.lower == 0.0 and 0 < none_right.sensitivity_ci.upper < 1
+    _, text = _document(_parts([_stored("diagnostic", {"tp": 12, "fp": 0, "fn": 0, "tn": 12})]))
+    assert "Sensitivity\n1\n0.758 to 1" in text and "1.00000000" not in text and "e-17" not in text
+    # the form of the test in the title: two results of the same columns read alike under one title
+    title = "Diagnostic accuracy"
+    assert (
+        result_title("diagnostic", {"index_form": "yes_no"}, title) == f"{title} of a yes/no test"
+    )
+    assert result_title("diagnostic", {"auc": {}}, title) == f"{title} of a score"
+    assert result_title("cox", {"index_form": "yes_no"}, "Cox model") == "Cox model"
+    assert plan.KINDS["diagnostic"].typed_title == f"{title} of a yes/no test (numbers typed)"
 
 
 def test_small_counts_typed_are_written_as_typed() -> None:
@@ -604,22 +984,41 @@ def test_every_kind_computed_from_numbers_typed_has_its_words_and_its_block() ->
     """A kind given a typed runner without its words would stop the calculator's page and the dossier's: the
     catalogue, the words and the blocks are held together here."""
     from biostats.rates import has_ratio
-    from manage.report_tables import RECORD_BLOCKS, record_blocks, typed_numbers, typed_title
+    from manage.report_tables import (
+        CALCULATION_KINDS,
+        RECORD_BLOCKS,
+        TABLE_KIND,
+        calculation_blocks,
+        record_blocks,
+        typed_numbers,
+        typed_title,
+    )
 
     samples = {
         "proportion": ({"count": 30, "total": 100}, {"reference": 0.2}),
         "rates": (TWO, {}),
         "standardised_ratio": ({"observed": 25, "expected": 18.4}, {}),
+        "diagnostic": (TABLE, {}),
     }
     typed = [kind.id for kind in plan.KINDS.values() if kind.typed_run is not None]
     assert sorted(typed) == sorted(samples) and set(RECORD_BLOCKS) <= set(plan.KINDS)
+    # the kinds the dossier writes a calculation of are those computed from numbers typed, no more and no fewer
+    assert set(typed) == CALCULATION_KINDS == {*RECORD_BLOCKS, TABLE_KIND}
     for kind in typed:
         numbers, options = samples[kind]
         spec = plan.specify(kind, typed=numbers, options=options)
         assert typed_numbers(spec) and typed_title(spec).endswith("(numbers typed)")
         done = plan.run(spec)
-        blocks = record_blocks(plan.record_of(done.spec, done.result))
-        assert blocks.lines and blocks.references and blocks.warnings
+        record = plan.record_of(done.spec, done.result)
+        blocks = calculation_blocks(done.spec, done.result, record)
+        assert blocks.lines and blocks.references and blocks.warnings and not blocks.held_numbers
+        if kind in RECORD_BLOCKS:  # written from its record alone
+            alone = record_blocks(record)
+            assert (blocks.lines, blocks.warnings, blocks.references) == (
+                alone.lines,
+                alone.warnings,
+                alone.references,
+            )
     # the page offers what the kinds know, and a rate's title follows the rule the rates are computed by
     choices = plan.KINDS["rates"].choices
     assert tuple(m.PERSON_TIME) == choices["unit"]

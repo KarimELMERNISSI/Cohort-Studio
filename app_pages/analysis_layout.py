@@ -22,7 +22,7 @@ from app_pages.clean_categories import take_done
 from app_pages.clean_dialog import clean_actions
 from biostats._types import TestResult
 from biostats.assumptions import read_assumptions
-from manage.report_tables import TYPED_SOURCE
+from manage.report_tables import TYPED_SOURCE, typed_numbers
 from ui import nav
 from ui.components import glossary_popover, help_popover, status_chip
 from ui.components.text import plain
@@ -40,7 +40,16 @@ from ui.guidance.numbers import (
     with_interval,
 )
 from ui.guidance.outcomes import ModelPlan
-from ui.results import MISSING, STALE_CONFIG, recall, status, stored_settings
+from ui.results import (
+    MISSING,
+    NOTE_MAX,
+    STALE_CONFIG,
+    clean_note,
+    recall,
+    status,
+    stored_settings,
+    typed_provenance,
+)
 from ui.state import get_state
 
 PAGE = "analyze"  # the page of the two tabs, as the navigation names it
@@ -318,6 +327,30 @@ def imputed_line(text: str) -> None:
 def typed_line(numbers: str) -> None:
     """Under a calculator's result, in place of the line "computed on": where its numbers came from."""
     st.caption(f":material/edit_note: {numbers} {TYPED}")
+
+
+def numbers_source(key: str) -> str:
+    """Where the numbers of a calculator come from (optional), in the user's words: the last field of a calculator,
+    kept with the calculation in the study dossier."""
+    return clean_note(
+        st.text_input(
+            "Where the numbers come from (optional)",
+            key=key,
+            max_chars=NOTE_MAX,
+            placeholder="for example: Smith 2021, table 2",
+            persist_state="page",
+            help=HELP["numbers_source"],
+        )
+    )
+
+
+def typed_close(spec: Any, source: str, key: str) -> None:
+    """Under a calculator's result, where "Computed on" stands under an analysis: the numbers typed in words, where
+    they come from when it was said, that they are not the dataset's, and the button that adds the calculation to
+    the study dossier (:func:`ui.results.typed_provenance`; ``key``: the source field's, read when it is clicked)."""
+    said = f" ({plain(source)})" if source else ""
+    typed_line(f"From the numbers typed{said}: {typed_numbers(spec)}.")
+    typed_provenance(spec, note_key=key)
 
 
 def advice_lines(advice: Sequence[Any]) -> None:

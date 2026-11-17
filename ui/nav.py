@@ -134,6 +134,16 @@ PAGES: tuple[PageDef, ...] = (
                 "accuracy_yes_no",
                 (_DIAGNOSTIC, "Accuracy of a test", "Positive or negative (yes or no)"),
             ),
+            # the 2x2 table of a paper, typed: a calculator inside the entry
+            (
+                "accuracy_typed",
+                (
+                    _DIAGNOSTIC,
+                    "Accuracy of a test",
+                    "Positive or negative (yes or no)",
+                    "Numbers I type",
+                ),
+            ),
             ("measurements", (_DIAGNOSTIC, "Agreement of two measurements")),
             ("raters", (_DIAGNOSTIC, "Agreement of two raters (kappa)")),
             ("paired_number", (_PAIRED, "Paired measurements", "A number (continuous)")),

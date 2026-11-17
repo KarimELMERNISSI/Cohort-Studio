@@ -6,6 +6,44 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Accuracy of a test: the 2x2 table of a paper, typed
+
+- **Counts from: Numbers I type**, under *Accuracy of a test* > *Positive or negative*, is a calculator for the
+  2x2 table of a paper or of another study: four counts laid out as the table (the test's result in the rows, the
+  condition by the reference standard in the columns), their margins written under them to compare with the
+  source's. The result follows the numbers: sensitivity and specificity with their intervals, predictive values
+  where the sampling allows or at the prevalence you give, likelihood ratios and the diagnostic odds ratio, by
+  the same computation as a yes/no test of the dataset. A link opens it from *Which test?*.
+- **What the table cannot be** is refused with its reason: no participant with the condition, or none without it;
+  a test always positive, or always negative. A test positive more often without the condition than with it is
+  said to point the other way (its two rows, or its two columns, may be exchanged). A table typed the other way
+  round, the condition in its rows, shows in its totals only: they are written under the grid, to compare with the
+  paper's.
+- **It can be added to the study dossier,** as every calculator's result, with where its numbers come from. The
+  Word dossier writes its measures and its table as it writes those of a yes/no test of the dataset.
+- **Privacy:** the counts of a table typed are counted as participants', under the rule of a table of the dataset.
+  With fewer than 10 on a side of the reference standard, the Word dossier writes the calculation's title and its
+  source, and neither its four counts nor a measure. It does the same for a table typed that holds the four
+  counts, in any order, of a table it does not write: the table of an accuracy result computed on this dataset
+  since it was loaded (a cut-off found on the data that calls fewer than 10 participants to one side, typed back
+  as a table), or another table typed that is held back (the same counts typed again with rows and columns
+  exchanged). The calculator says beforehand when a side is too small, and the Study dossier page says which
+  table is not written, and why.
+- **In the study dossier, the accuracy of a test is titled by the form of its test:** *Diagnostic accuracy of a
+  score* and *Diagnostic accuracy of a yes/no test*, where two results of the same columns both read "Diagnostic
+  accuracy"; a table typed is *Diagnostic accuracy of a yes/no test (numbers typed)*. A result added before keeps
+  its title until it is added again.
+- **A share with the condition next to 0% or 100% is written with the decimals that show it** in *Accuracy of a
+  test*, for a test of the dataset too: 24 of 50,000 read "0.0% (a series)" beside a negative predictive value of
+  99.992%.
+- **The interval of a share of 0% or 100% ends at 0 or at 1 exactly.** For 12 of 12, the Word dossier wrote
+  "1.00000000 (0.75750599 to 1.00000000)": the bound was 0.9999999999999999.
+- **The prevalence where the test will be used** stands under the question on how the participants entered the
+  study: beside it, its label wrapped onto two lines in a narrow window.
+- **One engine for the measures of a 2x2 table.** An older function that computed them by other rules (a
+  sensitivity of 0 where it has no value, no interval for a likelihood ratio) is removed; nothing on a page used
+  it.
+
 ### The calculators' results can go into the study dossier
 
 - **Add to the study dossier** now stands under the result of each calculator (one rate, two rates and their ratio,

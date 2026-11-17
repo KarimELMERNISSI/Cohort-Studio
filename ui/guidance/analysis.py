@@ -126,8 +126,8 @@ TAB_GUIDE: tuple[TabGuide, ...] = (
     TabGuide(
         "Diagnostic accuracy & agreement",
         "How well does a test identify a condition? Do two methods or two raters agree?",
-        "A marker or a yes/no test against a reference standard; two devices measuring the same quantity; two readers grading the "
-        "same participants.",
+        "A marker or a yes/no test against a reference standard (or the 2x2 table of a paper); two devices measuring "
+        "the same quantity; two readers grading the same participants.",
     ),
     TabGuide(
         "Paired, rates & stratified",

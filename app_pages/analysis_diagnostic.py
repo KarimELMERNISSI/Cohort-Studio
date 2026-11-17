@@ -40,6 +40,8 @@ from biostats.diagnostic import (
     yes_no_table,
     youden_cutoff,
 )
+from biostats.plan import run as run_spec
+from biostats.plan import specify
 from biostats.references import cite
 from biostats.reliability import (
     NEAR_MISSES,
@@ -50,9 +52,11 @@ from biostats.reliability import (
     rater_table,
 )
 from core.registry import as_code
+from manage.report_tables import dossier_min_n, table_cautions
 from ui.components import empty_state, error_card, help_popover
 from ui.guidance import measures as m
 from ui.guidance.measures import HELP
+from ui.guidance.numbers import share_decimals
 from ui.progress import mark_step
 from ui.results import CURRENT, provenance, remember, status
 from ui.theme import OKABE_ITO
@@ -448,30 +452,48 @@ def _reference_standard(df: pd.DataFrame, standards: list[str], first: Any, seco
     return outcome, present
 
 
-def _sampling_and_prevalence(outcome: str | None, share: float | None) -> tuple[str, float | None]:
+def _share_text(share: Any) -> str:
+    """The share with the condition as a percentage, with the decimals that tell it from 0% and from 100%
+    (``share_decimals``): 24 of 50,000 read "0.0%" beside a negative predictive value of 99.992%."""
+    return (
+        layout.percent(share, share_decimals(share))
+        if layout.known(share)
+        else layout.percent(share)
+    )
+
+
+def _sampling_question(
+    sampling_key: str,
+    prevalence_key: str,
+    share: float | None,
+    *,
+    where: str,
+    helps: tuple[str, str],
+    disabled: bool = False,
+) -> tuple[str, float | None]:
     """
-    How the participants entered the study, and beside it the prevalence where the test will be used: two of the
+    How the participants entered the study, and under it the prevalence where the test will be used: two of the
     three answers read predictive values only at that prevalence, so it stands in view (it was the one field of a
-    folded "More options"). The question is a statement about who was taken into the study, asked once the reference
-    standard is chosen and again for another; it starts at "Not stated", which reads no predictive value at the share
-    in the data.
+    folded "More options"). Under the question, in half the width: beside it, in a third of the row, its label
+    wrapped onto two lines in a 1,280-pixel window and its field sat below the question's first option. ``share``:
+    the share with the condition in ``where`` ("these data", "this table"), said for a series only: beside another
+    answer it is the share that answer has just set aside, and typing it back would read the predictive values
+    withheld.
     """
-    layout.depends("diag_sampling", outcome, SAMPLING_NOT_STATED)
-    layout.depends("diag_prev", outcome, None)  # a prevalence is that of one condition
-    wide, side = st.columns([2, 1])  # the labels are sentences: a third of a row cut them
     sampling = (
-        wide.radio(
+        st.radio(
             m.DESIGN_QUESTION,
             SAMPLINGS,
             format_func=m.SAMPLING_LABELS.__getitem__,
-            disabled=not outcome,
-            key="diag_sampling",
+            disabled=disabled,
+            key=sampling_key,
             persist_state="page",
-            help=HELP["sampling"],
+            help=helps[0],
         )
         or SAMPLING_NOT_STATED
     )
-    prevalence = side.number_input(
+    half, _ = st.columns(2)
+    prevalence = half.number_input(
         "Prevalence where the test will be used (optional)",
         min_value=0.0,
         max_value=1.0,
@@ -479,15 +501,31 @@ def _sampling_and_prevalence(outcome: str | None, share: float | None) -> tuple[
         step=0.01,
         format="%g",  # as typed: two decimals showed 1 in 2,500 as "0.00"
         placeholder="for example 0.02",
-        key="diag_prev",
+        key=prevalence_key,
         persist_state="page",
-        help=HELP["prevalence"],
+        help=helps[1],
     )
-    # the share in the data is a prevalence for a series only: beside another answer it is the share that answer
-    # has just set aside, and typing it back would read the predictive values withheld
     if share is not None and sampling == SERIES:
-        side.caption(f"In these data: {share:.1%} (a series).")
+        half.caption(f"In {where}: {_share_text(share)} (a series).")
     return sampling, prevalence
+
+
+def _sampling_and_prevalence(outcome: str | None, share: float | None) -> tuple[str, float | None]:
+    """
+    The question and the prevalence of a test of the dataset (:func:`_sampling_question`). The question is a
+    statement about who was taken into the study, asked once the reference standard is chosen and again for
+    another; it starts at "Not stated", which reads no predictive value at the share in the data.
+    """
+    layout.depends("diag_sampling", outcome, SAMPLING_NOT_STATED)
+    layout.depends("diag_prev", outcome, None)  # a prevalence is that of one condition
+    return _sampling_question(
+        "diag_sampling",
+        "diag_prev",
+        share,
+        where="these data",
+        helps=(HELP["sampling"], HELP["prevalence"]),
+        disabled=not outcome,
+    )
 
 
 def _prevalence_setting(prevalence: float | None) -> str | None:
@@ -510,13 +548,158 @@ def _accuracy(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     panel(df, mi=mi, guided=guided)
 
 
+def _table_cell(
+    label: str, key: str, column: Any, example: str, help_key: str, *, shown: bool = True
+) -> int | None:
+    """One count of the 2x2 table typed. ``shown``: the label is drawn (the second row keeps it for screen readers
+    only: its row names the test's result and the first row's labels head the columns)."""
+    return column.number_input(
+        label,
+        label_visibility="visible" if shown else "collapsed",
+        min_value=0,
+        value=None,
+        step=1,
+        placeholder=example,
+        key=key,
+        persist_state="page",
+        help=HELP[help_key],
+    )
+
+
+def _accuracy_typed() -> None:
+    """
+    The accuracy of a test from the four counts of a 2x2 table typed (a paper's, another study's): a calculator,
+    computed as the numbers are typed and through the plan, as the dossier computes it again from the same numbers.
+    It reads no row: no plan, no Run, no line of imputed data. The fields are laid out as the table, so no table is
+    echoed under the result; its margins are, to compare with the source's.
+    """
+    st.caption(
+        "Rows: the test's result. Columns: the condition, by the reference standard. A paper's table may be the "
+        "other way round."
+    )
+    label, present, absent = st.columns([1.2, 2, 2], vertical_alignment="bottom")
+    label.markdown("**Test positive**")
+    tp = _table_cell("Condition present", "diag_tp", present, "for example 90", "table_tp")
+    fp = _table_cell("Condition absent", "diag_fp", absent, "for example 30", "table_fp")
+    label, present, absent = st.columns([1.2, 2, 2], vertical_alignment="bottom")
+    label.markdown("**Test negative**")
+    fn = _table_cell(
+        "Condition present, test negative",
+        "diag_fn",
+        present,
+        "for example 10",
+        "table_fn",
+        shown=False,
+    )
+    tn = _table_cell(
+        "Condition absent, test negative",
+        "diag_tn",
+        absent,
+        "for example 270",
+        "table_tn",
+        shown=False,
+    )
+    whole = tp is not None and fp is not None and fn is not None and tn is not None
+    if whole:
+        # the one check of a table typed the other way round (the condition in its rows), which no measure shows
+        st.caption(
+            m.table_totals(int(tp), int(fp), int(fn), int(tn))  # type: ignore[arg-type]
+            + " Compare these totals with the paper's: they differ when the table is typed the other way round."
+        )
+    counted = int(tp) + int(fp) + int(fn) + int(tn) if whole else 0  # type: ignore[arg-type]
+    # the sampling and the prevalence of this table, apart from those of a test of the dataset (their own keys: a
+    # prevalence typed for a column of the dataset became the table's)
+    sampling, prevalence = _sampling_question(
+        "diag_sampling_typed",
+        "diag_prev_typed",
+        (int(tp) + int(fn)) / counted if counted else None,  # type: ignore[arg-type]
+        where="this table",
+        helps=(HELP["table_sampling"], HELP["table_prevalence"]),
+    )
+    source = layout.numbers_source("diag_from")
+    # a side under the dossier's threshold: said here, before the table is added and found held back there
+    ready, advice = m.check_table(tp, fp, fn, tn, prevalence, dossier_min=dossier_min_n())
+    layout.advice_lines(advice)
+    if not ready:
+        if not advice:
+            st.caption(
+                ":material/info: Type the four counts of the table: the result appears here."
+            )
+        return
+    try:
+        spec = specify(
+            "diagnostic",
+            typed={"tp": tp, "fp": fp, "fn": fn, "tn": tn},
+            options={
+                "sampling": sampling,
+                "prevalence": None if prevalence is None else float(prevalence),
+            },
+        )
+        acc = run_spec(spec).result
+    except Exception as exc:
+        error_card("The accuracy of the test could not be computed.", exc)
+        return
+    _show_accuracy_typed(acc)
+    layout.typed_close(spec, source, "diag_from")
+
+
+def _show_accuracy_typed(acc: Any) -> None:
+    """The result of a 2x2 table typed: the headline of a yes/no test, the predictive values its sampling allows,
+    every measure folded. What to know of the table (a test that points the other way) is said with the measures'
+    own warnings, as the dossier writes them."""
+    cautions = [*table_cautions(acc), *acc.warnings]
+    with_it, without = acc.tp + acc.fn, acc.fp + acc.tn
+    layout.headline(
+        [
+            _share_metric("Sensitivity", acc.sensitivity, acc.sensitivity_ci, acc.tp, with_it),
+            _share_metric("Specificity", acc.specificity, acc.specificity_ci, acc.tn, without),
+            Metric(
+                "Participants",
+                f"{with_it + without:,}",
+                f"{with_it:,} with the condition, {without:,} without",
+            ),
+        ],
+        m.SAMPLING_SENTENCE.get(acc.sampling, ""),
+        len(cautions),
+    )
+    said = _predictive_caption(acc, acc.prevalence_assumed, typed=True)
+    if said:
+        st.caption(said)
+    layout.warn(cautions)
+    with st.expander("Details: every measure"):
+        st.dataframe(
+            _measure_rows(acc, acc.prevalence_assumed, typed=True),
+            hide_index=True,
+            width="stretch",
+        )
+        st.caption(
+            _intervals(acc, acc.prevalence_assumed)
+            + " A 2x2 table has one point on the ROC plane: its area would be (sensitivity + specificity) / 2, "
+            "nothing beyond the two shares above."
+        )
+        st.caption("Method: " + " | ".join(acc.references))
+    help_popover(m.ACCURACY_READING)
+
+
 def _accuracy_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
+    source = layout.choose(
+        "Counts from",
+        m.SOURCES,
+        key="diag_source",
+        help=HELP["table_source"],
+        default=m.DATASET,
+        depth=3,
+    )
+    if source == m.TYPED:
+        _accuracy_typed()
+        return
     columns = m.two_valued(df)
     if len(columns) < 2:
         empty_state(
             "No yes/no test in this dataset",
             "A yes/no test is assessed against a reference standard: two columns with two values each. A test "
-            "recorded as a number can be assessed as a score (A number), or made yes/no on Data > Enrich.",
+            "recorded as a number can be assessed as a score (A number), or made yes/no on Data > Enrich. For the "
+            "2x2 table of a paper, choose Numbers I type.",
             links=(("enrich", "Create new variables", "variables"), ("clean", "Clean categories")),
         )
         return
@@ -635,13 +818,17 @@ def _predictive_pair(positive: tuple[Any, Any], negative: tuple[Any, Any]) -> st
     return ", ".join(said)
 
 
-def _predictive_caption(acc: Any, prevalence: float | None, unequal: bool = False) -> str:
+def _predictive_caption(
+    acc: Any, prevalence: float | None, unequal: bool = False, *, typed: bool = False
+) -> str:
     """The predictive values under the 2x2 table, by the sampling: at the share in the data for a series, at the
     prevalence given whatever the sampling (its interval carried from the likelihood ratio's, the prevalence taken
     as known). The numbers first; where none is read, why, with the share named and what to do. ``unequal``: the
     reference standard was done unequally by test result, and the share among those who had it is then no
-    prevalence, even in a series."""
-    share = layout.percent(acc.prevalence_observed)
+    prevalence, even in a series. ``typed``: a table typed into the calculator, which has no Run to run again and
+    whose share is the table's."""
+    share = _share_text(acc.prevalence_observed)
+    again = "" if typed else ", then run again"
     at = ""
     if prevalence is not None and acc.ppv_at_prevalence is not None:
         at = (
@@ -660,33 +847,37 @@ def _predictive_caption(acc: Any, prevalence: float | None, unequal: bool = Fals
             )
         return (
             "No predictive values: those with and without the condition were sampled apart, so the share with it "
-            f"here ({share}) was set by the sampling. Give the prevalence where the test will be used, then run again."
+            f"here ({share}) was set by the sampling. Give the prevalence where the test will be used{again}."
         )
     if acc.sampling != SERIES:
         return at or (
             "No predictive values: if the participants were taken as they came (a series), say so to read them at "
-            f"the share in these data ({share}); otherwise give the prevalence where the test will be used. Then run "
-            "again."
+            f"the share in {'this table' if typed else 'these data'} ({share}); otherwise give the prevalence where "
+            "the test will be used." + ("" if typed else " Then run again.")
         )
     where = (
         f"Predictive values among those who had the reference standard ({share} with the condition)"
         if unequal
-        else f"Predictive values at the share with the condition in these participants ({share}, a series)"
+        else "Predictive values at the share with the condition in "
+        f"{'this table' if typed else 'these participants'} ({share}, a series)"
     )
     text = f"{where}: {_predictive_pair((acc.ppv, acc.ppv_ci), (acc.npv, acc.npv_ci))}."
     return f"{text} {at}".strip()
 
 
-def _measure_rows(acc: Any, prevalence: float | None, unequal: bool = False) -> pd.DataFrame:
+def _measure_rows(
+    acc: Any, prevalence: float | None, unequal: bool = False, *, typed: bool = False
+) -> pd.DataFrame:
     """Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
     in the data and the share classified correctly for a series only). ``unequal``: the reference standard was done
-    unequally by test result, and the rows name that share as the caption does."""
-    share = layout.percent(acc.prevalence_observed)
+    unequally by test result, and the rows name that share as the caption does. ``typed``: a table typed into the
+    calculator, whose share is the table's."""
+    share = _share_text(acc.prevalence_observed)
     at_share = reads_share(acc.sampling)
     where = (
         f"among those who had the reference standard ({share} with the condition)"
         if unequal
-        else f"at the share in these data ({share})"
+        else f"at the share in {'this table' if typed else 'these data'} ({share})"
     )
     rows: list[tuple[str, Any, Any]] = [
         ("Sensitivity", acc.sensitivity, acc.sensitivity_ci),
@@ -706,15 +897,15 @@ def _measure_rows(acc: Any, prevalence: float | None, unequal: bool = False) -> 
             ),
         ]
     if prevalence is not None and acc.ppv_at_prevalence is not None:
-        typed = m.prevalence_text(prevalence)
+        given = m.prevalence_text(prevalence)
         rows += [
             (
-                f"Positive predictive value, at a prevalence of {typed}",
+                f"Positive predictive value, at a prevalence of {given}",
                 acc.ppv_at_prevalence,
                 acc.ppv_at_prevalence_ci,
             ),
             (
-                f"Negative predictive value, at a prevalence of {typed}",
+                f"Negative predictive value, at a prevalence of {given}",
                 acc.npv_at_prevalence,
                 acc.npv_at_prevalence_ci,
             ),

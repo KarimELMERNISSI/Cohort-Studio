@@ -1217,6 +1217,8 @@ def test_every_entry_of_the_two_tabs_can_be_linked_to() -> None:
     thirds = {
         m.MEASURES[m.NUMBER]: set(m.CHANGES.values()),
         m.COMPARED[m.MEAN]: set(m.SUMMARIES.values()),
+        # where the counts of a yes/no test come from: the dataset, or the 2x2 table of a paper typed
+        m.TEST_RESULTS[m.YES_NO]: set(m.SOURCES.values()),
     }
     linked = {tab: set() for tab in entries}
     for labels in paths.values():
@@ -1226,7 +1228,9 @@ def test_every_entry_of_the_two_tabs_can_be_linked_to() -> None:
         linked[labels[0]].add(labels[1])
         if len(labels) > 2:
             assert labels[2] in seconds[labels[1]], labels
-        if len(labels) > 3:  # the summary of a rank test, on the radio of a number or of a mean
+        if (
+            len(labels) > 3
+        ):  # the summary of a rank test, on the radio of a number or of a mean; a table typed
             assert labels[3] in thirds[labels[2]], labels
     assert linked == entries  # every entry has a link
 
@@ -1279,9 +1283,15 @@ def test_which_test_opens_the_analysis_it_recommends() -> None:
     assert mean.test == "One-sample t-test" and mean.tab == "one_mean"
     assert {tab for _, tab in OTHER_QUESTIONS} <= set(paths)
     # the four questions compare groups: what they cannot reach is linked beside them
-    assert {"accuracy", "measurements", "raters", "strata", "rates", "expected"} == {
-        t for _, t in OTHER_QUESTIONS
-    }
+    assert {
+        "accuracy",
+        "accuracy_typed",
+        "measurements",
+        "raters",
+        "strata",
+        "rates",
+        "expected",
+    } == {t for _, t in OTHER_QUESTIONS}
 
 
 def test_the_orientation_opens_what_it_names(app: AppTest) -> None:

@@ -8,7 +8,7 @@ returns plain data that the Word builder (:mod:`manage.dossier`) lays out.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from io import BytesIO
@@ -31,6 +31,9 @@ class ResultBlocks:
     warnings: list[str] = field(default_factory=list)
     # the words of the result's settings line that the block holds back (:func:`settings_written`)
     held_settings: tuple[str, ...] = ()
+    # a calculation whose block holds its table back: the line of the numbers typed is then not written either
+    # (the four counts of a 2x2 table are the table)
+    held_numbers: bool = False
 
 
 
@@ -659,17 +662,14 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     from biostats.diagnostic import FOUND_CUTOFF, LOWER, YES_NO_FORM, reads_share
     from biostats.references import cite
 
-    acc, auc = value["acc"], value["auc"]
+    acc, auc = value["acc"], value.get("auc")
     yes_no = value.get("index_form") == YES_NO_FORM
+    # a table typed into the calculator: no column, no value and no cut-off to name; one rule with the dataset's
+    typed = bool(value.get("typed"))
     lower = value.get("direction") == LOWER
     least = dossier_min_n()
     found = value.get("mode") == FOUND_CUTOFF
-    # a side of the reference standard of fewer than ``least`` participants: the AUC and the measures rank them one
-    # by one, and stay on the page
-    thin = _small_side(acc, auc, least)
-    # a cut-off found on these data that calls fewer than ``least`` participants to one side: its value, its
-    # range and the measures at it stay on the page (a typed cut-off is no participant's value)
-    few = _few_called(acc, least) if found and acc is not None and not thin else ""
+    thin, few = _table_held(value, least)
     held_back = bool(thin or few)
     rows: list[tuple[str, str, str]] = []
     if auc is not None:
@@ -693,22 +693,22 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
             where = (
                 f"among those who had the reference standard ({share} with the condition)"
                 if unequal
-                else f"at the share in these data ({share})"
+                else f"at the share in {'this table' if typed else 'these data'} ({share})"
             )
             rows += [
                 _share_row(f"PPV, {where}", acc.ppv, acc.ppv_ci),
                 _share_row(f"NPV, {where}", acc.npv, acc.npv_ci),
             ]
         if value.get("prevalence") is not None and acc.ppv_at_prevalence is not None:
-            typed = f"{_num(100 * float(value['prevalence']))}%"
+            given = f"{_num(100 * float(value['prevalence']))}%"
             rows += [
                 _share_row(
-                    f"PPV, at a prevalence of {typed}",
+                    f"PPV, at a prevalence of {given}",
                     acc.ppv_at_prevalence,
                     getattr(acc, "ppv_at_prevalence_ci", None),
                 ),
                 _share_row(
-                    f"NPV, at a prevalence of {typed}",
+                    f"NPV, at a prevalence of {given}",
                     acc.npv_at_prevalence,
                     getattr(acc, "npv_at_prevalence_ci", None),
                 ),
@@ -720,12 +720,15 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
         if acc.dor is not None:  # its zero-cell warning was written, and not the ratio
             rows.append(("Diagnostic odds ratio", _num(acc.dor), _ci(acc.dor_ci)))
     table = pd.DataFrame(rows, columns=["Measure", "Estimate", "95% CI"])
-    # what the numbers are of: the value that means the condition, the way the test points, the cut-off
-    if yes_no:
+    # what the numbers are of: the value that means the condition, the way the test points, the cut-off; a table
+    # typed names none of them (its heading and the line of its numbers have said what it is)
+    if typed:
+        title = ""
+    elif yes_no:
         title = f"{value.get('score')} = {value.get('positive')} (positive) for {value.get('outcome')}"
     else:
         title = f"{value.get('score')} for {value.get('outcome')}"
-    if value.get("pos_label") is not None:
+    if not typed and value.get("pos_label") is not None:
         title += f" = {value.get('pos_label')}"
     called = "Test positive"
     if yes_no:
@@ -736,9 +739,10 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     # (typed at the largest score, it is the score of the one called positive): its value is not written, in the
     # title, in the table's row or in the settings line. The table and the measures are, as for any typed cut-off;
     # a yes/no test's positive value is a code of the data, and is out of this
-    typed_few = _few_called(acc, least) if acc is not None and not yes_no and not found else ""
+    scored = not yes_no and not typed
+    typed_few = _few_called(acc, least) if acc is not None and scored and not found else ""
     held_settings: tuple[str, ...] = ()
-    if not yes_no:
+    if scored:
         if acc is None:
             title += " (no cut-off)"
         elif found and held_back:
@@ -756,8 +760,9 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     blocks = ResultBlocks(
         # a yes/no test beside a side too small has no row to write: its title stands as a line, no empty table
         tables=[(title, table)] if rows else [],
-        lines=[] if rows else [title],
+        lines=[] if rows or typed else [title],
         held_settings=held_settings,
+        held_numbers=typed and held_back,
         references=([] if not written else list(acc.references))
         # the caution of partial verification is written with the measures only, and its reference with it
         + (cite("begg1983") if written and value.get("verification") else [])
@@ -794,7 +799,13 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
                 )
             )
     youden = value.get("youden") or {}
-    if thin and yes_no:
+    if thin and typed:
+        # true in the Word file and on the Study dossier page's card, which shows the counts typed
+        blocks.lines.append(
+            f"Fewer than {least} participants {thin} in this table: the table and its measures read them one by "
+            "one, so the Word dossier writes neither, as for a table of the dataset; the calculator shows them."
+        )
+    elif thin and yes_no:
         blocks.lines.append(
             f"Fewer than {least} participants {thin}: the table and the measures of the test read them one by one, "
             "and are not written in the dossier; the page shows them."
@@ -829,7 +840,40 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
         if value.get("verification"):
             blocks.warnings.append(str(value["verification"]))
         blocks.warnings.extend(acc.warnings)
+        if typed:
+            blocks.warnings.append(TABLE_NOTE)
     return blocks
+
+
+def _table_held(value: Mapping[str, Any], least: int) -> tuple[str, str]:
+    """
+    Why the dossier holds back the 2x2 table of an accuracy result and its measures, as two words ("" when it does
+    not): the side of the reference standard that holds fewer than ``least`` participants (the AUC and the measures
+    rank them one by one, and stay on the page), and, for a cut-off found on these data, the side it calls fewer
+    than ``least`` participants to (its value, its range and the measures at it stay on the page; a cut-off typed
+    beforehand is no participant's value). One test for the block and for what a table typed is compared with.
+    """
+    from biostats.diagnostic import FOUND_CUTOFF
+
+    acc = value.get("acc")
+    thin = _small_side(acc, value.get("auc"), least)
+    found = value.get("mode") == FOUND_CUTOFF
+    few = _few_called(acc, least) if found and acc is not None and not thin else ""
+    return thin, few
+
+
+def table_held_back(value: Any) -> tuple[int, ...] | None:
+    """
+    The four counts, sorted, of an accuracy result of the dataset whose 2x2 table the dossier does not write; None
+    when it writes the table, or for a result without one. Counts only: a table typed that holds the same four, in
+    any order (its rows or its columns swapped), is not written either (:func:`calculation_blocks`).
+    """
+    if not isinstance(value, Mapping) or value.get("acc") is None:
+        return None
+    if not any(_table_held(value, dossier_min_n())):
+        return None
+    acc = value["acc"]
+    return tuple(sorted(int(cell) for cell in (acc.tp, acc.fp, acc.fn, acc.tn)))
 
 
 # ----------------------------------------------------------------------------- calculations from numbers typed
@@ -849,6 +893,34 @@ STANDARDISED_NOTE = (
     "The expected number is taken as known; the comparison is with the population that gave the reference rates, "
     "and no other."
 )
+TABLE_NOTE = (
+    "The table is taken as counting each participant once, with one test result and one reference standard: counts "
+    "of lesions, segments or readings, several per participant, give intervals that are too narrow."
+)
+# a table typed that holds the four counts of a table the dossier does not write (the table of an accuracy result of
+# the dataset, or another table typed that a side too small holds back): the plain copy of what is held back, in
+# words that are true in the Word file and on the Study dossier page's card, which shows the counts
+TABLE_OF_A_RESULT_HELD_BACK = (
+    "These four counts are those of a table that the Word dossier does not write (a result of the dataset, or "
+    "another table typed here): it writes neither this table nor its measures; the calculator shows them."
+)
+
+
+def table_cautions(acc: Any) -> list[str]:
+    """What to know of a 2x2 table typed, beyond its measures' own warnings: said under the calculator's result and
+    written with its block, from this one place. A test positive more often without the condition than with it
+    points the other way: its two rows, or its two columns, may be exchanged. (A table typed with the condition in
+    its rows is not caught here: it reads predictive values as sensitivity and specificity, and only its margins,
+    written under the grid, show it.)"""
+    said: list[str] = []
+    with_it, without = acc.tp + acc.fn, acc.fp + acc.tn
+    if with_it and without and acc.tp / with_it < acc.fp / without:
+        said.append(
+            f"In this table the test is positive for {percent(acc.tp / with_it)} of those with the condition and "
+            f"{percent(acc.fp / without)} of those without it: it points the other way. Check that the two rows, or "
+            "the two columns, are not exchanged."
+        )
+    return said
 
 
 def source_line(note: str) -> str:
@@ -924,7 +996,30 @@ def typed_numbers(spec: Any) -> str:
             "observed deaths" if deaths else "observed new cases",
         )
         return f"{observed} against {_as_typed(numbers['expected'])} expected"
+    if spec.kind == "diagnostic":
+        said = (
+            f"test positive, {numbers['tp']:,} with the condition and {numbers['fp']:,} without; test negative, "
+            f"{numbers['fn']:,} with the condition and {numbers['tn']:,} without"
+        )
+        # what was asked with the table: two calculations of one table read alike without it
+        entered = TABLE_SAMPLING.get(str(options.get("sampling")))
+        if entered:
+            said += f"; {entered}"
+        prevalence = options.get("prevalence")
+        if prevalence is not None:
+            said += (
+                f"; predictive values at a prevalence of {_as_typed(round(100 * float(prevalence), 10))}%"
+            )
+        return said
     raise ValueError(f"the {spec.kind} calculation has no words for its numbers")
+
+
+# how the participants of a table typed entered their study, after its four counts (the ids are
+# biostats.diagnostic's; nothing is added while it is not stated)
+TABLE_SAMPLING: dict[str, str] = {
+    "series": "participants taken as they came (a series)",
+    "two_gate": "those with and without the condition sampled apart (two-gate)",
+}
 
 
 def _named(part: Any) -> dict[str, Any]:
@@ -1067,6 +1162,61 @@ def record_blocks(record: Any) -> ResultBlocks:
     if build is None:
         raise ValueError(f"no block is written from the record of the {record.kind} kind")
     return build(record)
+
+
+# The kinds computed from numbers typed that the dossier writes: those of RECORD_BLOCKS, and the 2x2 table typed,
+# which goes through the accuracy block of the dataset's results (one rule for a side too small, never a copy).
+TABLE_KIND = "diagnostic"
+CALCULATION_KINDS: frozenset[str] = frozenset({*RECORD_BLOCKS, TABLE_KIND})
+
+
+def result_title(key: str, value: Any, title: str) -> str:
+    """
+    The title of a result of the dataset in the dossier's list and in the Word file: its kind's ``title``, and for
+    the accuracy of a test the form of its index test with it ("Diagnostic accuracy of a score", "... of a yes/no
+    test"). A score and a yes/no test of the same columns are two items of the dossier, and read as one under one
+    title; a table typed is named as the yes/no test it is ("... of a yes/no test (numbers typed)").
+    """
+    if key != TABLE_KIND or not isinstance(value, Mapping):
+        return title
+    from biostats.diagnostic import YES_NO_FORM
+
+    form = "a yes/no test" if value.get("index_form") == YES_NO_FORM else "a score"
+    return f"{title} of {form}"
+
+
+def calculation_blocks(
+    spec: Any, result: Any, record: Any, *, held: Collection[tuple[int, ...]] = ()
+) -> ResultBlocks:
+    """
+    The report blocks of a calculation from numbers typed, computed again from its spec: from its record for a
+    share, rates and a standardised ratio, which the dossier writes as typed.
+
+    A 2x2 table typed is counted as people's, under the rule of a table of the dataset: with fewer than the
+    dossier's threshold on a side of the reference standard, neither the table nor a measure is written. Nor are
+    they when the table holds the four counts, in any order, of a table the dossier does not write (``held``: the
+    sorted counts of each, an accuracy result of the dataset or another table typed): the plain copy of what is
+    held back. A block that holds its table back says so (``held_numbers``), and the line of the numbers typed is
+    not written either.
+
+    For the full dossier only: the table is written from its result, through the accuracy block of the dataset's
+    results. A document written from disclosed records (the package's sharing mode) must not call this: the kind
+    stays out of ``RECORD_BLOCKS``, so that ``record_blocks`` refuses it, until the accuracy block reads records.
+    """
+    if spec.kind != TABLE_KIND:
+        return record_blocks(record)
+    blocks = _accuracy_blocks(
+        {
+            "acc": result,
+            "typed": True,
+            "prevalence": result.prevalence_assumed,
+            "cautions": table_cautions(result),
+        }
+    )
+    cells = tuple(sorted(int(cell) for cell in (result.tp, result.fp, result.fn, result.tn)))
+    if not blocks.held_numbers and cells in set(held):
+        return ResultBlocks(lines=[TABLE_OF_A_RESULT_HELD_BACK], held_numbers=True)
+    return blocks
 
 
 def result_blocks(value: Any) -> ResultBlocks:

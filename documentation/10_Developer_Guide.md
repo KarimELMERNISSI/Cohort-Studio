@@ -293,7 +293,8 @@ Test: an AppTest of the page (as `tests/ui_layer/test_survival_page.py`), and th
 #### Add a calculation from numbers typed
 
 A calculator's result is no result of the dataset: it is a function of its numbers, kept as JSON and computed again
-wherever it is read. Follow the three calculators of `app_pages/analysis_extras.py`:
+wherever it is read. Follow the three calculators of `app_pages/analysis_extras.py`, or the typed 2x2 table of
+`app_pages/analysis_diagnostic.py`:
 1. The computation goes into `biostats`, as for an analysis.
 2. In `biostats/plan.py`, give its kind what it needs to be computed from numbers typed: `typed_title`,
    `typed_inputs` (each number by a name that is never renamed, as a `COUNT` or a `QUANTITY`), `typed_options` with
@@ -304,15 +305,18 @@ wherever it is read. Follow the three calculators of `app_pages/analysis_extras.
    `typed_version`, never `version`, which is the dataset's.
 3. Its words and its block go into `manage/report_tables.py`: `typed_numbers` (the numbers with their names),
    `typed_title`, and a block written from the record in `RECORD_BLOCKS`, with the numbers written by
-   `utils/numbers.py`, the pages' rule.
-4. On the page: `spec = specify(kind, typed=..., options=...)`, `run_spec(spec).result` for the headline, then
-   `_typed_close(spec, source, key)`, which writes the line of the numbers and offers the button
-   (`ui.results.typed_provenance`; `key` is the source field's: a button's callback runs with the arguments of the
-   run before, so the source is read from its field when the button is clicked). Never `remember`: it refuses a
-   typed spec.
+   `utils/numbers.py`, the pages' rule. `calculation_blocks` gives a calculation its block. A kind whose numbers
+   the dossier holds back under a rule of the dataset's results goes through that result's own block, never a copy
+   of its rule: the 2x2 table typed is written by the accuracy block (`CALCULATION_KINDS` lists the kinds).
+4. On the page: `layout.numbers_source(key)` for the source field, `spec = specify(kind, typed=..., options=...)`,
+   `run_spec(spec).result` for the headline, then `layout.typed_close(spec, source, key)`, which writes the line of
+   the numbers and offers the button (`ui.results.typed_provenance`; `key` is the source field's: a button's
+   callback runs with the arguments of the run before, so the source is read from its field when the button is
+   clicked). Never `remember`: it refuses a typed spec.
 5. Privacy: an error names a number, never its value. Nothing typed is logged (a guard logs the exception's type).
    A calculation is never named outside the session by a hash of its numbers: a small count is found back from
-   one. A block the dossier holds back holds back the line of its numbers too.
+   one. A block the dossier holds back says so (`ResultBlocks.held_numbers`), and the line of its numbers is not
+   written either.
 
 Test: the round trip of the spec and of the record, and the function the calculator shows
 (`tests/biostats_layer/test_plan_typed.py`); the button, the dossier page and the Word section

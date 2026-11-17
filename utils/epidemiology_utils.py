@@ -7,7 +7,9 @@ What is implemented here:
 - Cohen's d (pooled SD) with a normal-approximation CI and the Hedges' g small-sample factor (approximate J)
 - Eta-squared / omega-squared point estimates for one-way designs
 - ANCOVA diagnostics (homogeneity of slopes, residual normality, Breusch-Pagan homoscedasticity)
-- Diagnostic test accuracy (sensitivity, specificity, PPV, NPV with Wilson score CIs; LR+/LR-, Youden J)
+
+The accuracy of a test against a reference standard has one engine, :func:`biostats.diagnostic.diagnostic_accuracy`:
+none here.
 
 No compliance with reporting guidelines is implied by this module; see documentation/05_Epidemiology.md.
 """
@@ -100,30 +102,6 @@ class ANCOVADiagnosticsResult(BaseModel):
     partial_eta_squared: float = Field(default=0.0, description="Partial Eta Squared effect size")
     warnings: list[str] = Field(default_factory=list, description="Assumption violation warnings")
     guidance: list[str] = Field(default_factory=list, description="Clinical guidance for interpretation")
-
-
-class DiagnosticTestResult(BaseModel):
-    """Clinical diagnostic accuracy metrics with Wilson score confidence intervals."""
-    tp: int = Field(..., description="True Positives")
-    fp: int = Field(..., description="False Positives")
-    fn: int = Field(..., description="False Negatives")
-    tn: int = Field(..., description="True Negatives")
-    
-    sensitivity: float = Field(..., description="Sensitivity (True Positive Rate)")
-    sensitivity_ci: ConfidenceInterval = Field(...)
-    
-    specificity: float = Field(..., description="Specificity (True Negative Rate)")
-    specificity_ci: ConfidenceInterval = Field(...)
-    
-    ppv: float = Field(..., description="Positive Predictive Value (Precision)")
-    ppv_ci: ConfidenceInterval = Field(...)
-    
-    npv: float = Field(..., description="Negative Predictive Value")
-    npv_ci: ConfidenceInterval = Field(...)
-    
-    lr_positive: float | None = Field(default=None, description="Positive Likelihood Ratio (Sens / (1 - Spec))")
-    lr_negative: float | None = Field(default=None, description="Negative Likelihood Ratio ((1 - Sens) / Spec)")
-    youden_index: float = Field(..., description="Youden's Index J = Sensitivity + Specificity - 1")
 
 
 # =============================================================================
@@ -467,78 +445,4 @@ def check_ancova_assumptions(
         partial_eta_squared=round(float(partial_eta), 4),
         warnings=warnings,
         guidance=guidance,
-    )
-
-
-# =============================================================================
-# 4. DIAGNOSTIC TEST ACCURACY METRICS
-# =============================================================================
-
-def _wilson_score_interval(p: float, n: int, alpha: float = 0.05) -> tuple[float, float]:
-    """Compute Wilson score interval for proportions."""
-    if n == 0:
-        return 0.0, 0.0
-    z = norm.ppf(1.0 - alpha / 2.0)
-    z2 = z * z
-    denom = 1.0 + z2 / n
-    center = (p + z2 / (2.0 * n)) / denom
-    margin = (z * math.sqrt((p * (1.0 - p) / n) + (z2 / (4.0 * n * n)))) / denom
-    return max(0.0, center - margin), min(1.0, center + margin)
-
-
-def calculate_diagnostic_accuracy(
-    tp: int, fp: int, fn: int, tn: int, alpha: float = 0.05
-) -> DiagnosticTestResult:
-    """
-    Calculate clinical diagnostic accuracy parameters with 95% Wilson score confidence intervals.
-    
-    Args:
-        tp: True Positives
-        fp: False Positives
-        fn: False Negatives
-        tn: True Negatives
-        alpha: Significance level (default 0.05 for 95% CI)
-    """
-    total_pos = tp + fn
-    total_neg = fp + tn
-    total_test_pos = tp + fp
-    total_test_neg = fn + tn
-
-    sens = tp / total_pos if total_pos > 0 else 0.0
-    spec = tn / total_neg if total_neg > 0 else 0.0
-    ppv = tp / total_test_pos if total_test_pos > 0 else 0.0
-    npv = tn / total_test_neg if total_test_neg > 0 else 0.0
-
-    sens_ci = _wilson_score_interval(sens, total_pos, alpha)
-    spec_ci = _wilson_score_interval(spec, total_neg, alpha)
-    ppv_ci = _wilson_score_interval(ppv, total_test_pos, alpha)
-    npv_ci = _wilson_score_interval(npv, total_test_neg, alpha)
-
-    # Likelihood Ratios
-    lr_pos = None
-    if (1.0 - spec) > 1e-6:
-        lr_pos = round(sens / (1.0 - spec), 3)
-
-    lr_neg = None
-    if spec > 1e-6:
-        lr_neg = round((1.0 - sens) / spec, 3)
-
-    youden = sens + spec - 1.0
-
-    return DiagnosticTestResult(
-        tp=tp,
-        fp=fp,
-        fn=fn,
-        tn=tn,
-        sensitivity=round(sens, 4),
-        sensitivity_ci=ConfidenceInterval(lower=round(sens_ci[0], 4), upper=round(sens_ci[1], 4), level=1.0 - alpha),
-        specificity=round(spec, 4),
-        specificity_ci=ConfidenceInterval(lower=round(spec_ci[0], 4), upper=round(spec_ci[1], 4), level=1.0 - alpha),
-        ppv=round(ppv, 4),
-        ppv_ci=ConfidenceInterval(lower=round(ppv_ci[0], 4), upper=round(ppv_ci[1], 4), level=1.0 - alpha),
-        npv=round(npv, 4),
-        npv_ci=ConfidenceInterval(lower=round(npv_ci[0], 4), upper=round(npv_ci[1], 4), level=1.0 - alpha),
-        lr_positive=lr_pos,
-        lr_negative=lr_neg,
-        youden_index=round(youden, 4),
     )

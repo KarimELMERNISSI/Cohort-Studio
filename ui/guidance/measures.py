@@ -64,8 +64,8 @@ DIAGNOSTIC_ENTRIES: tuple[Entry, ...] = (
     Entry(
         ACCURACY,
         "Accuracy of a test",
-        "A score or a yes/no test against a reference standard: sensitivity, specificity, predictive values, "
-        "likelihood ratios; for a score, the ROC curve and its AUC.",
+        "A score or a yes/no test against a reference standard, from the dataset or from a 2x2 table you type: "
+        "sensitivity, specificity, predictive values, likelihood ratios; for a score, the ROC curve and its AUC.",
         (
             "Reference standard",
             "Index test",
@@ -239,7 +239,23 @@ HELP: dict[str, str] = {
     "present": "The value of the reference standard that means the condition is present.",
     "index": "The measurement whose accuracy is assessed: a score or a marker, one number per participant.",
     "test_result": "A number: a score or a marker, read at every cut-off (the ROC curve) or at one. Positive or "
-    "negative: a test whose result is already yes or no, read from a column of two values.",
+    "negative: a test whose result is already yes or no, read from a column of two values, or from a 2x2 table you "
+    "type (a paper, another study).",
+    "table_source": "Counts read from two yes/no columns of the dataset (the test and the reference standard), or "
+    "the four counts of a 2x2 table you type (a paper, another study).",
+    "table_tp": "True positives: participants with the condition whose test was positive.",
+    "table_fp": "False positives: participants without the condition whose test was positive.",
+    "table_fn": "False negatives: participants with the condition whose test was negative.",
+    "table_tn": "True negatives: participants without the condition whose test was negative.",
+    "table_sampling": "It decides where predictive values can be read. As they came: every participant eligible in a "
+    "period, or a random sample of them, taken before anyone knew who had the condition, then given the reference "
+    "standard: the share with the condition is that of the setting, and predictive values are read at it. Sampled "
+    "apart: a group known to have the condition (from a clinic, a registry) and a group known not to (healthy "
+    "volunteers): that share was set by the sampling, so predictive values are read only at the prevalence you "
+    "give. Not stated: the same, until you say. A paper says it in its methods.",
+    "table_prevalence": "Predictive values depend on how common the condition is. Give the prevalence where the test "
+    "will be used (0.02 for 2%): they are read at it whatever the sampling, the prevalence taken as known. Leave "
+    "empty to read them at the share in the table, which a series of participants allows.",
     "yes_no_test": "The test's result for each participant, in two values: positive or negative. A column with a "
     "third value (indeterminate, not done) is not listed. To read the test on its definite results, make that value "
     "missing in a copy (Data > Clean). Then read it again with that value counted as positive, and as negative (two "
@@ -2152,6 +2168,77 @@ def check_rates(
     return True, advice
 
 
+def table_totals(tp: int, fp: int, fn: int, tn: int) -> str:
+    """The margins of a 2x2 table typed, to compare with those of its source before reading the result."""
+
+    def counted(count: int, one: str, many: str) -> str:
+        return f"{count:,} {one if count == 1 else many}"
+
+    return (
+        f"{tp + fn:,} with the condition and {fp + tn:,} without; "
+        f"{counted(tp + fp, 'positive test', 'positive tests')} and {fn + tn:,} negative; "
+        f"{tp + fp + fn + tn:,} in all."
+    )
+
+
+def check_table(
+    tp: int | None,
+    fp: int | None,
+    fn: int | None,
+    tn: int | None,
+    prevalence: float | None = None,
+    *,
+    dossier_min: int | None = None,
+) -> tuple[bool, list[Advice]]:
+    """Whether the accuracy of a test can be computed from the four counts of a 2x2 table typed, and what to know of
+    them. A column of zeros leaves sensitivity or specificity without a value; a row of zeros is a test that calls
+    everyone positive, or no one, refused as the score's cut-off that does so is. ``dossier_min``: the fewest
+    participants on a side of the reference standard for the study dossier to write the table (the page passes
+    it): below it, the line of that side says so, before the table is added and found held back."""
+    cells = (tp, fp, fn, tn)
+    if any(cell is None for cell in cells):
+        return False, []
+    tp, fp, fn, tn = (int(cell) for cell in cells)  # type: ignore[arg-type]
+    with_it, without = tp + fn, fp + tn
+    if not with_it or not without:
+        return False, [
+            Advice(
+                "violated",
+                "Type participants with the condition (the first column) and without it (the second): sensitivity "
+                "reads the first, specificity the second.",
+            )
+        ]
+    if not tp + fp or not fn + tn:
+        return False, [
+            Advice(
+                "violated",
+                "Type tests positive and tests negative: with a row of zeros the test calls everyone positive, or "
+                "no one, and there is nothing to assess.",
+            )
+        ]
+    if prevalence is not None and not 0 < prevalence < 1:
+        return False, [Advice("violated", PREVALENCE_BOUNDS)]
+    advice: list[Advice] = []
+    for held, who, measure in (
+        (with_it, "with the condition", "sensitivity"),
+        (without, "without the condition", "specificity"),
+    ):
+        back = dossier_min is not None and held < dossier_min
+        if held < LEVEL_MIN or back:
+            advice.append(
+                Advice(
+                    "info",
+                    f"{held:,} participant{'s' if held != 1 else ''} {who}: the interval of the {measure} is wide"
+                    + (
+                        "; added to the study dossier, this table is written without its counts and measures."
+                        if back
+                        else "."
+                    ),
+                )
+            )
+    return True, advice
+
+
 def check_expected(observed: int | None, expected: float | None) -> tuple[bool, list[Advice]]:
     """Whether observed events can be compared with an expected number, and what to know of the numbers typed."""
     if observed is None or expected is None:
@@ -2251,6 +2338,7 @@ __all__ = [
     "check_expected",
     "check_rates",
     "check_share",
+    "check_table",
     "design_ratio",
     "edge_ratios",
     "group_medians",
@@ -2275,6 +2363,7 @@ __all__ = [
     "rater_categories",
     "share_counts",
     "strata",
+    "table_totals",
     "two_valued",
     "verification_words",
 ]

@@ -1876,11 +1876,40 @@ def _with_interval(value: Any, ci: Any, *, scale: float | None) -> tuple[Number,
     return tuple(numbers)
 
 
+def _typed_diagnostic(spec: AnalysisSpec) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    from biostats.diagnostic import diagnostic_accuracy
+
+    numbers, options = spec.typed or {}, spec.options
+    tp, fp, fn, tn = (numbers[cell] for cell in ("tp", "fp", "fn", "tn"))
+    if not (tp + fn and fp + tn):
+        raise ValueError(
+            "a table of a test against a reference standard holds participants with the condition and without it"
+        )
+    if not (tp + fp and fn + tn):
+        # a test that calls everyone positive, or no one: nothing to assess (the page refuses it too)
+        raise ValueError(
+            "a table of a test against a reference standard holds positive tests and negative tests"
+        )
+    prevalence = options.get("prevalence")
+    found = diagnostic_accuracy(
+        tp,
+        fp,
+        fn,
+        tn,
+        alpha=float(options["alpha"]),
+        prevalence=None if prevalence is None else float(prevalence),
+        sampling=str(options["sampling"]),
+    )
+    return found, {}, {}
+
+
 def _record_diagnostic(result: Any) -> tuple[list[Part], None]:
     """
-    The accuracy of a test against a reference standard, as the page keeps it: a mapping with ``acc`` (the measures
-    of the 2x2 table; None for a score without a cut-off), ``auc`` (a score), ``youden`` (a cut-off found on the
-    data) and ``index_form`` (``number``, a score, when it is absent; ``yes_no``). One record for the forms.
+    The accuracy of a test against a reference standard. From the dataset, as the page keeps it: a mapping with
+    ``acc`` (the measures of the 2x2 table; None for a score without a cut-off), ``auc`` (a score), ``youden`` (a
+    cut-off found on the data) and ``index_form`` (``number``, a score, when it is absent; ``yes_no``). From numbers
+    typed: the table's measures alone (``biostats.diagnostic.DiagnosticAccuracy``), which name no column, no value
+    and no form of the index test. One record for the three.
 
     A part per measure, present when the result holds it: predictive values at the share in the data and the share
     classified correctly for a series only, those at a prevalence when one was given, a likelihood ratio and the
@@ -1890,17 +1919,30 @@ def _record_diagnostic(result: Any) -> tuple[list[Part], None]:
     counts, in its support, the participants without the reference standard by test result: the rule judges each
     count of each support, these two included.
     """
-    from biostats.diagnostic import FOUND_CUTOFF, SAMPLING_NOT_STATED, SCORE_FORM, reads_share
+    from biostats.diagnostic import (
+        FOUND_CUTOFF,
+        SAMPLING_NOT_STATED,
+        SCORE_FORM,
+        DiagnosticAccuracy,
+        reads_share,
+    )
 
+    table_alone = isinstance(result, DiagnosticAccuracy)
+    if table_alone:  # a table typed: its measures, and nothing of a dataset
+        result = {"acc": result}
     acc, auc = result.get("acc"), result.get("auc")
-    form = str(result.get("index_form") or SCORE_FORM)
+    # the form of the index test: none for a table alone; a result kept before the forms is a score
+    form = None if table_alone else str(result.get("index_form") or SCORE_FORM)
     labels = {
-        "reference": str(result.get("outcome")),
-        "index": str(result.get("score")),
-        "present": str(result.get("pos_label")),
+        name: str(result[key])
+        for name, key in (
+            ("reference", "outcome"),
+            ("index", "score"),
+            ("present", "pos_label"),
+            ("positive", "positive"),
+        )
+        if result.get(key) is not None
     }
-    if result.get("positive") is not None:
-        labels["positive"] = str(result["positive"])
     parts: list[Part] = []
     if auc is not None:
         with_it, without = int(auc["n_positive"]), int(auc["n_negative"])
@@ -1941,7 +1983,7 @@ def _record_diagnostic(result: Any) -> tuple[list[Part], None]:
         part(
             "table",
             *(Number(name, count, EXACT) for name, count in cells.items()),
-            Number("index_form", form, EXACT),
+            *(() if form is None else (Number("index_form", form, EXACT),)),
             Number("sampling", sampling, EXACT),
         )
     )
@@ -2524,10 +2566,10 @@ KINDS: dict[str, AnalysisKind] = {
         AnalysisKind(
             "diagnostic",
             "Diagnostic accuracy",
-            # declared for its record; its runner comes with those of the other remaining kinds. The values of
-            # index_form, direction, mode and sampling are the ids of biostats.diagnostic (INDEX_FORMS, DIRECTIONS,
-            # CUTOFF_MODES, SAMPLINGS), held equal by tests/test_accuracy_yes_no.py: this module reads every
-            # kind's own module inside its functions, never at import, so the two defaults are written here
+            # declared for its record; its dataset runner comes with those of the other remaining kinds. The values
+            # of index_form, direction, mode and sampling are the ids of biostats.diagnostic (INDEX_FORMS,
+            # DIRECTIONS, CUTOFF_MODES, SAMPLINGS), held equal by tests/test_accuracy_yes_no.py: this module reads
+            # every kind's own module inside its functions, never at import, so the two defaults are written here
             roles=("reference", "index"),
             options={
                 "alpha": 0.05,
@@ -2541,13 +2583,22 @@ KINDS: dict[str, AnalysisKind] = {
                 "sampling": "not_stated",  # SAMPLING_NOT_STATED
             },
             choices={
+                # one level: every writer says "95%", and another level is a later version's
+                "alpha": (0.05,),
                 "index_form": ("number", "yes_no"),
                 "direction": (None, "higher", "lower"),
                 "mode": (None, "No cut-off", "Manual", "Youden-optimal (data-driven)"),
                 # never "": that is how a result computed before the question reads, not what a request asks
                 "sampling": ("not_stated", "series", "two_gate"),
             },
+            libraries=("scipy", "statsmodels"),
             record=_record_diagnostic,
+            # typed: the calculator "Accuracy of a test, numbers I type", the four cells of a 2x2 table (a paper's,
+            # another study's); a table has no form of the index test, no column and no value
+            typed_title="Diagnostic accuracy of a yes/no test (numbers typed)",
+            typed_inputs={"tp": COUNT, "fp": COUNT, "fn": COUNT, "tn": COUNT},
+            typed_options={"alpha": 0.05, "prevalence": None, "sampling": "not_stated"},
+            typed_run=_typed_diagnostic,
         ),
         AnalysisKind("bland_altman", "Bland-Altman agreement"),
         AnalysisKind("icc", "Intraclass correlation"),

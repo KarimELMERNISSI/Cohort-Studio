@@ -42,15 +42,13 @@ from biostats.rates import (
 from biostats.reliability import category, category_order
 from biostats.study_designs import DESIGNS, DIFFERENCE, NOT_STATED, OFFERED, design_named
 from core.registry import as_code
-from manage.report_tables import typed_numbers
 from ui.components import empty_state, error_card, help_popover
 from ui.components.mi_mode import mi_token, show_mi_notes
-from ui.components.text import plain
 from ui.guidance import measures as m
 from ui.guidance.measures import HELP
 from ui.guidance.numbers import decimals, share_decimals
 from ui.progress import mark_step
-from ui.results import NOTE_MAX, clean_note, provenance, remember, typed_provenance
+from ui.results import provenance, remember
 from ui.state import get_state
 
 QUESTION_KEY = "paired_question"
@@ -570,30 +568,6 @@ def _show_mean(
     layout.warn(result.warnings)
 
 
-def _numbers_source(key: str) -> str:
-    """Where the numbers of a calculator come from (optional), in the user's words: the last field of a calculator,
-    kept with the calculation in the study dossier."""
-    return clean_note(
-        st.text_input(
-            "Where the numbers come from (optional)",
-            key=key,
-            max_chars=NOTE_MAX,
-            placeholder="for example: Smith 2021, table 2",
-            persist_state="page",
-            help=HELP["numbers_source"],
-        )
-    )
-
-
-def _typed_close(spec: Any, source: str, key: str) -> None:
-    """Under a calculator's result, where "Computed on" stands under an analysis: the numbers typed in words, where
-    they come from when it was said, that they are not the dataset's, and the button that adds the calculation to
-    the study dossier (:func:`ui.results.typed_provenance`; ``key``: the source field's, read when it is clicked)."""
-    said = f" ({plain(source)})" if source else ""
-    layout.typed_line(f"From the numbers typed{said}: {typed_numbers(spec)}.")
-    typed_provenance(spec, note_key=key)
-
-
 def _share_metrics(
     result: TestResult, with_it: int, counted: int, reference: float, what: str, where: str = ""
 ) -> None:
@@ -678,7 +652,7 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             persist_state="page",
             help=HELP["reference_share"],
         )
-        source = _numbers_source("prop_from")
+        source = layout.numbers_source("prop_from")
         ready, advice = m.check_share(with_it, counted, reference)
         layout.advice_lines(advice)
         if not ready:
@@ -700,7 +674,7 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             error_card("The share could not be compared with its reference.", exc)
             return
         _share_metrics(result, int(with_it), int(counted), float(reference), "the characteristic")  # type: ignore[arg-type]
-        _typed_close(spec, source, "prop_from")
+        layout.typed_close(spec, source, "prop_from")
         return
     offered = m.two_valued(df)
     if not offered:
@@ -1580,7 +1554,7 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         persist_state="page",
         help=HELP["per"],
     )
-    source = _numbers_source("rate_from")
+    source = layout.numbers_source("rate_from")
     ready, advice = m.check_rates(
         calculation, events, person_time, reference_events, reference_time
     )
@@ -1629,7 +1603,7 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             )
         st.caption("Method: " + " | ".join((ratio or first).references))
     help_popover(m.RATE_READING if ratio is None else m.RATIO_READING)
-    _typed_close(spec, source, "rate_from")
+    layout.typed_close(spec, source, "rate_from")
 
 
 def _ratio_metric(ratio: Any) -> Metric:
@@ -1691,7 +1665,7 @@ def _expected() -> None:
         persist_state="page",
         help=HELP["event_kind"],
     )
-    source = _numbers_source("smr_from")
+    source = layout.numbers_source("smr_from")
     ready, advice = m.check_expected(observed, expected)
     layout.advice_lines(advice)
     if not ready:
@@ -1727,7 +1701,7 @@ def _expected() -> None:
     with st.expander("Details: the method"):
         st.caption("Method: " + " | ".join(found.references))
     help_popover(m.EXPECTED_READING)
-    _typed_close(spec, source, "smr_from")
+    layout.typed_close(spec, source, "smr_from")
 
 
 # ----------------------------------------------------------------------------- the tab

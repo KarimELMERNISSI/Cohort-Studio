@@ -311,6 +311,15 @@ def test_the_chapter_numbers(analysis_set: pd.DataFrame) -> None:
     assert a["site"].nunique() == 7  # uncleaned site names: why the chapter creates site_clean
 
     assert round(roc_auc_score(a["mi_adjudicated"] == "Yes", a["troponin_ng_l"]), 2) == 0.93
+    # the 2x2 table at 30.9 ng/L, which the chapter types into the calculator of a paper's table
+    high, ill = a["troponin_ng_l"] >= 30.9, a["mi_adjudicated"] == "Yes"
+    assert (
+        int((high & ill).sum()),
+        int((high & ~ill).sum()),
+        int((~high & ill).sum()),
+        int((~high & ~ill).sum()),
+    ) == (87, 126, 14, 701)
+    assert round(87 / 101, 3) == 0.861 and round(701 / 827, 3) == 0.848
     assert round(cohen_kappa_score(a["nyha_class"], a["nyha_class_central"]), 2) == 0.71
     assert (
         round(cohen_kappa_score(a["nyha_class"], a["nyha_class_central"], weights="linear"), 2)

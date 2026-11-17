@@ -18,10 +18,15 @@ from biostats.references import cite
 
 
 def _wilson(count: int, nobs: int, alpha: float) -> CI:
+    """The Wilson interval of ``count`` of ``nobs``. With none or all of them, its bound on that side is 0 or 1
+    exactly (as R's ``prop.test`` gives it): the formula leaves 2.8e-17 or 0.9999999999999999 there for many sizes,
+    which a table then wrote as a share strictly inside the interval, "1.00000000 (0.75750599 to 1.00000000)"."""
     if nobs == 0:
         return CI(lower=float("nan"), upper=float("nan"), level=1 - alpha, method=WILSON)
     lo, hi = proportion_confint(count, nobs, alpha=alpha, method="wilson")
-    return CI(lower=float(lo), upper=float(hi), level=1 - alpha, method=WILSON)
+    lower = 0.0 if count == 0 else float(lo)
+    upper = 1.0 if count == nobs else float(hi)
+    return CI(lower=lower, upper=upper, level=1 - alpha, method=WILSON)
 
 
 def _log_ci(estimate: float, se_log: float, alpha: float, method: str) -> CI | None:

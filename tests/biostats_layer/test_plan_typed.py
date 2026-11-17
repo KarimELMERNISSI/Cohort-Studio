@@ -1,10 +1,12 @@
 """
 A calculation from numbers typed as a source of an analysis spec (biostats.plan): the share against a reference, one
-rate or two and their ratio, observed against expected. Its spec holds the numbers and names no data; ``run`` computes
-it from them alone, through the function the page's calculator shows; its record is marked typed.
+rate or two and their ratio, observed against expected, the 2x2 table of a test against a reference standard. Its
+spec holds the numbers and names no data; ``run`` computes it from them alone, through the function the page's
+calculator shows; its record is marked typed.
 
 Numbers: 30 of 100 against 20% (Wilson 21.9% to 39.6%, exact binomial p = 0.017); 15 events over 1,200 person-years
-against 4 over 1,000 (ratio 3.125, exact conditional); 25 observed against 18.4 expected (1.36, exact Poisson).
+against 4 over 1,000 (ratio 3.125, exact conditional); 25 observed against 18.4 expected (1.36, exact Poisson); a
+table of 90 and 30 positive tests, 10 and 270 negative (sensitivity and specificity 90%).
 """
 
 from __future__ import annotations
@@ -28,11 +30,15 @@ TWO_RATES = {
     "reference_person_time": 1000,
 }
 EXPECTED = {"observed": 25, "expected": 18.4}
+TABLE = {"tp": 90, "fp": 30, "fn": 10, "tn": 270}
 CALCULATIONS = (
     ("proportion", SHARE, {"reference": 0.2}),
     ("rates", TWO_RATES, {}),
     ("rates", {"events": 15, "person_time": 1200}, {"per": 100000, "unit": "person-days"}),
     ("standardised_ratio", EXPECTED, {"events_are": "cases"}),
+    ("diagnostic", TABLE, {}),
+    ("diagnostic", TABLE, {"sampling": "two_gate", "prevalence": 0.02}),
+    ("diagnostic", {"tp": 12, "fp": 0, "fn": 3, "tn": 40}, {"sampling": "series"}),
 )
 
 
@@ -45,7 +51,12 @@ def _numbers(part: plan.Part) -> dict:
 
 def test_the_kinds_computed_from_numbers_typed_are_declared_whole() -> None:
     typed = [kind for kind in plan.KINDS.values() if kind.typed_run is not None]
-    assert [kind.id for kind in typed] == ["proportion", "rates", "standardised_ratio"]
+    assert [kind.id for kind in typed] == [
+        "diagnostic",
+        "proportion",
+        "rates",
+        "standardised_ratio",
+    ]
     assert [k for k in plan.KINDS if plan.runnable(k, typed=True)] == [kind.id for kind in typed]
     for kind in typed:
         assert kind.typed_title and kind.typed_title.endswith("(numbers typed)")
@@ -524,6 +535,133 @@ def test_a_block_s_words_are_in_the_record_and_a_result_names_its_test() -> None
     ]
     assert few.result.p_value == pytest.approx(0.098, abs=5e-4)
     assert plan.record_of(few.spec, few.result).warnings == tuple(few.result.warnings)  # type: ignore[union-attr]
+
+
+# ----------------------------------------------------------------------------- the 2x2 table typed
+
+
+def test_a_table_typed_is_computed_by_the_function_of_a_table_of_the_dataset() -> None:
+    from biostats.diagnostic import diagnostic_accuracy
+
+    done = plan.run(
+        specify("diagnostic", typed=TABLE, options={"sampling": "series", "prevalence": 0.02})
+    )
+    assert done.result == diagnostic_accuracy(90, 30, 10, 270, prevalence=0.02, sampling="series")
+    assert (done.result.sensitivity, done.result.specificity) == (0.9, 0.9)
+    assert done.result.ppv == 0.75 and done.result.ppv_at_prevalence == pytest.approx(
+        0.1552, abs=5e-5
+    )
+    # not stated: no predictive value at the table's share, and none at a prevalence that was not given
+    bare = plan.run(specify("diagnostic", typed=TABLE)).result
+    assert bare.sampling == "not_stated" and math.isnan(bare.ppv) and bare.ppv_at_prevalence is None
+    # a table asks nothing of a dataset: the options of a column or of a score are not its own
+    for option in ("index_form", "positive", "present", "direction", "mode", "cutoff"):
+        with pytest.raises(ValueError, match=f"has no option {option}"):
+            specify("diagnostic", typed=TABLE, options={option: None})
+    for option, value in (("sampling", ""), ("sampling", "cohort"), ("alpha", 0.1)):
+        with pytest.raises(ValueError, match=f"does not know this value of its option {option}"):
+            specify("diagnostic", typed=TABLE, options={option: value})
+    # the dataset's own spec keeps its declaration and its id (tests/biostats_layer/test_plan.py pins it)
+    assert set(specify("diagnostic").options) == set(plan.KINDS["diagnostic"].options)
+
+
+def test_a_table_without_a_side_or_without_a_test_result_is_refused_in_words() -> None:
+    """Without participants on a side of the reference standard a measure has no value; a test that calls everyone
+    positive, or no one, leaves nothing to assess (the page refuses both). The reason holds no number typed."""
+    sides = "participants with the condition and without it"
+    results = "positive tests and negative tests"
+    for numbers, named in (
+        ({"tp": 0, "fp": 31, "fn": 0, "tn": 277}, sides),
+        ({"tp": 93, "fp": 0, "fn": 17, "tn": 0}, sides),
+        ({"tp": 0, "fp": 0, "fn": 0, "tn": 0}, sides),
+        ({"tp": 0, "fp": 0, "fn": 17, "tn": 277}, results),
+        ({"tp": 93, "fp": 31, "fn": 0, "tn": 0}, results),
+    ):
+        with pytest.raises(ValueError, match=named) as refused:
+            plan.run(specify("diagnostic", typed=numbers))
+        assert not any(character.isdigit() for character in str(refused.value))
+    for outside in (0, 1, 2):
+        with pytest.raises(ValueError, match="strictly between 0 and 1"):
+            plan.run(specify("diagnostic", typed=TABLE, options={"prevalence": outside}))
+    with pytest.raises(
+        ValueError, match="the option prevalence of the diagnostic calculation is not a finite"
+    ):
+        specify("diagnostic", typed=TABLE, options={"prevalence": math.nan})
+    with pytest.raises(ValueError, match="the diagnostic calculation lacks its number tn"):
+        specify("diagnostic", typed={"tp": 90, "fp": 30, "fn": 10})
+
+
+def test_the_record_of_a_table_typed_names_no_column_and_no_form() -> None:
+    """The record read the page's dict only: a table alone raised, and a mapping without columns wrote the labels
+    "None" and the form of a score. A table typed names no column, no value and no form; its measures are those of
+    a yes/no test of the dataset with the same four counts, to the last digit."""
+    from biostats.diagnostic import diagnostic_accuracy
+
+    done = plan.run(
+        specify("diagnostic", typed=TABLE, options={"sampling": "series", "prevalence": 0.02})
+    )
+    record = plan.record_of(done.spec, done.result)
+    assert record is not None and record.typed and record.kind == "diagnostic"
+    assert [part.id for part in record.parts] == [
+        "table",
+        "sensitivity",
+        "specificity",
+        "ppv",
+        "npv",
+        "accuracy",
+        "ppv_at",
+        "npv_at",
+        "lr_positive",
+        "lr_negative",
+        "dor",
+        "youden",
+    ]
+    table = record.part("table")
+    assert _numbers(table) == {**TABLE, "sampling": "series"}
+    assert not any(part.labels for part in record.parts)
+    # each count typed is counted as a participant's: the four cells and their sums, as for a table of the dataset
+    assert dict(table.support) == {
+        **TABLE,
+        "rows": 400,
+        "with_condition": 100,
+        "without_condition": 300,
+        "called_positive": 120,
+        "called_negative": 280,
+    }
+    counted = plan.record(
+        "diagnostic",
+        {
+            "acc": diagnostic_accuracy(90, 30, 10, 270, prevalence=0.02, sampling="series"),
+            "auc": None,
+            "index_form": "yes_no",
+            "outcome": "ill",
+            "score": "rapid",
+            "pos_label": "Yes",
+            "positive": "Positive",
+        },
+    )
+    assert counted is not None and not counted.typed
+    for typed, of_the_dataset in zip(record.parts, counted.parts, strict=True):
+        assert typed.id == of_the_dataset.id and dict(typed.support) == dict(of_the_dataset.support)
+        shared = {k: v for k, v in _numbers(of_the_dataset).items() if k != "index_form"}
+        assert _numbers(typed) == shared
+        assert dict(of_the_dataset.labels) == {
+            "reference": "ill",
+            "index": "rapid",
+            "present": "Yes",
+            "positive": "Positive",
+        }
+    assert _numbers(counted.part("table"))["index_form"] == "yes_no"
+    # a result kept before the forms is a score, and a label is written only when its value is there
+    kept = {"mode": "Manual", "direction": "higher", "cutoff": 52.0}
+    before = plan.record("diagnostic", {"acc": done.result, "auc": None, "outcome": "ill", **kept})
+    assert before is not None and _numbers(before.part("table"))["index_form"] == "number"
+    assert dict(before.part("table").labels) == {"reference": "ill"}
+    # a zero cell: the measures' own warnings go with the record of a table typed
+    zero = plan.run(specify("diagnostic", typed={"tp": 12, "fp": 0, "fn": 3, "tn": 40}))
+    held = plan.record_of(zero.spec, zero.result)
+    assert held is not None and held.warnings == tuple(zero.result.warnings)
+    assert len(held.warnings) == 2
 
 
 def test_the_sampling_of_an_accuracy_study_is_read_for_any_design() -> None:
