@@ -75,7 +75,7 @@ says what Run will do, one click runs it, and the result reads the estimate firs
 function of its own here (``accuracy_of``, ``kappa_of``), so that the numbers are checked without the page._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.KOOPMAN`, `biostats.diagnostic.SAMPLING_NOT_STATED`, `biostats.diagnostic.SAMPLINGS`, `biostats.diagnostic.SCORE_CARRIED`, `biostats.diagnostic.SERIES`, `biostats.diagnostic.TWO_GATE`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.reads_share`, `biostats.diagnostic.verification`, `biostats.diagnostic.yes_no_table`, `biostats.diagnostic.youden_cutoff`, `biostats.plan.run`, `biostats.plan.specify`, `biostats.references.cite`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `manage.report_tables.dossier_min_n`, `manage.report_tables.table_cautions`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.share_decimals`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.KOOPMAN`, `biostats.diagnostic.SAMPLING_NOT_STATED`, `biostats.diagnostic.SAMPLINGS`, `biostats.diagnostic.SCORE_CARRIED`, `biostats.diagnostic.SERIES`, `biostats.diagnostic.TWO_GATE`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.verification`, `biostats.diagnostic.yes_no_table`, `biostats.diagnostic.youden_cutoff`, `biostats.plan.run`, `biostats.plan.specify`, `biostats.references.cite`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `manage.report_tables.dossier_min_n`, `manage.report_tables.measure_rows`, `manage.report_tables.table_cautions`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.share_decimals`, `ui.guidance.numbers.share_parts`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
 
 ### def `_rgba` (analysis_diagnostic.py)
 
@@ -332,7 +332,9 @@ whose share is the table's.
 - **Returns**: `pd.DataFrame`
 
 Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
-in the data and the share classified correctly for a series only). ``unequal``: the reference standard was done
+in the data and the share classified correctly for a series only). The rows are those the dossier's block
+writes (``manage.report_tables.measure_rows``), with Youden's J and the share classified correctly: a measure
+has one name and one number on the page and in the document. ``unequal``: the reference standard was done
 unequally by test result, and the rows name that share as the caption does. ``typed``: a table typed into the
 calculator, whose share is the table's.
 
@@ -376,18 +378,6 @@ No description available.
 
 No description available.
 
-### def `_share_parts` (analysis_diagnostic.py)
-
-- **Arguments**: `value: Any, ci: Any`
-
-- **Returns**: `tuple[ComplexType]`
-
-A share and the bounds of its interval, as percentages: one decimal ("40.8%", "34.5% to 47.6%"); "" for an
-interval without bounds. Bounds that one decimal writes alike take the decimals that tell them apart (three to
-six), and the share with them ("100.0% (95% CI 100.0% to 100.0%)" stood for a negative predictive value at a
-prevalence of 1 in 2,500). A share below 100% is never written "100.0%" nor one above 0 "0.0%" (the rule of
-"more than 99 of 100 pairs").
-
 ### def `_share_metric` (analysis_diagnostic.py)
 
 - **Arguments**: `label: str, value: Any, ci: Any, count: int, of: int`
@@ -395,7 +385,8 @@ prevalence of 1 in 2,500). A share below 100% is never written "100.0%" nor one 
 - **Returns**: `Metric`
 
 A share of the headline, with its count and its interval, written as the table of every measure writes it
-(2,499 of 2,500 read "100.0%" above and "more than 99.9%" in the table).
+(2,499 of 2,500 read "100.0%" above and "more than 99.9%" in the table): ``share_parts``, the rule of both and of
+the dossier's block.
 
 ### def `_share` (analysis_diagnostic.py)
 
@@ -405,15 +396,6 @@ A share of the headline, with its count and its interval, written as the table o
 
 A share with its interval, as a sentence writes it: "40.8% (95% CI 34.5% to 47.6%)", or the share alone when
 it has no interval ("n/a (95% CI n/a% to n/a%)" stood for a predictive value without a value).
-
-### def `_measure` (analysis_diagnostic.py)
-
-- **Arguments**: `name: str, value: Any, ci: Any`
-
-- **Returns**: `tuple[ComplexType]`
-
-A row of the table of every measure: a share as a percentage, as the headline writes it (the headline read
-86.1% and the table 0.861), a ratio to three significant figures; its interval with the same decimals.
 
 ### def `_show_accuracy` (analysis_diagnostic.py)
 

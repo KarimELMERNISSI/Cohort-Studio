@@ -3915,7 +3915,7 @@ pages store (biostats results, pooled results over imputed datasets, the diction
 returns plain data that the Word builder (:mod:`manage.dossier`) lays out._
 
 **Imports**:
-`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Collection`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.share_decimals`, `utils.numbers.with_interval`
+`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Collection`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.prevalence_text`, `utils.numbers.ratio_parts`, `utils.numbers.share_decimals`, `utils.numbers.share_parts`, `utils.numbers.with_interval`
 
 ### class `ResultBlocks` (report_tables.py)
 
@@ -4151,31 +4151,25 @@ without the condition"; "" when both hold enough). Read on the 2x2 table wheneve
 index test: a yes/no test has no AUC, and a result without the AUC's counts was read as "enough". Without a
 table, on the AUC's counts (:func:`_thin_side`).
 
-### def `_bounds` (report_tables.py)
+### def `measure_rows` (report_tables.py)
 
-- **Arguments**: `ci: Any`
+- **Arguments**: `acc: Any, prevalence: Any`
 
-- **Returns**: `str`
+- **Returns**: `list[tuple[ComplexType]]`
 
-An interval's two bounds, or nothing when it has none ("n/a to n/a" stood beside a predictive value that no
-test result gives).
+The measures of a 2x2 table, each with its estimate and the bounds of its interval: the rows of the page's
+table of every measure and of the dossier's block, from one list, so that a measure has one name and one number
+on the screen and in the document. The block read "Sensitivity | 0.861 | 0.781 to 0.916", "NPV, ..." and "LR- |
+0.164 | 0.1 to 0.266" under a page that read 86.1% (78.1% to 91.6%), "Negative predictive value, ..." and 0.100
+to 0.266. A share is a percentage (``utils.numbers.share_parts``), a ratio has the decimals of its bounds
+(``ratio_parts``).
 
-### def `_share_row` (report_tables.py)
-
-- **Arguments**: `name: str, value: Any, ci: Any`
-
-- **Returns**: `tuple[ComplexType]`
-
-A share's row: three significant figures, and the decimals that tell a share from 0 and from 1, and its two
-bounds from each other ("1 | 1 to 1" stood for a negative predictive value of 99.993%, 99.989% to 99.996%).
-
-### def `_ratio_row` (report_tables.py)
-
-- **Arguments**: `name: str, value: Any, ci: Any`
-
-- **Returns**: `tuple[ComplexType]`
-
-A likelihood ratio's row: at a zero cell, the one bound the data leave ("0" stood alone, and "inf").
+The rows are those the sampling supports: the predictive values at the share with the condition for a series
+only (sampled apart, that share is the sampling's), those at a prevalence given whatever the sampling.
+``unequal``: the reference standard was done unequally by test result, and the rows name that share as the
+page's caption does. ``typed``: a table typed into the calculator, whose share is the table's. ``every``: the
+page's table, with Youden's J, the share classified correctly (a series), and the diagnostic odds ratio's row
+when it has no value; the dossier's block writes the others (a ratio without a value has its warning there).
 
 ### def `_accuracy_blocks` (report_tables.py)
 
