@@ -167,7 +167,7 @@ def test_an_answer_keeps_its_formatting_but_draws_nothing_it_would_fetch(
 
 
 def test_an_answer_drops_invisible_characters_and_is_cut() -> None:
-    assert answer("a‮b‏c\x07d\n\te") == "abcd\n\te"
+    assert answer("a\u202eb\u200fc\x07d\n\te") == "abcd\n\te"
     assert answer("x" * 50, limit=10) == "x" * 9 + "…"
 
 

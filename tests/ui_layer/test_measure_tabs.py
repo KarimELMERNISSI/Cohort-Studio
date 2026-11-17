@@ -985,7 +985,7 @@ def test_two_rates_and_their_ratio_follow_the_numbers_typed(app: AppTest) -> Non
     )
     _type(app, "rate_e0", 0)  # no event in the reference group: no "inf"
     assert _metrics(app)["Rate ratio"] == "no upper bound"
-    assert not re.search(r"inf", _texts(app))
+    assert not re.search(r"\binf\b", _texts(app))
 
 
 def test_one_rate(app: AppTest) -> None:

@@ -84,7 +84,7 @@ def test_the_account_is_the_workspace_s_when_none_is_given_and_one_line_whatever
             account="x\ny",
         )
         # a line separator of another kind, and a terminal's escape, from a name the sign-in service gives
-        bare.confirm("mistral", account="eve INFO forged\x85\x1bc")
+        bare.confirm("mistral", account="eve\u2028INFO forged\x85\x1bc")
     lines = _lines(caplog)
     assert lines[:2] == [
         "AI data sharing confirmed by the account folder_name for: gemini",
@@ -102,7 +102,7 @@ def test_every_character_that_is_not_printable_is_written_as_its_escape() -> Non
     assert single_line("plain name, with spaces and accents: Zoé") == (
         "plain name, with spaces and accents: Zoé"
     )
-    assert single_line("a\rb\nc\td e\u0085f\x1b[2Jg\x00") == (
+    assert single_line("a\rb\nc\td\u2028e\u0085f\x1b[2Jg\x00") == (
         "a\\rb\\nc\\td\\u2028e\\x85f\\x1b[2Jg\\x00"
     )
 
@@ -157,7 +157,7 @@ def test_a_recipient_an_ollama_server_answers_is_read_as_an_address() -> None:
     )
     for answer in (
         "https://[ollama.com",
-        "https://ollama.com INFO forged",
+        "https://ollama.com\u2028INFO forged",
         "https://ollama.com\x1bc",
         "https://user:secret@ollama.com",
         "ftp://ollama.com",

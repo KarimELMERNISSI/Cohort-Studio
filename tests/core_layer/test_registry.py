@@ -279,7 +279,7 @@ def test_a_saved_name_is_shown_as_code() -> None:
         as_code("x`y\n z") == "`xy z`" and as_code("[link](http://e.x)") == "`[link](http://e.x)`"
     )
     # bidirectional overrides and zero-width characters cannot reorder or hide part of the sentence
-    assert as_code("ab‮cd​ef") == "`abcdef`"
+    assert as_code("ab\u202ecd\u200bef") == "`abcdef`"
     assert as_code("```") == "`?`"  # nothing left to show
     long = as_code("x" * 300)
     assert len(long) == 66 and long.endswith("…`")  # cut at 64 characters

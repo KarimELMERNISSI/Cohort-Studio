@@ -923,7 +923,7 @@ def test_the_source_keeps_only_what_is_seen() -> None:
     the one kept."""
     from ui.results import NOTE_MAX, clean_note, typed_id
 
-    for hidden in ("­", "​", "⁠", "‮", "\x07"):
+    for hidden in ("\xad", "\u200b", "\u2060", "\u202e", "\x07"):
         assert clean_note(f"Register of Wil{hidden}tz, 2021") == "Register of Wiltz, 2021"
     assert clean_note("  Smith\n2021 \t table 2 ") == "Smith 2021 table 2"
     assert clean_note("Smith 2021, table 2") == "Smith 2021, table 2"
