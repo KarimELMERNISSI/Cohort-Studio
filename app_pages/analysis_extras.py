@@ -32,23 +32,25 @@ from biostats.paired import (
     paired_table,
     wilcoxon_signed_rank,
 )
+from biostats.plan import KINDS, specify
+from biostats.plan import run as run_spec
 from biostats.rates import (
-    incidence_rate,
     mantel_haenszel,
-    rate_ratio,
     reference_risks,
-    standardised_ratio,
     stratum_differences,
 )
 from biostats.reliability import category, category_order
 from biostats.study_designs import DESIGNS, DIFFERENCE, NOT_STATED, OFFERED, design_named
 from core.registry import as_code
+from manage.report_tables import typed_numbers
 from ui.components import empty_state, error_card, help_popover
 from ui.components.mi_mode import mi_token, show_mi_notes
+from ui.components.text import plain
 from ui.guidance import measures as m
 from ui.guidance.measures import HELP
+from ui.guidance.numbers import decimals, share_decimals
 from ui.progress import mark_step
-from ui.results import provenance, remember
+from ui.results import NOTE_MAX, clean_note, provenance, remember, typed_provenance
 from ui.state import get_state
 
 QUESTION_KEY = "paired_question"
@@ -568,20 +570,54 @@ def _show_mean(
     layout.warn(result.warnings)
 
 
+def _numbers_source(key: str) -> str:
+    """Where the numbers of a calculator come from (optional), in the user's words: the last field of a calculator,
+    kept with the calculation in the study dossier."""
+    return clean_note(
+        st.text_input(
+            "Where the numbers come from (optional)",
+            key=key,
+            max_chars=NOTE_MAX,
+            placeholder="for example: Smith 2021, table 2",
+            persist_state="page",
+            help=HELP["numbers_source"],
+        )
+    )
+
+
+def _typed_close(spec: Any, source: str, key: str) -> None:
+    """Under a calculator's result, where "Computed on" stands under an analysis: the numbers typed in words, where
+    they come from when it was said, that they are not the dataset's, and the button that adds the calculation to
+    the study dossier (:func:`ui.results.typed_provenance`; ``key``: the source field's, read when it is clicked)."""
+    said = f" ({plain(source)})" if source else ""
+    layout.typed_line(f"From the numbers typed{said}: {typed_numbers(spec)}.")
+    typed_provenance(spec, note_key=key)
+
+
 def _share_metrics(
     result: TestResult, with_it: int, counted: int, reference: float, what: str, where: str = ""
 ) -> None:
     ci = result.estimate_ci
     share = float("nan") if result.estimate is None else float(result.estimate)
+    # the decimals that tell a share from 0% and from 100%: at one, 24 of 50,000 read "0.0%" against a reference of
+    # "0.0%", beside p < 0.001
+    places = share_decimals(
+        share, getattr(ci, "lower", None), getattr(ci, "upper", None), reference
+    )
+    bounds = (
+        ""
+        if ci is None
+        else f" · 95% CI {layout.fixed(100 * ci.lower, places)}% to {layout.fixed(100 * ci.upper, places)}% (Wilson)"
+    )
     metrics = [
         Metric(
             f"Share with {what}",
-            layout.percent(share),
-            f"{with_it:,} of {counted:,} · {layout.interval(ci, scale=100, unit='%')} (Wilson)",
+            layout.percent(share, places),
+            f"{with_it:,} of {counted:,}{bounds}",
         ),
         Metric(
             "Against a reference of",
-            layout.percent(reference),
+            layout.percent(reference, places),
             f"p {layout.p_text(result.p_value)} (exact binomial test)",
         ),
     ]
@@ -590,10 +626,11 @@ def _share_metrics(
     gap = 100 * (share - reference)
     layout.headline(
         metrics,
+        # "equals" only when it does: a gap that one decimal writes as 0 is written with its own figures
         "The share equals the reference."
-        if abs(gap) < 0.05
-        else f"The share is {layout.fixed(abs(gap), 1)} points {'below' if gap < 0 else 'above'} the "
-        "reference.",
+        if gap == 0
+        else f"The share is {layout.fixed(abs(gap), max(places, decimals(abs(gap), 2)))} points "
+        f"{'below' if gap < 0 else 'above'} the reference.",
         len(result.warnings),
     )
     layout.warn(result.warnings)
@@ -640,6 +677,7 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             persist_state="page",
             help=HELP["reference_share"],
         )
+        source = _numbers_source("prop_from")
         ready, advice = m.check_share(with_it, counted, reference)
         layout.advice_lines(advice)
         if not ready:
@@ -649,9 +687,19 @@ def _one_share(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
                     "reference share: the result appears here."
                 )
             return
-        result = one_sample_proportion(int(with_it), int(counted), float(reference))  # type: ignore[arg-type]
+        try:
+            # through the plan, as the dossier computes it again from the same numbers
+            spec = specify(
+                "proportion",
+                typed={"count": with_it, "total": counted},
+                options={"reference": float(reference)},  # type: ignore[arg-type]
+            )
+            result = run_spec(spec).result
+        except Exception as exc:
+            error_card("The share could not be compared with its reference.", exc)
+            return
         _share_metrics(result, int(with_it), int(counted), float(reference), "the characteristic")  # type: ignore[arg-type]
-        layout.typed_line(f"From the numbers typed: {int(with_it):,} of {int(counted):,}.")  # type: ignore[arg-type]
+        _typed_close(spec, source, "prop_from")
         return
     offered = m.two_valued(df)
     if not offered:
@@ -1524,13 +1572,14 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
     )
     per = u2.selectbox(
         "Show rates per",
-        [100, 1000, 10000, 100000],
+        list(KINDS["rates"].choices["per"]),  # the multipliers a calculation knows
         index=1,
         format_func=lambda value: f"{value:,}",
         key="rate_per",
         persist_state="page",
         help=HELP["per"],
     )
+    source = _numbers_source("rate_from")
     ready, advice = m.check_rates(
         calculation, events, person_time, reference_events, reference_time
     )
@@ -1543,30 +1592,22 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
                 + ": the result appears here."
             )
         return
+    numbers: dict[str, Any] = {"events": events, "person_time": person_time}
+    if two:
+        numbers |= {"reference_events": reference_events, "reference_person_time": reference_time}
     try:
-        first = incidence_rate(int(events), float(person_time), per=per)  # type: ignore[arg-type]
-        second = (
-            incidence_rate(int(reference_events), float(reference_time), per=per)  # type: ignore[arg-type]
-            if two
-            else None
-        )
-        # no event in either group: two rates of 0, and no ratio of them
-        ratio = (
-            rate_ratio(first.events, first.person_time, second.events, second.person_time, per=per)
-            if second is not None and (first.events or second.events)
-            else None
-        )
+        # through the plan, as the dossier computes it again from the same numbers; no event in either group: two
+        # rates of 0, and no ratio of them (biostats.rates.rates)
+        spec = specify("rates", typed=numbers, options={"unit": unit, "per": per})
+        found = run_spec(spec).result
     except Exception as exc:
         error_card("The rates could not be computed.", exc)
         return
-    typed = (
-        f"From the numbers typed: {first.events:,} event{'s' if first.events != 1 else ''} over "
-        f"{layout.num(first.person_time, 6)} {unit}"
-    )
+    first, ratio = found.rates[0], found.ratio
+    second = found.rates[1] if two else None
     if second is None:
         layout.headline([_rate_metric("Rate", first, per, unit)])
     else:
-        typed += f" against {second.events:,} over {layout.num(second.person_time, 6)}"
         rates = [
             _rate_metric("Rate, group compared", first, per, unit),
             _rate_metric("Rate, reference group", second, per, unit),
@@ -1587,7 +1628,7 @@ def _rates(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
             )
         st.caption("Method: " + " | ".join((ratio or first).references))
     help_popover(m.RATE_READING if ratio is None else m.RATIO_READING)
-    layout.typed_line(typed + ".")
+    _typed_close(spec, source, "rate_from")
 
 
 def _ratio_metric(ratio: Any) -> Metric:
@@ -1649,6 +1690,7 @@ def _expected() -> None:
         persist_state="page",
         help=HELP["event_kind"],
     )
+    source = _numbers_source("smr_from")
     ready, advice = m.check_expected(observed, expected)
     layout.advice_lines(advice)
     if not ready:
@@ -1658,7 +1700,13 @@ def _expected() -> None:
             )
         return
     try:
-        found = standardised_ratio(int(observed), float(expected))  # type: ignore[arg-type]
+        # through the plan, as the dossier computes it again from the same numbers
+        spec = specify(
+            "standardised_ratio",
+            typed={"observed": observed, "expected": expected},
+            options={"events_are": kind},
+        )
+        found = run_spec(spec).result
     except Exception as exc:
         error_card("The ratio could not be computed.", exc)
         return
@@ -1668,7 +1716,8 @@ def _expected() -> None:
             Metric(
                 m.RATIO_NAMES[kind],
                 value,
-                f"{bounds} · p {layout.p_text(found.p_value)} (exact Poisson)",
+                # the test named by its rule: R's poisson.test computes its p-value another way
+                f"{bounds} · p {layout.p_text(found.p_value)} (exact Poisson, twice the smaller tail)",
             )
         ],
         f"{_against_expected(found.ratio, value)}; the interval runs from {_more_or_fewer(found.ci.lower)} to "
@@ -1677,9 +1726,7 @@ def _expected() -> None:
     with st.expander("Details: the method"):
         st.caption("Method: " + " | ".join(found.references))
     help_popover(m.EXPECTED_READING)
-    layout.typed_line(
-        f"From the numbers typed: {found.observed:,} observed against {layout.num(found.expected, 6)} expected."
-    )
+    _typed_close(spec, source, "smr_from")
 
 
 # ----------------------------------------------------------------------------- the tab

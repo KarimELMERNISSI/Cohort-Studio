@@ -307,6 +307,12 @@ KEYS: tuple[Key, ...] = (
         note="the results added to the study dossier, stale like them",
     ),
     Key(
+        "_report_typed",
+        "ui.results",
+        "dataset",
+        note="the calculations from numbers typed added to the study dossier (JSON): never stale, gone with it",
+    ),
+    Key(
         "workflow_marks",
         "ui.progress",
         "dataset",

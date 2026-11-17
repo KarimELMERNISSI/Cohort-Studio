@@ -2687,6 +2687,12 @@ def disclose_record(
     k - 1 rows left out for another reason than a missing value (whatever the flow shows), and one whose rows, or
     whose rows left out, are not those of the analysis it is given with.
     """
+    if spec.typed is not None or record.typed:
+        # a calculation from numbers typed is no result of the population: it has a path of its own (whole or
+        # withheld whole), and none of the analysis, the covers or the closure this function reads
+        raise ValueError(
+            "a calculation from numbers typed is not disclosed as a result of the dataset"
+        )
     if spec.kind != record.kind or bool(spec.pooled) != bool(record.pooled):
         raise ValueError("a result is disclosed with its own spec")
     rule = RULES.get(record.kind)
@@ -2743,6 +2749,11 @@ def disclose_spec(
     withholds it or does not list it. The rows of the population and the rows analysed are written only when they
     are the flow's own for that analysis: any other number beside the flow's would be a subtraction.
     """
+    if spec.typed is not None:
+        # its request holds the numbers typed: written here, they would travel whatever was withheld
+        raise ValueError(
+            "a calculation from numbers typed is not disclosed as a result of the dataset"
+        )
     if disclosed.record is None:
         return None
     shown = spec.request()

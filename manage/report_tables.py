@@ -8,11 +8,16 @@ returns plain data that the Word builder (:mod:`manage.dossier`) lays out.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from decimal import Decimal
 from io import BytesIO
+from types import SimpleNamespace
 from typing import Any
 
 import pandas as pd
+
+from utils.numbers import decimals, fixed, number, p_text, percent, share_decimals, with_interval
 
 ESTIMATE_COLUMNS = {"hr": "hazard ratio", "odds_ratio": "odds ratio", "rate_ratio": "rate ratio"}
 
@@ -57,11 +62,8 @@ def _num(value: Any, digits: int = 3) -> str:
 
 def _points(share: float) -> str:
     """A difference of two shares in percentage points, one decimal, a half rounded away from zero, as the page
-    writes it (ui.guidance.numbers.fixed): "-10.6", never "-0.0"."""
-    from decimal import ROUND_HALF_UP, Decimal
-
-    rounded = Decimal(repr(100 * float(share))).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-    return f"{rounded:.1f}" if rounded else "0.0"
+    writes it: "-10.6", never "-0.0"."""
+    return fixed(100 * float(share), 1)
 
 
 def _p(value: Any) -> str:
@@ -830,6 +832,236 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     return blocks
 
 
+# ----------------------------------------------------------------------------- calculations from numbers typed
+
+# under a calculator's result, in place of "Computed on"
+TYPED_SOURCE = "Not from the dataset: the analysis population and the imputation do not apply."
+# what every calculation is called until its kind says more, and where its numbers came from when it was not said
+CALCULATION = "Calculation from numbers typed"
+SOURCE_NOT_GIVEN = "Source: not given."
+# what each kind's numbers are taken to be: the software never saw where they come from, so each is an assumption
+SHARE_NOTE = "The reference share is taken as fixed beforehand."
+RATES_NOTE = (
+    "The events are taken as first events, one per participant: if the numbers count repeated events of a "
+    "participant, the intervals are too narrow."
+)
+STANDARDISED_NOTE = (
+    "The expected number is taken as known; the comparison is with the population that gave the reference rates, "
+    "and no other."
+)
+
+
+def source_line(note: str) -> str:
+    """Where the numbers of a calculation come from, as a sentence: the user's words, closed with a full stop only
+    when they have none (a reference ends with one more often than not: "1-10.." was written)."""
+    if not note:
+        return SOURCE_NOT_GIVEN
+    return f"Source: {note}" + ("" if note.endswith((".", "?", "!")) else ".")
+
+
+def _as_typed(value: Any) -> str:
+    """A number as it was typed: its whole part grouped, every decimal kept, no exponent (18.4; 1,200;
+    1,234,567.891234)."""
+    if isinstance(value, int):
+        return f"{value:,}"
+    text = f"{Decimal(repr(float(value))):,f}"
+    return text.removesuffix(".0")
+
+
+def _counted(count: int, one: str, many: str) -> str:
+    return f"{count:,} {one if count == 1 else many}"
+
+
+def typed_title(spec: Any) -> str:
+    """The title of a calculation from numbers typed, by what its numbers give: one rate or a ratio of two, a
+    mortality or an incidence ratio."""
+    from biostats.plan import kind_named
+    from biostats.rates import has_ratio
+
+    numbers, options = spec.typed or {}, spec.options
+    if spec.kind == "rates":
+        if "reference_events" not in numbers:
+            return "Incidence rate (numbers typed)"
+        if not has_ratio(numbers["events"], numbers["reference_events"]):
+            return "Incidence rates (numbers typed)"  # no event in either group leaves no ratio
+        return "Rate ratio (numbers typed)"
+    if spec.kind == "standardised_ratio":
+        which = "mortality" if options.get("events_are") == "deaths" else "incidence"
+        return f"Standardised {which} ratio (numbers typed)"
+    return kind_named(spec.kind).typed_title or CALCULATION
+
+
+def typed_numbers(spec: Any) -> str:
+    """
+    The numbers of a calculation in words, each with its name, written afresh from its spec: what the page writes
+    under the result after "From the numbers typed", and the dossier after "Numbers typed" (never bare values, and
+    never a string the page made). Every kind computed from numbers typed has its words here (a test).
+    """
+    numbers, options = spec.typed or {}, spec.options
+    if spec.kind == "proportion":
+        said = (
+            f"{numbers['count']:,} of {_counted(numbers['total'], 'participant', 'participants')} with the "
+            "characteristic"
+        )
+        reference = options.get("reference")
+        if reference is not None:
+            said += f", against a reference share of {_as_typed(round(100 * float(reference), 10))}%"
+        return said
+    if spec.kind == "rates":
+        unit, per = options.get("unit", "person-years"), options.get("per", 1000)
+        first = f"{_counted(numbers['events'], 'event', 'events')} over {_as_typed(numbers['person_time'])} {unit}"
+        if "reference_events" not in numbers:
+            return f"{first}, rate per {per:,} {unit}"
+        return (
+            f"{first} (group compared) against {numbers['reference_events']:,} over "
+            f"{_as_typed(numbers['reference_person_time'])} (reference group), rates per {per:,} {unit}"
+        )
+    if spec.kind == "standardised_ratio":
+        deaths = options.get("events_are") == "deaths"
+        observed = _counted(
+            numbers["observed"],
+            "observed death" if deaths else "observed new case",
+            "observed deaths" if deaths else "observed new cases",
+        )
+        return f"{observed} against {_as_typed(numbers['expected'])} expected"
+    raise ValueError(f"the {spec.kind} calculation has no words for its numbers")
+
+
+def _named(part: Any) -> dict[str, Any]:
+    return {found.name: found.value for found in part.numbers}
+
+
+def _level(numbers: dict[str, Any]) -> str:
+    """ "95% CI", from the level the interval's record holds: no writer assumes it."""
+    level = numbers.get("level")
+    return "CI" if level is None else f"{_as_typed(round(100 * float(level), 6))}% CI"
+
+
+def _share_block(record: Any) -> ResultBlocks:
+    """A share against a reference, from its record: one sentence for a share counted in the dataset and for one of
+    numbers typed, so that the two read alike. The share, its bounds and its reference take the decimals that tell
+    a share from 0% and from 100% (``utils.numbers.share_decimals``)."""
+    from biostats.references import cite
+
+    share, test = _named(record.part("share")), _named(record.part("test:exact_binomial"))
+    lower, upper, reference = share.get("lower"), share.get("upper"), test.get("reference")
+    places = share_decimals(share["estimate"], lower, upper, reference)
+    line = f"Share: {percent(share['estimate'], places)} ({share['count']:,} of {share['total']:,}"
+    if lower is not None and upper is not None:
+        line += (
+            f"; {_level(share)} {fixed(100 * lower, places)}% to {fixed(100 * upper, places)}%, "
+            f"{share.get('method')}"
+        )
+    line += ")"
+    if reference is not None:
+        gap = 100 * (float(share["estimate"]) - float(reference))
+        apart = (
+            "equal to the reference"
+            if gap == 0
+            else f"{fixed(abs(gap), max(places, decimals(abs(gap), 2)))} points "
+            f"{'below' if gap < 0 else 'above'} the reference"
+        )
+        line += (
+            f"; against a reference of {percent(reference, places)}: p {p_text(test['p'])} (exact binomial test, "
+            f"two-sided); {apart}"
+        )
+    return ResultBlocks(
+        lines=[line + "."],
+        warnings=[*record.warnings, SHARE_NOTE],
+        references=cite("wilson1927"),
+    )
+
+
+def _rates_block(record: Any) -> ResultBlocks:
+    """One rate, or two and their ratio, from their record: the rates per the multiplier and the unit the record
+    holds, the ratio with the one bound it has when the reference group has no event, and the intervals' methods."""
+    from biostats.references import cite
+
+    parts = {part.id: part for part in record.parts}
+    first = _named(parts["rate#0"])
+    per, unit, two = first["per"], first["unit"], "rate#1" in parts
+    rows: list[tuple[str, str, str]] = []
+    for part_id, label in (
+        ("rate#0", "Rate, group compared" if two else "Rate"),
+        ("rate#1", "Rate, reference group"),
+    ):
+        if part_id not in parts:
+            continue
+        rate = _named(parts[part_id])
+        value, bounds = with_interval(
+            rate["estimate"] * per,
+            SimpleNamespace(lower=rate["lower"] * per, upper=rate["upper"] * per),
+        )
+        rows.append((f"{label}, per {per:,} {unit}", value, bounds.removeprefix("95% CI ")))
+    lines: list[str] = []
+    methods = [f"{first['method']} for the rate{'s' if two else ''}"]
+    cited = ["garwood1936"]
+    if "ratio" in parts:
+        ratio = _named(parts["ratio"])
+        if ratio["bounded"]:
+            value, bounds = with_interval(
+                ratio["estimate"], SimpleNamespace(lower=ratio["lower"], upper=ratio["upper"])
+            )
+            rows.append(("Rate ratio", value, bounds.removeprefix("95% CI ")))
+        else:  # no event in the reference group: the lower end is what the data say
+            rows.append(("Rate ratio", "no upper bound", f"at least {number(ratio['lower'])}"))
+        lines += [
+            f"p {p_text(ratio['p'])} ({ratio['test']} test, twice the smaller tail).",
+            f"Rate difference: {number(ratio['difference'] * per)} per {per:,} {unit} (no interval is given for "
+            "it).",
+        ]
+        methods.append(f"{ratio['method']} for the ratio")
+        cited.append("clopper1934")
+    lines.append("Intervals: " + "; ".join(methods) + ".")
+    return ResultBlocks(
+        tables=[("", pd.DataFrame(rows, columns=["Measure", "Estimate", _level(first)]))],
+        lines=lines,
+        warnings=[*record.warnings, RATES_NOTE],
+        references=cite(*cited),
+    )
+
+
+def _standardised_block(record: Any) -> ResultBlocks:
+    """Observed against expected, from its record: a mortality or an incidence ratio by what the record says the
+    events are, the test named by its rule (R's ``poisson.test`` computes its p-value another way)."""
+    from biostats.references import cite
+
+    ratio = _named(record.part("ratio"))
+    name = f"Standardised {'mortality' if ratio.get('events_are') == 'deaths' else 'incidence'} ratio"
+    value, bounds = with_interval(
+        ratio["estimate"], SimpleNamespace(lower=ratio["lower"], upper=ratio["upper"])
+    )
+    return ResultBlocks(
+        lines=[
+            f"{name} = {value} ({bounds.replace('95% CI', _level(ratio), 1)}), p {p_text(ratio['p'])} (exact "
+            f"Poisson test, twice the smaller tail); {ratio['observed']:,} observed, "
+            f"{_as_typed(ratio['expected'])} expected."
+        ],
+        warnings=[*record.warnings, STANDARDISED_NOTE],
+        references=cite("ulm1990", "garwood1936"),
+    )
+
+
+# The blocks written from a result's record, by kind (the ids are biostats.plan.KINDS'): one block per kind whatever
+# its source, written from the record alone (it holds every number and every word its block needs), and the only
+# blocks a document may write from disclosed numbers. The results of the dataset whose kind is not here keep
+# :func:`result_blocks`.
+RECORD_BLOCKS: dict[str, Callable[[Any], ResultBlocks]] = {
+    "proportion": _share_block,
+    "rates": _rates_block,
+    "standardised_ratio": _standardised_block,
+}
+
+
+def record_blocks(record: Any) -> ResultBlocks:
+    """The report blocks of a result from its record (``biostats.plan.ResultRecord``), for the kinds of
+    ``RECORD_BLOCKS``."""
+    build = RECORD_BLOCKS.get(record.kind)
+    if build is None:
+        raise ValueError(f"no block is written from the record of the {record.kind} kind")
+    return build(record)
+
+
 def result_blocks(value: Any) -> ResultBlocks:
     """The report blocks of one stored result (unknown types give a short text)."""
     from biostats._types import TestResult
@@ -1092,13 +1324,22 @@ def result_blocks(value: Any) -> ResultBlocks:
 
 
 __all__ = [
+    "CALCULATION",
     "DOSSIER_MIN_N",
+    "RATES_NOTE",
+    "RECORD_BLOCKS",
     "SAMPLING_WORDS",
+    "SOURCE_NOT_GIVEN",
     "TWO_GATE_SPECTRUM",
+    "TYPED_SOURCE",
     "ResultBlocks",
     "dossier_min_n",
     "km_png",
+    "record_blocks",
     "result_blocks",
     "sampling_line",
     "settings_written",
+    "source_line",
+    "typed_numbers",
+    "typed_title",
 ]

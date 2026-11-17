@@ -12,7 +12,9 @@ Sections:
 4. Missing data: missing values per variable, values filled by single imputation, and the multiple imputation
    with its methods paragraph (reporting items of Sterne et al. 2009);
 5. Results: each result added to the dossier with what it was computed on;
-6. References.
+6. Calculations from numbers typed by hand: each with its numbers and where they come from, apart from the results
+   of the dataset (they have no analysis population, and the participant flow does not count them);
+7. References.
 
 The input is plain data (:class:`DossierInput`); the app gathers it (app_pages/study_dossier.py). The dossier
 supports these reporting guidelines; it does not certify compliance, and it is not an electronically signed record.
@@ -33,7 +35,7 @@ from docx import Document
 from docx.shared import Cm, Pt, RGBColor
 
 from core.attrition import MISSING_VALUES_NOTE, FlowExit, ParticipantFlow
-from manage.report_tables import ResultBlocks
+from manage.report_tables import ResultBlocks, source_line
 
 METHOD_REFERENCES = {
     "strobe": "von Elm E, Altman DG, Egger M, Pocock SJ, Gotzsche PC, Vandenbroucke JP (2007). The Strengthening the "
@@ -63,6 +65,19 @@ class DossierResult:
 
 
 @dataclass
+class DossierCalculation:
+    """A calculation from numbers typed (a calculator's result added to the dossier): its numbers in words, written
+    afresh from its spec, where they come from (the user's words; "" when not given), its blocks and when it was
+    added."""
+
+    title: str
+    numbers: str
+    note: str
+    blocks: ResultBlocks
+    added_at: str = ""
+
+
+@dataclass
 class DossierInput:
     title: str
     flow: ParticipantFlow
@@ -80,12 +95,29 @@ class DossierInput:
     results: list[DossierResult] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
     omitted: list[str] = field(default_factory=list)  # stale results left out
+    calculations: list[DossierCalculation] = field(default_factory=list)  # from numbers typed
 
 
 logger = logging.getLogger(__name__)
 
 # what a result reads when its block, or its writing, failed: the other sections are still written
 NOT_WRITTEN = "This result could not be written in the dossier; the page shows it."
+# the same for a calculation from numbers typed: one that this version cannot compute again from its numbers (it
+# is computed when the dossier is built), and one whose writing failed
+CALCULATION_NOT_COMPUTED = (
+    "This calculation could not be computed again from its numbers by this version of CohortStudio; its result is "
+    "not written. Type the numbers again on the calculator's page."
+)
+CALCULATION_NOT_WRITTEN = (
+    "This calculation could not be written in the dossier; Reproduce > Study dossier lists its numbers."
+)
+CALCULATIONS_INTRO = (
+    "These were computed from numbers typed into a calculator of CohortStudio, not read from the dataset: they have "
+    "no analysis population, no imputation and no data fingerprint, and the participant flow does not count them. "
+    "Nothing links these numbers to the study's data: if they were read from it, they are not updated when the data "
+    "change. Each says where its numbers come from when that was given."
+)
+NO_CALCULATION = "No calculation from numbers typed by hand was added."
 # the characters XML 1.0 refuses, which python-docx raises on
 _NOT_IN_XML = re.compile(
     "[" + "".join(map(chr, [*range(0, 9), 11, 12, *range(14, 32), 0xFFFE, 0xFFFF])) + "]"
@@ -186,6 +218,29 @@ def _write_result(doc: Any, result: DossierResult, figure: int) -> int:
     for warning in dict.fromkeys(result.blocks.warnings):
         _small(doc.add_paragraph(), f"Note: {warning}")
     return figure
+
+
+def _write_calculation(doc: Any, calculation: DossierCalculation) -> None:
+    """One calculation of section 6: its title, the numbers typed, where they come from and when it was added, then
+    its tables, lines and notes. Never "Computed on", a population or a number analysed: it read no data."""
+    doc.add_heading(calculation.title, level=2)
+    if calculation.numbers:
+        _small(doc.add_paragraph(), f"Numbers typed: {calculation.numbers}.", italic=False)
+    added = calculation.added_at[:16].replace("T", " at ")
+    _small(
+        doc.add_paragraph(),
+        f"{source_line(calculation.note)} Typed by hand"
+        + (f", added on {added}" if added else "")
+        + ". Not computed from the dataset.",
+    )
+    for caption, frame in calculation.blocks.tables:
+        if caption:
+            doc.add_paragraph().add_run(caption).bold = True
+        _table(doc, frame)
+    for line in calculation.blocks.lines:
+        doc.add_paragraph(line)
+    for warning in dict.fromkeys(calculation.blocks.warnings):
+        _small(doc.add_paragraph(), f"Note: {warning}")
 
 
 def _pairs(doc: Any, rows: list[tuple[str, str]]) -> None:
@@ -331,7 +386,8 @@ def build_dossier(inp: DossierInput) -> BytesIO:
 
     doc.add_heading("5. Results", level=1)
     if not inp.results:
-        doc.add_paragraph("No result was added to the dossier.")
+        # of the dataset: section 6 may hold calculations from numbers typed
+        doc.add_paragraph("No result of the dataset was added to the dossier.")
     figure = 1
     for position, result in enumerate(inp.results, start=1):
         try:
@@ -352,7 +408,19 @@ def build_dossier(inp: DossierInput) -> BytesIO:
             + ".",
         )
 
-    doc.add_heading("6. References", level=1)
+    doc.add_heading("6. Calculations from numbers typed by hand", level=1)
+    doc.add_paragraph(CALCULATIONS_INTRO if inp.calculations else NO_CALCULATION)
+    for position, calculation in enumerate(inp.calculations, start=1):
+        try:
+            _write_calculation(doc, calculation)
+        except Exception as exc:
+            # as for a result: the other sections are still written, the type only is logged
+            logger.warning(
+                "calculation %d of the dossier could not be written: %s", position, type(exc).__name__
+            )
+            doc.add_paragraph(CALCULATION_NOT_WRITTEN)
+
+    doc.add_heading("7. References", level=1)
     for i, ref in enumerate(dict.fromkeys(inp.references), start=1):
         doc.add_paragraph(f"{i}. {ref}")
 
@@ -369,8 +437,13 @@ def exits_text(exit_: FlowExit) -> str:
 
 
 __all__ = [
+    "CALCULATIONS_INTRO",
+    "CALCULATION_NOT_COMPUTED",
+    "CALCULATION_NOT_WRITTEN",
     "METHOD_REFERENCES",
     "NOT_WRITTEN",
+    "NO_CALCULATION",
+    "DossierCalculation",
     "DossierInput",
     "DossierResult",
     "build_dossier",

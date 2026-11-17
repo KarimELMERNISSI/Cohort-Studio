@@ -8,6 +8,10 @@ change of the data, of the ticked criteria or of the settings, the old numbers a
 a notice says why and the analysis is run again. :func:`provenance` prints the stamp under the result,
 with a caveat when values filled by a single imputation were analysed (``columns``), and a button that adds
 the result to the study dossier (follow-up programme M3): :func:`report_items` lists them.
+
+A calculation from numbers typed (a calculator's result) is no result of the dataset: it is never stored here with a
+stamp, never stale and never in the participant flow. The dossier keeps it apart (:func:`add_typed`,
+:func:`typed_items`), as JSON only: its spec, where its numbers come from, and when it was added.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ import json
 import logging
 import re
 import sys
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,12 +29,16 @@ from typing import Any
 
 import streamlit as st
 
-from biostats.plan import AnalysisSpec, ComputedOn, titles
+from biostats.plan import AnalysisSpec, ComputedOn, read_spec, titles
+from manage.report_tables import CALCULATION, typed_numbers, typed_title
+from ui.components.text import plain
 
 logger = logging.getLogger(__name__)
 
 RESULTS_KEY = "_results"
 REPORT_KEY = "_report"  # the results added to the study dossier
+TYPED_KEY = "_report_typed"  # the calculations from numbers typed added to it: JSON only
+NOTE_MAX = 200  # characters of "Where the numbers come from"
 CURRENT, STALE_DATA, STALE_POPULATION, STALE_CONFIG, MISSING = (
     "current",
     "stale_data",
@@ -161,6 +170,12 @@ def remember(
     """
     from ui.state import get_state
 
+    if spec is not None and spec.typed is not None:
+        # stamped, it would read "Computed on <dataset>, N analysed" for numbers that are not the dataset's, and go
+        # stale with data it never read
+        raise ValueError(
+            "a calculation from numbers typed is not a result of the dataset: it is kept with add_typed"
+        )
     state = get_state()
     identity = state.identity()
     if identity is None:
@@ -398,6 +413,174 @@ def report_status(item: ReportItem) -> str:
     return CURRENT
 
 
+# ----------------------------------------------------------------------------- calculations from numbers typed
+
+
+@dataclass(frozen=True)
+class TypedItem:
+    """
+    A calculation from numbers typed, added to the study dossier. The session keeps its JSON only, and an item is
+    read back each time by the reader a received package takes: an update of the application leaves no object the
+    new code cannot read. ``spec`` is None, with ``problem`` saying why, for an item this version cannot read;
+    ``words`` are its numbers in words as they were when it was added, which such an item still shows.
+    """
+
+    id: str
+    spec: AnalysisSpec | None
+    title: str
+    note: str = ""
+    added_at: str = ""
+    problem: str = ""
+    words: str = ""
+
+
+def clean_note(note: Any) -> str:
+    """
+    Where the numbers come from, as it is kept: plain text on one line, ``NOTE_MAX`` characters at most, and only
+    what is seen. Control and format characters are dropped: a soft hyphen or a zero-width space inside a name
+    (a source pasted from a PDF) hides the name from a scan of rare values while the page shows it whole, and a
+    right-to-left override shows another text than the one kept.
+    """
+    seen = "".join(
+        " " if c.isspace() else c
+        for c in str(note or "")
+        if c.isspace() or unicodedata.category(c) not in ("Cc", "Cf")
+    )
+    return " ".join(seen.split())[:NOTE_MAX]
+
+
+def typed_id(spec: AnalysisSpec) -> str:
+    """
+    The name of a calculation in the dossier: ``typed:<kind>:`` then the start of its request id. The same numbers
+    and options are one item, whatever their source (a source typed after adding replaces the one kept); another
+    number is another. Of the session only: a package names a calculation by its kind and its place, never by a
+    hash of its numbers (a small count is found back from one in seconds).
+    """
+    return f"typed:{spec.kind}:{spec.request_id[:16]}"
+
+
+def typed_note(note_key: str | None) -> str:
+    """The source as its field holds it now (``note_key``: the field's key), cleaned; "" without a field."""
+    return clean_note(st.session_state.get(note_key)) if note_key else ""
+
+
+def _typed() -> dict[str, dict[str, Any]]:
+    basket = st.session_state.get(TYPED_KEY)
+    if not isinstance(basket, dict):
+        basket = {}
+        st.session_state[TYPED_KEY] = basket
+    return basket
+
+
+def add_typed(spec: Mapping[str, Any], note_key: str | None = None) -> None:
+    """
+    Put a calculation from numbers typed in the study dossier, or write its source anew when the dossier holds its
+    numbers already (callback of the two buttons): ``spec`` as JSON values. The source is read from its field when
+    the button is clicked, never as it stood when the button was drawn: a callback runs with the arguments of the
+    run before, so a source typed just before the click was lost, and a second click kept the calculation twice.
+    """
+    found, _ = read_spec(spec)
+    if found is None or found.typed is None:
+        return
+    note, item_id = typed_note(note_key), typed_id(found)
+    stored = _typed().get(item_id)
+    if stored is not None:
+        stored["note"] = note
+        return
+    try:
+        words = typed_numbers(found)
+    except ValueError:
+        words = ""
+    _typed()[item_id] = {
+        "id": item_id,
+        "spec": found.to_dict(),
+        "note": note,
+        # the numbers in words, as added: what an item this version can no longer read still shows
+        "words": words,
+        "added_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+def remove_typed(item_id: str) -> None:
+    _typed().pop(item_id, None)
+
+
+def typed_stored() -> list[dict[str, Any]]:
+    """The calculations of the dossier as the session keeps them (JSON values), in the order they were added: what
+    the Word dossier is built from, after the page run."""
+    return [json.loads(json.dumps(stored)) for stored in _typed().values()]
+
+
+def typed_items() -> list[TypedItem]:
+    """The calculations from numbers typed added to the study dossier, in the order they were added; one that this
+    version cannot read is listed with its reason, never dropped unsaid."""
+    items = []
+    for stored in _typed().values():
+        spec, problem = read_spec(stored.get("spec"))
+        if spec is not None and spec.typed is None:
+            spec, problem = None, "not a calculation from numbers typed"
+        items.append(
+            TypedItem(
+                id=str(stored.get("id") or ""),
+                spec=spec,
+                title=typed_title(spec) if spec is not None else CALCULATION,
+                note=str(stored.get("note") or ""),
+                added_at=str(stored.get("added_at") or ""),
+                problem=problem,
+                words=str(stored.get("words") or ""),
+            )
+        )
+    return items
+
+
+def typed_provenance(spec: AnalysisSpec, *, note_key: str | None = None) -> None:
+    """
+    Under a calculator's result, after the line of its numbers: the button that adds the calculation to the study
+    dossier; "In the study dossier (remove)" once it is there with the source the field holds; "Update the source
+    in the study dossier" when it is there with another. ``note_key`` is the key of the field "Where the numbers
+    come from": the callbacks read it when clicked. The buttons are named by the numbers alone, so each stays one
+    widget while the source is typed.
+    """
+    item_id = typed_id(spec)
+    stored = _typed().get(item_id)
+    if stored is None:
+        st.button(
+            "Add to the study dossier",
+            key=f"report_typed_add::{item_id}",
+            icon=":material/note_add:",
+            type="tertiary",
+            on_click=add_typed,
+            args=(spec.to_dict(), note_key),
+            help="Adds this calculation, with the numbers typed and where they come from, to the Word study "
+            "dossier (Reproduce > Study dossier), apart from the results of the dataset.",
+        )
+    elif str(stored.get("note") or "") != typed_note(note_key):
+        kept = str(stored.get("note") or "")
+        st.button(
+            "Update the source in the study dossier",
+            key=f"report_typed_update::{item_id}",
+            icon=":material/edit_note:",
+            type="tertiary",
+            on_click=add_typed,
+            args=(spec.to_dict(), note_key),
+            help="The study dossier keeps these numbers "
+            + (f'with another source ("{plain(kept)}")' if kept else "without a source")
+            + ". This writes the one above in its place, or none if the field is empty; the numbers and the result "
+            "do not change.",
+        )
+    else:
+        st.button(
+            "In the study dossier (remove)",
+            key=f"report_typed_remove::{item_id}",
+            icon=":material/check_circle:",
+            type="tertiary",
+            on_click=remove_typed,
+            args=(item_id,),
+            help="Reproduce > Study dossier lists the calculations from numbers typed, apart from the results of "
+            "the dataset.",
+        )
+
+
 def provenance(key: str) -> None:
     """Caption with what the stored result was computed on (and the single-imputation caveat), and the button
     that adds it to the study dossier."""
@@ -450,26 +633,37 @@ def stored_settings(key: str) -> tuple[str, str] | None:
 __all__ = [
     "CURRENT",
     "MISSING",
+    "NOTE_MAX",
     "REPORT_KEY",
     "RESULTS_KEY",
     "RESULT_TITLES",
     "STALE_CONFIG",
     "STALE_DATA",
     "STALE_POPULATION",
+    "TYPED_KEY",
     "ReportItem",
     "ResultStamp",
     "StoredResult",
+    "TypedItem",
     "add_to_report",
+    "add_typed",
+    "clean_note",
     "config_hash",
     "describe_settings",
     "provenance",
     "recall",
     "remember",
     "remove_from_report",
+    "remove_typed",
     "report_items",
     "report_status",
     "single_imputation_warning",
     "stamp_of",
     "status",
     "stored_settings",
+    "typed_id",
+    "typed_items",
+    "typed_note",
+    "typed_provenance",
+    "typed_stored",
 ]

@@ -290,6 +290,34 @@ Follow `app_pages/analysis_survival.py`:
 Test: an AppTest of the page (as `tests/ui_layer/test_survival_page.py`), and the module added to the list of
 `test_analysis_pages_keep_results_in_the_result_store` in `tests/test_quality_gates.py`.
 
+#### Add a calculation from numbers typed
+
+A calculator's result is no result of the dataset: it is a function of its numbers, kept as JSON and computed again
+wherever it is read. Follow the three calculators of `app_pages/analysis_extras.py`:
+1. The computation goes into `biostats`, as for an analysis.
+2. In `biostats/plan.py`, give its kind what it needs to be computed from numbers typed: `typed_title`,
+   `typed_inputs` (each number by a name that is never renamed, as a `COUNT` or a `QUANTITY`), `typed_options` with
+   their defaults (their closed values in `choices`), `typed_run`, and a `record` (the counts behind each part in
+   its support: a count typed is counted as a participant's). The record holds every number and every word its
+   block needs (a rate's unit and multiplier, what the events are, each interval's level): the block is written
+   from the record alone. A change of the numbers, of the options or of what `typed_run` computes moves
+   `typed_version`, never `version`, which is the dataset's.
+3. Its words and its block go into `manage/report_tables.py`: `typed_numbers` (the numbers with their names),
+   `typed_title`, and a block written from the record in `RECORD_BLOCKS`, with the numbers written by
+   `utils/numbers.py`, the pages' rule.
+4. On the page: `spec = specify(kind, typed=..., options=...)`, `run_spec(spec).result` for the headline, then
+   `_typed_close(spec, source, key)`, which writes the line of the numbers and offers the button
+   (`ui.results.typed_provenance`; `key` is the source field's: a button's callback runs with the arguments of the
+   run before, so the source is read from its field when the button is clicked). Never `remember`: it refuses a
+   typed spec.
+5. Privacy: an error names a number, never its value. Nothing typed is logged (a guard logs the exception's type).
+   A calculation is never named outside the session by a hash of its numbers: a small count is found back from
+   one. A block the dossier holds back holds back the line of its numbers too.
+
+Test: the round trip of the spec and of the record, and the function the calculator shows
+(`tests/biostats_layer/test_plan_typed.py`); the button, the dossier page and the Word section
+(`tests/ui_layer/test_typed_dossier.py`).
+
 #### Add a page panel
 
 1. Write it in a module of its own, with one `render_...()` function called in its tab, as

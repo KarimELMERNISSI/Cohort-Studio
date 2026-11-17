@@ -6,6 +6,48 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### The calculators' results can go into the study dossier
+
+- **Add to the study dossier** now stands under the result of each calculator (one rate, two rates and their ratio,
+  observed against expected, a share from numbers you type), under the line *From the numbers typed*, which writes
+  the numbers with their names ("15 events over 1,200 person-years (group compared) against 4 over 1,000 (reference
+  group), rates per 1,000 person-years"). A calculator's result was not kept, and could not be added.
+- **Where the numbers come from (optional)** is the last field of each calculator: a publication and its table, a
+  report, a count of your own and its date. It is written with the calculation, as typed. The same numbers are one
+  item of the dossier: a source typed after adding replaces the one kept (**Update the source in the study
+  dossier**).
+- **A calculation is kept apart from the results of the dataset.** It read no data: it is never stale, has no
+  analysis population and no number analysed, and the participant flow does not count it. Like a result, it is
+  cleared when another dataset is loaded. The Study dossier page lists it under *From numbers typed by hand*, with
+  a chip "typed"; the Word dossier writes it in a section of its own, **6. Calculations from numbers typed by
+  hand** (the references become section 7), with the numbers typed, their source and the result.
+- **The Word dossier computes each calculation again from its numbers,** by the same method as the page, so the
+  two give the same result. What the numbers are taken to be is said as a note (the events as first events, the
+  expected number as known, the reference share as fixed beforehand).
+- **Privacy:** numbers typed and where they come from are kept in the session only, and go with the dataset:
+  loading another dataset or signing out clears them. They are never logged (an error logs its type only), and are
+  never in the trace, the study definition or the results of the dataset. The Word dossier writes them exactly,
+  small counts included, as it writes counts: its rules for small groups read the results of the dataset, not
+  numbers you type.
+- **A share against a reference reads the same whatever its source.** The dataset's share is written in the
+  dossier as a typed one is: "Share: 30.0% (30 of 100; 95% CI 21.9% to 39.6%, Wilson); against a reference of 20.0%:
+  p = 0.017 (exact binomial test, two-sided); 10.0 points above the reference" (it read "observed proportion
+  (reference 0.2) = 0.3 ... n = sample: 100"). Its title is *Share against a reference*, the page's words (it read
+  "One-sample proportion").
+- **A share next to 0% or 100% is written with the decimals that show it,** on the page and in the dossier: 24 of
+  50,000 against 0.02% read "0.0%" against a reference of "0.0%" beside p < 0.001 (now "0.048%" against "0.020%").
+  The headline says "equals the reference" only when it does.
+- **The standardised ratio's test is named by its rule** ("exact Poisson, twice the smaller tail"): it agrees with
+  the exact interval, and R's `poisson.test` computes its p-value another way (0.128 where this gives 0.165 for 25
+  observed against 18.4 expected). Fewer than 1 event expected is said with the result wherever it is written.
+- **The Word dossier's first section** reads "Trace integrity: intact (the hash chain holds)".
+
+### An analysis spec refuses an option value it does not know
+
+- **A spec of the accuracy of a test or of the stratified analysis** read back with a sampling, a form, a cut-off's
+  mode, a direction or a design that this version does not know is refused with the option named ("written by a
+  later version"), where it was read as its own. Nothing a user sees changes: no such spec is written yet.
+
 ### The study dossier: a typed cut-off that calls few participants is written without its value
 
 - **A cut-off typed beforehand that calls fewer than 10 participants to one side** is written in the Word dossier

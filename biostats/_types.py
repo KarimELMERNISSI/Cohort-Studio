@@ -167,6 +167,9 @@ class TestResult(BaseModel):
     n_per_group: list[int] = Field(default_factory=list)
     reference_group: str | None = None
     comparison_group: str | None = None
+    # the value the estimate is tested against, when the test has one (a reference share fixed beforehand): a
+    # result's record reads it here, never in a label's words
+    reference_value: float | None = None
     alpha: float = 0.05
 
     @property

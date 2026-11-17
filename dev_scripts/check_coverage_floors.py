@@ -47,6 +47,8 @@ from pathlib import Path
 # stratified through the page (2026-11-12).
 # app_pages to 70 at 72.1, and utils to 72 at 74.1, with the tests of the dossier's cut-off, the z-score file, the
 # clustermap's hidden labels, the density curves and the record of the AI confirmations (2026-11-14).
+# manage to 81 at 83.0 with the tests of the calculations from numbers typed: their blocks, their words and the
+# dossier's section (2026-11-17).
 FLOORS: dict[str, float] = {
     "app_pages": 70.0,
     "biostats": 93.0,
@@ -55,7 +57,7 @@ FLOORS: dict[str, float] = {
     "explore": 82.0,
     "graph": 92.0,
     "ingest": 89.0,
-    "manage": 79.0,
+    "manage": 81.0,
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 87.0,

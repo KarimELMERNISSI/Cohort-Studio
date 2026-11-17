@@ -626,6 +626,59 @@ def mantel_haenszel(
 
 
 @dataclass
+class RatesResult:
+    """
+    One rate, or the rates of two groups and their ratio: ``rates`` in order (the group compared, then the reference
+    group); ``ratio`` None for one rate, and for two groups without an event in either (two rates of 0 have no
+    ratio: ``warnings`` says so). ``unit`` is the unit of the person-time (a stored id): a rate without it is no
+    number a reader can use, so the result carries it, as each rate carries the multiplier it is shown with.
+    """
+
+    rates: tuple[IncidenceRate, ...]
+    ratio: RateRatio | None = None
+    warnings: list[str] = field(default_factory=list)
+    references: list[str] = field(default_factory=list)
+    unit: str = "person-years"
+
+
+def has_ratio(events: int, reference_events: int | None) -> bool:
+    """Whether two groups have a ratio of their rates: a reference group, and an event in one of the two (two rates
+    of 0 have none). One rule, read where the rates are computed and where a calculation is titled."""
+    return reference_events is not None and events + reference_events > 0
+
+
+def rates(
+    events: int,
+    person_time: float,
+    reference_events: int | None = None,
+    reference_person_time: float | None = None,
+    *,
+    per: float = 1000.0,
+    alpha: float = 0.05,
+    unit: str = "person-years",
+) -> RatesResult:
+    """One rate with its exact interval, or the rates of two groups and their ratio (:func:`rate_ratio`). The
+    reference group is given whole (its events and its person-time) or not at all."""
+    if (reference_events is None) != (reference_person_time is None):
+        raise ValueError("the reference group needs its events and its person-time")
+    first = incidence_rate(events, person_time, per=per, alpha=alpha)
+    if reference_events is None or reference_person_time is None:
+        return RatesResult((first,), references=list(first.references), unit=unit)
+    second = incidence_rate(reference_events, reference_person_time, per=per, alpha=alpha)
+    if not has_ratio(first.events, second.events):
+        return RatesResult(
+            (first, second),
+            warnings=["No event in either group: two rates of 0 have no ratio."],
+            references=list(first.references),
+            unit=unit,
+        )
+    ratio = rate_ratio(
+        first.events, first.person_time, second.events, second.person_time, per=per, alpha=alpha
+    )
+    return RatesResult((first, second), ratio, references=list(ratio.references), unit=unit)
+
+
+@dataclass
 class StandardisedRatio:
     observed: int
     expected: float
@@ -633,10 +686,20 @@ class StandardisedRatio:
     ci: CI
     p_value: float
     references: list[str] = field(default_factory=list)
+    # what the events are (a stored id, "deaths" or "cases"): it names the ratio, mortality or incidence
+    events_are: str = "deaths"
+    warnings: list[str] = field(default_factory=list)
 
 
-def standardised_ratio(observed: int, expected: float, *, alpha: float = 0.05) -> StandardisedRatio:
-    """SMR / SIR = observed / expected with the exact Poisson interval on the observed count."""
+def standardised_ratio(
+    observed: int, expected: float, *, alpha: float = 0.05, events_are: str = "deaths"
+) -> StandardisedRatio:
+    """
+    SMR / SIR = observed / expected with the exact Poisson interval on the observed count (Garwood) and the test
+    that agrees with it: twice the smaller Poisson tail, which excludes 1 exactly when the interval does. R's
+    ``poisson.test(observed, T = expected)`` gives the same interval and a minimum-likelihood p-value, which can
+    differ (25 against 18.4: 0.165 here, 0.128 there).
+    """
     if expected <= 0:
         raise ValueError("expected count must be positive")
     lo, hi = confint_poisson(int(observed), 1.0, method="exact-c", alpha=alpha)
@@ -658,17 +721,26 @@ def standardised_ratio(observed: int, expected: float, *, alpha: float = 0.05) -
             method="exact Poisson",
         ),
         p_value=p,
-        references=[REFERENCES["ulm1990"]],
+        references=[REFERENCES["ulm1990"], REFERENCES["garwood1936"]],
+        events_are=events_are,
+        warnings=(
+            ["Fewer than 1 event expected: the ratio rests on almost nothing."]
+            if expected < 1
+            else []
+        ),
     )
 
 
 __all__ = [
     "IncidenceRate",
     "RateRatio",
+    "RatesResult",
     "StandardisedRatio",
     "StratifiedResult",
+    "has_ratio",
     "incidence_rate",
     "mantel_haenszel",
     "rate_ratio",
+    "rates",
     "standardised_ratio",
 ]

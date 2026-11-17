@@ -658,7 +658,10 @@ def test_a_share_against_a_reference_from_numbers_typed(app: AppTest) -> None:
     assert shown["Share with the characteristic"] == "30.0%"
     text = _texts(app)
     assert "21.9% to 39.6%" in text and "p = 0.017" in text
-    assert "From the numbers typed: 30 of 100." in text and "Not from the dataset" in text
+    assert (
+        "From the numbers typed: 30 of 100 participants with the characteristic, against a reference share of 20%."
+        in text
+    ) and "Not from the dataset" in text
     assert "Reference: typed" not in text and text.count("Not from the dataset") == 1
     assert "They are two methods" in text  # the share ended without "How to read this"
     # 3 of 10 against 10%: the exact test does not reject, the Wilson interval leaves the reference out
@@ -976,7 +979,10 @@ def test_two_rates_and_their_ratio_follow_the_numbers_typed(app: AppTest) -> Non
     assert (
         "95% CI 0.996 to 12.935" in text
     )  # the exact conditional interval of the ratio (0.996 to 12.9)
-    assert "From the numbers typed: 15 events over 1,200 person-years against 4 over 1,000." in text
+    assert (
+        "From the numbers typed: 15 events over 1,200 person-years (group compared) against 4 over 1,000 "
+        "(reference group), rates per 1,000 person-years." in text
+    )
     _type(app, "rate_e0", 0)  # no event in the reference group: no "inf"
     assert _metrics(app)["Rate ratio"] == "no upper bound"
     assert not re.search(r"inf", _texts(app))
@@ -989,7 +995,10 @@ def test_one_rate(app: AppTest) -> None:
     assert _metrics(app) == {"Rate": "12.50"}
     text = _texts(app)
     assert "per 1,000 person-years · 95% CI 7.00 to 20.62" in text
-    assert "From the numbers typed: 15 events over 1,200 person-years." in text
+    assert (
+        "From the numbers typed: 15 events over 1,200 person-years, rate per 1,000 person-years."
+        in text
+    )
     assert (
         "A rate is events over the time at risk" in text
     )  # a single rate ended without its reading
@@ -1008,7 +1017,7 @@ def test_observed_against_expected_events(app: AppTest) -> None:
     assert shown == {"Standardised mortality ratio (SMR)": "1.359"}
     text = _texts(app)
     assert "95% CI 0.879 to 2.006" in text
-    assert "From the numbers typed: 25 observed against 18.4 expected." in text
+    assert "From the numbers typed: 25 observed deaths against 18.4 expected." in text
     assert text.count("The expected number is taken as known") == 1  # in "How to read this"
     app.radio(key="smr_kind").set_value(m.CASES).run()
     assert "Standardised incidence ratio (SIR)" in _metrics(app)

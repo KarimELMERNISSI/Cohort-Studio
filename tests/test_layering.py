@@ -77,6 +77,7 @@ UTILS_PLATFORM = {
     "utils.environment",
     "utils.export_utils",
     "utils.logging_config",
+    "utils.numbers",
     "utils.optional",
     "utils.settings",
 }

@@ -57,7 +57,9 @@ TITLES = {
     "bland_altman": "Bland-Altman agreement",
     "icc": "Intraclass correlation",
     "kappa": "Cohen's kappa",
-    "proportion": "One-sample proportion",
+    "proportion": "Share against a reference",  # the page's words; it read "One-sample proportion"
+    "rates": "Incidence rates",
+    "standardised_ratio": "Standardised ratio (observed against expected)",
 }
 
 # the ids a file can hold: a class, a rule, a part's prefix or a number's name is added, never renamed
@@ -321,9 +323,12 @@ def test_a_key_this_version_does_not_know_is_refused_by_every_reader() -> None:
         specify("cox", time="days", event="died", compare="arm", adjust=["age"]), _cohort()
     )
     written = json.loads(json.dumps(done.spec.to_dict()))
-    later = read_spec({**written, "typed": {"with": 3, "of": 928}})
+    later = read_spec({**written, "weights": {"column": "w928"}})
     assert later[0] is None and "does not know" in later[1]
-    assert "typed" not in later[1] and "928" not in later[1]
+    assert "weights" not in later[1] and "928" not in later[1]
+    # numbers typed on a kind that has none to type: refused too, and not read as an analysis of the data
+    typed = read_spec({**written, "typed": {"with": 3, "of": 928}})
+    assert typed == (None, "the analysis kind cox is not computed from numbers typed")
     on = ComputedOn("observed", "f" * 64, 10).to_dict()
     imputation = ImputationUsed("e" * 64, 5).to_dict()
     record = plan.record("cox", done.result)
@@ -348,12 +353,13 @@ def test_each_reader_knows_the_keys_its_writer_writes() -> None:
     )
     imputation = ImputationUsed("e" * 64, 5)
     on = ComputedOn("imputed", "f" * 64, 10, imputation=imputation)
-    assert set(done.spec.on(on).to_dict()) == plan.SPEC_KEYS
+    # "typed" is written for a calculation from numbers typed only (tests/biostats_layer/test_plan_typed.py)
+    assert set(done.spec.on(on).to_dict()) == plan.SPEC_KEYS - {"typed"}
     assert set(on.to_dict()) == plan.COMPUTED_ON_KEYS
     assert set(imputation.to_dict()) == plan.IMPUTATION_KEYS
     record = plan.record("cox", done.result)
     assert record is not None
-    assert set(record.to_dict()) == plan.RECORD_KEYS
+    assert set(record.to_dict()) == plan.RECORD_KEYS - {"typed"}
     assert set(record.parts[0].to_dict()) == plan.PART_KEYS
     assert set(record.parts[0].numbers[0].to_dict()) == plan.NUMBER_KEYS
 
@@ -1271,7 +1277,7 @@ def test_the_closed_values_are_the_ids_their_modules_keep() -> None:
         SAMPLINGS
     )
     for kind in plan.KINDS.values():
-        offered = {**kind.options, **kind.pooled_options}
+        offered = {**kind.options, **kind.pooled_options, **kind.typed_options}
         for option, known in kind.choices.items():
             # a closed option is a declared one, and its default is among its values
             assert option in offered, (kind.id, option)

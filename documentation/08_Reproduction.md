@@ -152,7 +152,9 @@ dossier name it by its number. The data have their own counter, the *data revisi
    item, kept with what it was computed on (data, data revision, population, N analysed).
 2. The Study dossier page draws the participant flow with a box for each analysis of the dossier (N analysed, or
    the imputed datasets pooled) and lists the results. A result computed on data that changed since, or on
-   another population, is marked stale.
+   another population, is marked stale. The calculations from numbers typed (a calculator's result, added with
+   the same button) are listed apart, under *From numbers typed by hand*: they read no data, so they are never
+   stale and the flow does not count them. Like the results, they are cleared when another dataset is loaded.
 3. **Download the Word dossier**. Its sections:
 
 | Section | Contents |
@@ -162,7 +164,8 @@ dossier name it by its number. The data have their own counter, the *data revisi
 | 3. Data handling | The recorded steps that changed the data, with their formulas |
 | 4. Missing data | Missing values per variable, values filled by single imputation, the multiple imputation (settings, methods, status, methods paragraph) |
 | 5. Results | Each result with its settings, what it was computed on, its tables and, for survival, the Kaplan-Meier figure |
-| 6. References | The methods used, STROBE and, with multiple imputation, the pooling references |
+| 6. Calculations from numbers typed by hand | Each calculation with the numbers typed, where they come from when it was said, and its result, computed again from its numbers; never a population, a number analysed or a fingerprint |
+| 7. References | The methods used, the calculations' included, STROBE and, with multiple imputation, the pooling references |
 
 Stale results are left out and listed; tick the option to keep them, marked as not current. The dossier supports
 the reporting of the participant flow (STROBE item 13) and of multiple imputation (Sterne et al. 2009); it does

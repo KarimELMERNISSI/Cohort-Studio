@@ -57,9 +57,14 @@ OFFERED = (NOT_STATED, "cohort", "rct", "cross-sectional", "case-control")
 
 # The accuracy of a test asks the same question with answers of its own (biostats.diagnostic.SAMPLINGS: two
 # catalogues, since the answers differ). Where a design declared for an outcome later fills that answer in, it is by
-# this table, and only when the reference standard is that outcome: sampled by it (case-control), those with and
-# without the condition were sampled apart (two-gate); followed over time, or taken at one point in time, the
-# participants entered before the condition was known (a series); a design not stated is a sampling not stated.
+# this table, and only when the reference standard is that outcome:
+# - sampled by it (case-control), those with and without the condition were sampled apart (two-gate);
+# - followed over time (a cohort, a trial), the participants entered before the condition was known, consecutively
+#   or at random (a series). The share with the outcome is then a risk only with complete follow-up: a participant
+#   lost before the condition could be seen counts as without it, unchecked; in a trial it is the arms' mix;
+# - taken at one point in time, they were not selected by the condition (a series);
+# - a design not stated is a sampling not stated, and so is a result kept before the design was asked
+#   (:func:`accuracy_sampling` reads the table for any id).
 ACCURACY_SAMPLING: dict[str, str] = {
     NOT_STATED: "not_stated",
     "cohort": "series",
@@ -67,6 +72,13 @@ ACCURACY_SAMPLING: dict[str, str] = {
     "cross-sectional": "series",
     "case-control": "two_gate",
 }
+
+
+def accuracy_sampling(design: str) -> str:
+    """The sampling of an accuracy study for a study design's id (``ACCURACY_SAMPLING``); not stated for a result
+    kept before the design was asked, and for any id this version does not know."""
+    return ACCURACY_SAMPLING.get(design, "not_stated")
+
 
 _BEFORE_DESIGNS = StudyDesign(BEFORE, (RATIO, ODDS_RATIO, DIFFERENCE, NNT), "risk")
 
@@ -93,5 +105,6 @@ __all__ = [
     "OFFERED",
     "RATIO",
     "StudyDesign",
+    "accuracy_sampling",
     "design_named",
 ]

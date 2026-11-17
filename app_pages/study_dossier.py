@@ -20,22 +20,30 @@ from core.state import checksum_text
 from core.steps import DOCUMENT, LOAD, POPULATION, step_title
 from core.steps import ids as step_ids
 from enrich.transformation_logic import added_columns
+from manage.report_tables import SOURCE_NOT_GIVEN
 from ui.components import no_dataset, section, status_chip
 from ui.components.flow import current_flow, render_flow
 from ui.components.study import status_text, study_status, study_strip
+from ui.components.text import plain
 from ui.results import (
     CURRENT,
     STALE_CODE,
     STALE_DATA,
     ReportItem,
     remove_from_report,
+    remove_typed,
     report_items,
     report_status,
+    typed_stored,
 )
 from ui.state import get_state
 from utils.environment import environment_text
 
 logger = logging.getLogger(__name__)
+
+# a card of the dossier's list: its title, its chip, its Remove button (wide enough for the button's word in a
+# 1,280-pixel window)
+_CARD_COLUMNS = [6, 1.2, 1.4]
 
 # steps of the trace with a section of their own (the source, the population, the multiple imputation), or that
 # only document; the data handling lists the others
@@ -93,7 +101,7 @@ def _provenance_rows(state, trace: dict) -> list[tuple[str, str]]:
     identity = state.identity()
     check = verify_trace(trace) if trace.get("steps") else None
     integrity = {
-        "verified": "verified (hash chain intact)",
+        "verified": "intact (the hash chain holds)",
         "unverifiable": "not verifiable (recorded before traces were chained)",
     }
     rows = [
@@ -239,21 +247,77 @@ def session_parts(state, items: list[ReportItem], *, include_stale: bool) -> dic
         "single_imputed": state.single_imputed_counts(),
         "exact_imputed": state.exact_imputed_counts(),
         "mi": _mi_section(state),
+        # the calculations from numbers typed, as the session keeps them: computed again when the document is built
+        "typed": typed_stored(),
     }
+
+
+def _calculation(stored: dict[str, Any]):
+    """
+    A calculation from numbers typed for the Word dossier and for the page's list, from what the session keeps of
+    it (JSON): computed again from its numbers, its words and its blocks written afresh from its spec and its
+    record. One that this version cannot read or compute any more keeps its place with a fixed line, and its
+    numbers in words: those of its spec when it reads, else as they were when it was added.
+    """
+    from biostats import plan
+    from manage.dossier import CALCULATION_NOT_COMPUTED, DossierCalculation
+    from manage.report_tables import (
+        CALCULATION,
+        ResultBlocks,
+        record_blocks,
+        typed_numbers,
+        typed_title,
+    )
+
+    note, added = str(stored.get("note") or ""), str(stored.get("added_at") or "")
+    title, numbers = CALCULATION, str(stored.get("words") or "")
+    try:
+        spec, _ = plan.read_spec(stored.get("spec"))
+        if spec is None or spec.typed is None:
+            raise ValueError("not a calculation this version reads")
+        title, numbers = typed_title(spec), typed_numbers(spec)
+        done = plan.run(spec)
+        record = plan.record_of(done.spec, done.result)
+        if record is None:
+            raise ValueError("the calculation has no record")
+        blocks = record_blocks(record)
+    except Exception as exc:
+        # the type only, never the message: it can hold a number typed
+        logger.warning(
+            "a calculation from numbers typed could not be written in the dossier: %s",
+            type(exc).__name__,
+        )
+        blocks = ResultBlocks(lines=[CALCULATION_NOT_COMPUTED])
+    return DossierCalculation(
+        title=title, numbers=numbers, note=note, blocks=blocks, added_at=added
+    )
+
+
+def _result_blocks(item: Any):
+    """A result's blocks: from its record for the kinds that have a record block, so that a share counted in the
+    dataset reads as a share of numbers typed does in the same document; by the type of the result otherwise."""
+    from biostats import plan
+    from manage.report_tables import RECORD_BLOCKS, record_blocks, result_blocks
+
+    if item.key in RECORD_BLOCKS:
+        record = plan.record(item.key, item.value)
+        if record is not None:
+            return record_blocks(record)
+    return result_blocks(item.value)
 
 
 def finish_input(parts: dict[str, Any], *, title: str, author: str):
     """The DossierInput from the session parts: result tables, figures and references (no session needed)."""
     from manage.dossier import METHOD_REFERENCES, NOT_WRITTEN, DossierInput, DossierResult
     from manage.flow_figure import flow_png
-    from manage.report_tables import ResultBlocks, result_blocks, settings_written
+    from manage.report_tables import ResultBlocks, settings_written
 
     results = []
     references: list[str] = [METHOD_REFERENCES["strobe"]]
     pooled = parts["mi"] is not None
     for item, status in parts["kept"]:
         try:
-            blocks = result_blocks(item.value)
+            blocks = _result_blocks(item)
         except Exception as exc:
             # one result's block must not stop the download of every section; the stored key and the type only,
             # never the message (it can hold a value of the data)
@@ -277,6 +341,9 @@ def finish_input(parts: dict[str, Any], *, title: str, author: str):
         references += [
             METHOD_REFERENCES[k] for k in ("rubin1987", "barnard1999", "vanbuuren2018", "white2011", "sterne2009")
         ]
+    calculations = [_calculation(stored) for stored in parts.get("typed") or []]
+    for calculation in calculations:
+        references.extend(calculation.blocks.references)
     flow = parts["flow"]
     return DossierInput(
         title=title,
@@ -294,6 +361,7 @@ def finish_input(parts: dict[str, Any], *, title: str, author: str):
         results=results,
         references=references,
         omitted=parts["omitted"],
+        calculations=calculations,
     )
 
 
@@ -319,17 +387,23 @@ def app() -> None:
 
     section(
         "Results in the dossier",
-        "Add a result with the button under it on the analysis pages; it keeps what it was computed on.",
+        "Add a result with the button under it on the analysis pages, and a calculator's result with the same "
+        "button under its numbers; a result keeps what it was computed on.",
     )
+    typed = typed_stored()
     if not items:
         st.info(
-            "No result yet. Run an analysis (Analyze) and click **Add to the study dossier** under the result.",
+            "No result of the dataset yet. Run an analysis (Analyze) and click **Add to the study dossier** under "
+            "the result."
+            if typed
+            else "No result yet. Run an analysis or use a calculator (Analyze), and click **Add to the study "
+            "dossier** under the result.",
             icon=":material/note_add:",
         )
     for item in items:
         status = report_status(item)
         with st.container(border=True):
-            head, chip, remove = st.columns([6, 1.4, 1], vertical_alignment="center")
+            head, chip, remove = st.columns(_CARD_COLUMNS, vertical_alignment="center")
             head.markdown(f"**{item.title}**" + (f" · {item.settings}" if item.settings else ""))
             with chip:
                 status_chip("current" if status == CURRENT else "stale", "ok" if status == CURRENT else "caution")
@@ -347,10 +421,54 @@ def app() -> None:
                     "include stale results, marked as such. Run the analysis again to update it."
                 )
 
+    if typed:
+        st.markdown("**From numbers typed by hand**")
+        st.caption(
+            "Calculations from numbers typed into a calculator: not computed on the dataset, so the participant "
+            "flow does not count them. They stay with this dataset, as the results do: loading another dataset "
+            "clears them."
+        )
+    from manage.dossier import (
+        CALCULATION_NOT_COMPUTED,  # with the Word writer, loaded when the page runs
+    )
+
+    for stored in typed:
+        # computed again, as the Word dossier will: the page and the document then say the same of each
+        calculation = _calculation(stored)
+        with st.container(border=True):
+            head, chip, remove = st.columns(_CARD_COLUMNS, vertical_alignment="center")
+            head.markdown(
+                f"**{calculation.title}**"
+                + (f" · {calculation.numbers}" if calculation.numbers else "")
+            )
+            with chip:
+                st.badge("typed", icon=":material/edit_note:", color="grey")
+            remove.button(
+                "Remove",
+                key=f"dossier_remove::{stored.get('id')}",
+                icon=":material/delete:",
+                on_click=remove_typed,
+                args=(stored.get("id"),),
+            )
+            note = calculation.note
+            source = (
+                f"Source: {plain(note)}" + ("" if note.endswith((".", "?", "!")) else ".")
+                if note
+                else SOURCE_NOT_GIVEN
+            )
+            st.caption(f":material/edit_note: {source} Added at {calculation.added_at[11:16]}.")
+            if calculation.blocks.lines == [CALCULATION_NOT_COMPUTED]:
+                st.caption(
+                    ":material/warning: This version of CohortStudio cannot compute this calculation again; the "
+                    "Word dossier writes a line in its place."
+                    + (f" Its numbers, as added: {calculation.numbers}." if calculation.numbers else "")
+                    + " Type them again on the calculator's page."
+                )
+
     section(
         "Word dossier",
-        "Provenance, analysis population and participant flow, data handling, missing data, the results above "
-        "and the references.",
+        "Provenance, analysis population and participant flow, data handling, missing data, the results above, "
+        "the calculations from numbers typed and the references.",
     )
     ref = state.dataset
     c1, c2 = st.columns([2, 1])

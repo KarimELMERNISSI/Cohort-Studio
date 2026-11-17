@@ -1104,7 +1104,7 @@ def test_one_result_that_fails_does_not_stop_the_dossier(
     caplog.clear()
     with caplog.at_level("WARNING"):
         text = _document_text(build_dossier(inp))
-    assert text.count(NOT_WRITTEN) == 1 and "Sensitivity" in text and "6. References" in text
+    assert text.count(NOT_WRITTEN) == 1 and "Sensitivity" in text and "7. References" in text
     assert "result 1 of the dossier could not be written: AttributeError" in caplog.text
 
 

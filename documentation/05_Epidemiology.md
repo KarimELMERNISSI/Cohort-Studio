@@ -354,11 +354,22 @@ time; each keeps its choices and its result while another is open.
 | **One group against a reference**, a mean | the measurement; a reference value fixed beforehand; the summary | the mean (or typical value) with its interval, and its difference from the reference: one-sample t-test or Wilcoxon signed-rank |
 | **One group against a reference**, a share | a yes/no variable and the value counted, read from the dataset, or two numbers you type; the reference share | the share with its Wilson interval and the exact binomial test |
 | **Stratified (Mantel-Haenszel)** | a yes/no outcome and its event; what is compared and its **reference group**; one variable of 2 to 8 groups to adjust for; **how the participants entered the study** | the odds ratio (Robins-Breslow-Greenland interval) adjusted for that variable and, when the design allows, the risk or prevalence ratio (Greenland-Robins) and difference (Sato's variance), beside the unadjusted ones; each stratum's table and ratios; whether the strata differ (Woolf for the risk or prevalence ratios, Breslow-Day for the odds ratios) |
-| **Rates (from counts)** | one rate, two rates, or observed against expected events; the numbers | events per person-time with exact Poisson intervals; the rate ratio with the exact conditional interval (Clopper-Pearson, the interval of R's `poisson.test`) and a test that agrees with it (twice the smaller tail; R's own p-value is computed another way and can differ): the interval excludes 1 exactly when p < 0.05; the standardised ratio (SMR or SIR) with its exact Poisson interval |
+| **Rates (from counts)** | one rate, two rates, or observed against expected events; the numbers | events per person-time with exact Poisson intervals; the rate ratio with the exact conditional interval (Clopper-Pearson, the interval of R's `poisson.test`) and a test that agrees with it (twice the smaller tail; R's own p-value is computed another way and can differ): the interval excludes 1 exactly when p < 0.05; the standardised ratio (SMR or SIR) with its exact Poisson interval and the test that agrees with it (twice the smaller tail; R's `poisson.test` computes its p-value another way and can differ) |
 
 - **Rates is a calculator.** It reads the numbers you type, not the dataset: its fields start empty, it has no Run
   button, and its result follows the numbers and says where they came from. The analysis population and the
   imputation do not apply to it. The typed share of *One group against a reference* works the same way.
+- **A calculator's result can go into the study dossier.** Under the result, the line *From the numbers typed*
+  writes them with their names, and **Add to the study dossier** keeps the calculation. *Where the numbers come
+  from (optional)* takes a publication and its table, a report, a count of your own and its date: it is written
+  with the calculation, as you type it (a publication's authors may be named; never a participant). The same numbers
+  are one item: a source typed after adding is written in its place with **Update the source in the study
+  dossier**; another number is another calculation, and the dossier keeps the earlier one as it was. A calculation
+  read no data: it is never stale, the participant flow does not count it, and the Word dossier writes it in a
+  section of its own, *Calculations from numbers typed by hand*, computed again from its numbers when the document
+  is built. It is written as typed: the dossier's rules for small groups read the results of the dataset, not
+  numbers you type. A calculation stays with the dataset loaded: loading another clears it, as it clears the
+  results.
 - **How the participants entered the study.** The stratified analysis and the 2x2 panel ask it, once the outcome
   is chosen, and show only what the design supports. *Not stated* (where they start) gives the odds ratio only:
   it means the same whatever the sampling. *Followed over time* (a cohort, or a randomised trial whose groups were
@@ -417,8 +428,8 @@ time; each keeps its choices and its result while another is open.
   carries it to the stratified analysis, and another outcome starts at *Not stated*. An individually matched
   case-control study needs a conditional analysis (McNemar's test for pairs), not this one.
 - **Rates are typed.** Rates read from the dataset are those of a count model (Survival & regression, Count or
-  rate). A calculator's result follows the numbers typed: it is not kept, and cannot be added to the study
-  dossier.
+  rate). A calculator's result follows the numbers typed. Nothing links those numbers to the study's data: if they
+  were read from it, a calculation kept in the dossier is not updated when the data change.
 
 ## Analyses with multiply imputed data
 

@@ -316,6 +316,9 @@ HELP: dict[str, str] = {
     "person_time": "The sum of every participant's time at risk in the group, in one unit.",
     "unit": "The unit the person-time is counted in. It is written beside every rate.",
     "per": "Rates are shown per this much person-time, for example per 1,000 person-years.",
+    "numbers_source": "Optional. Where these numbers were read: a publication and its table, a report, a count "
+    "of your own and its date. It is written with the calculation in the study dossier, as you type it. A "
+    "publication's authors may be named; never a participant.",
     "observed": "The events observed in the cohort.",
     "expected": "The number expected if the reference rates applied: for each stratum (age band, sex, period), the "
     "reference rate times the cohort's person-time, summed.",

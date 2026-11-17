@@ -147,7 +147,8 @@ def test_the_word_dossier_documents_the_flow_and_the_results(data_root: Path) ->
         "3. Data handling",
         "4. Missing data",
         "5. Results",
-        "6. References",
+        "6. Calculations from numbers typed by hand",
+        "7. References",
         "Cox proportional-hazards model",
         "Kaplan-Meier survival and log-rank test",
     ):
@@ -224,7 +225,7 @@ def test_results_of_another_population_are_left_out_unless_kept_marked(data_root
     text, headings, _, _ = _text(at.session_state["dossier"])
     assert "Cox proportional-hazards model" not in headings
     assert "Left out because they were computed on other data or another population" in text
-    assert "No result was added to the dossier." in text
+    assert "No result of the dataset was added to the dossier." in text
     marked, headings, _, _ = _text(at.session_state["dossier_stale"])
     assert "Cox proportional-hazards model" in headings
     assert "Not current: computed on another analysis population" in marked

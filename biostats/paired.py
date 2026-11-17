@@ -390,6 +390,7 @@ def one_sample_proportion(
         estimate_ci=CI(lower=float(lo), upper=float(hi), level=1 - alpha, method="Wilson"),
         warnings=notes,
         references=cite("wilson1927"),
+        reference_value=float(reference_proportion),
         groups=["sample"],
         n_per_group=[int(n)],
         alpha=alpha,

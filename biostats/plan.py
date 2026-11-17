@@ -20,8 +20,14 @@ and the numbers it gave.
   curve, one per event; a median, which is an event time; the last follow-up time) are marked ``fine``: a shared
   package writes only what its rule for the kind names, and never a ``fine`` number as it is.
 
-Specs and records exist for the time-to-event, logistic and count analyses; the other kinds have their titles and
-get their runners later (until then their results have no spec and a package lists them as not run).
+- **A calculation from numbers typed** (a share, rates, observed against expected) is the same kind with a third
+  source, beside the observed rows and imputed data: its spec holds the numbers (``AnalysisSpec.typed``) in place of
+  what it was computed on, and :func:`run` computes it from them alone. It is a function of its numbers: never stale,
+  and never among the results of the dataset (its record is marked ``typed``).
+
+Specs and records exist for the time-to-event, logistic and count analyses, and for the calculations from numbers
+typed; the other kinds have their titles and get their runners later (until then their results have no spec and a
+package lists them as not run).
 """
 
 from __future__ import annotations
@@ -63,6 +69,12 @@ RECIPROCAL = (
 RULES = (PLAIN, LOG, RECIPROCAL)
 
 POOLED_SUFFIX = "_mi"  # of the key a pooled result is stored under ("cox_mi")
+
+# the type of a number typed into a calculation (stored ids): a count of participants or of events, or a quantity
+# (person-time, an expected number)
+COUNT, QUANTITY = "count", "quantity"
+# what a spec is computed on (stored ids)
+OBSERVED, IMPUTED, TYPED = "observed", "imputed", "typed"
 
 EXTREME_LOG, EXTREME_SE = (
     10.0,
@@ -172,11 +184,15 @@ SPEC_KEYS = frozenset(
         "random",
         "backend",
         "data",
+        "typed",  # written only for a calculation from numbers typed
     }
 )
 NUMBER_KEYS = frozenset({"name", "value", "class", "scale", "rule", "fine"})
 PART_KEYS = frozenset({"id", "labels", "support", "numbers"})
-RECORD_KEYS = frozenset({"kind", "record_version", "pooled", "parts", "warnings", "complete_case"})
+RECORD_KEYS = frozenset(
+    # "typed" is written only for a calculation from numbers typed
+    {"kind", "record_version", "pooled", "parts", "warnings", "complete_case", "typed"}
+)
 
 
 def _closed(value: Mapping[str, Any], keys: frozenset[str], what: str) -> None:
@@ -317,6 +333,11 @@ class AnalysisSpec:
     factor with the reference first, the values read as an event), recorded so that a later run uses or compares
     them; ``random`` the seed and the number of draws, None for a kind that draws nothing; ``backend`` the libraries
     that computed it, with their versions; ``data`` what it was computed on.
+
+    ``typed`` holds the numbers of a calculation from numbers typed, by name (the kind's ``typed_inputs``): such a
+    spec names no variable, is never pooled, draws nothing and is computed on no data; its options are the kind's
+    ``typed_options``. Each number is converted to its declared type when the spec is built (1200 and 1200.0 are one
+    calculation).
     """
 
     kind: str
@@ -328,39 +349,72 @@ class AnalysisSpec:
     backend: Mapping[str, Any] = field(default_factory=dict)
     data: ComputedOn | None = None
     kind_version: int = 1
+    typed: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         kind = kind_named(self.kind)
-        if self.pooled and kind.pooled_title is None:
-            raise ValueError(f"the analysis kind {self.kind} is never pooled")
-        unknown = sorted(set(self.variables) - set(kind.roles))
-        if unknown:
-            raise ValueError(
-                f"the analysis kind {self.kind} has no role {', '.join(unknown)}; its roles: "
-                f"{', '.join(kind.roles) or 'none yet'}"
-            )
-        offered = {**kind.options, **(kind.pooled_options if self.pooled else {})}
+        if self.typed is not None:
+            if not kind.typed_inputs:
+                raise ValueError(
+                    f"the analysis kind {self.kind} is not computed from numbers typed"
+                )
+            if self.pooled or self.variables or self.random is not None or self.data is not None:
+                raise ValueError(
+                    "a calculation from numbers typed names no variable, is never pooled, draws nothing and is "
+                    "computed on no data"
+                )
+            object.__setattr__(self, "typed", _numbers_typed(kind, self.typed))
+            offered = dict(kind.typed_options)
+        else:
+            if self.pooled and kind.pooled_title is None:
+                raise ValueError(f"the analysis kind {self.kind} is never pooled")
+            unknown = sorted(set(self.variables) - set(kind.roles))
+            if unknown:
+                raise ValueError(
+                    f"the analysis kind {self.kind} has no role {', '.join(unknown)}; its roles: "
+                    f"{', '.join(kind.roles) or 'none yet'}"
+                )
+            offered = {**kind.options, **(kind.pooled_options if self.pooled else {})}
         unknown = sorted(set(self.options) - set(offered))
         if unknown:
             raise ValueError(
                 f"the analysis kind {self.kind} has no option {', '.join(unknown)}; its options: "
                 f"{', '.join(offered) or 'none'}"
             )
+        options = dict(self.options)
         for name, known in kind.choices.items():
+            if name not in options:
+                continue
             # the option named, never the value: a value this version does not know was written by a later one
-            if name in self.options and not any(self.options[name] == value for value in known):
+            members = [value for value in known if _same_value(options[name], value)]
+            if not members:
                 raise ValueError(
                     f"the {self.kind} analysis does not know this value of its option {name} (written by a later "
                     "version)"
                 )
+            options[name] = members[
+                0
+            ]  # 1000.0 is the multiplier 1000: one request, written one way
+        if self.typed is not None:
+            for name, value in options.items():
+                if name in kind.choices or value is None or isinstance(value, str):
+                    continue
+                # a calculation's own number among its options (a reference share): finite, and of one type
+                if not _holds_a_number(value):
+                    raise ValueError(
+                        f"the option {name} of the {self.kind} calculation is not a finite number"
+                    )
+                options[name] = float(value)
+        object.__setattr__(self, "options", options)
         for name in ("variables", "options", "decided", "backend"):
             object.__setattr__(self, name, _plain(getattr(self, name)))
         if self.random is not None:
             object.__setattr__(self, "random", _plain(self.random))
 
     def request(self) -> dict[str, Any]:
-        """What was asked, apart from what it ran on and with: the kind, the variables, the options, the draws."""
-        return {
+        """What was asked, apart from what it ran on and with: the kind, the variables, the options, the draws;
+        for a calculation, its numbers (written only then: a spec of the dataset keeps its JSON and its id)."""
+        asked = {
             "kind": self.kind,
             "kind_version": self.kind_version,
             "pooled": self.pooled,
@@ -368,6 +422,9 @@ class AnalysisSpec:
             "options": copy.deepcopy(dict(self.options)),
             "random": None if self.random is None else copy.deepcopy(dict(self.random)),
         }
+        if self.typed is not None:
+            asked["typed"] = dict(self.typed)
+        return asked
 
     def to_dict(self) -> dict[str, Any]:
         """A copy as JSON values: changing it changes nothing of the spec."""
@@ -385,7 +442,9 @@ class AnalysisSpec:
         _closed(value, SPEC_KEYS, "analysis spec")
         data = _typed(value, "data", dict, optional=True)
         random = _typed(value, "random", dict, optional=True)
+        numbers = _typed(value, "typed", dict, optional=True)
         return cls(
+            typed=None if numbers is None else _restored(numbers),
             kind=_typed(value, "kind", str),
             kind_version=_typed(value, "kind_version", int),
             pooled=_typed(value, "pooled", bool),
@@ -413,8 +472,17 @@ class AnalysisSpec:
         """
         return hashlib.sha256(canonical(self.to_dict()).encode("utf-8")).hexdigest()
 
+    @property
+    def source(self) -> str:
+        """What the spec is computed on: the numbers typed, imputed data, or the observed rows."""
+        if self.typed is not None:
+            return TYPED
+        return IMPUTED if self.pooled else OBSERVED
+
     def on(self, data: ComputedOn) -> AnalysisSpec:
         """The spec with what it was computed on."""
+        if self.typed is not None:
+            raise ValueError("a calculation from numbers typed is computed on no data")
         return replace(self, data=data)
 
     def covariates(self) -> list[str]:
@@ -422,6 +490,67 @@ class AnalysisSpec:
         compare = self.variables.get("compare")
         first = [compare] if compare else []
         return first + [c for c in self.variables.get("adjust") or [] if c not in first]
+
+
+def _holds_a_number(value: Any) -> bool:
+    """Whether ``value`` is a number with a value a float can hold: not a yes or no, not a text, not NaN or
+    infinite, and not a whole number of hundreds of digits (which raises where it is converted)."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
+
+
+def _same_value(given: Any, known: Any) -> bool:
+    """Whether an option's value is this member of its closed set: equal, a yes or no never being a number."""
+    return isinstance(given, bool) == isinstance(known, bool) and given == known
+
+
+def _numbers_typed(kind: AnalysisKind, typed: Mapping[str, Any]) -> dict[str, int | float]:
+    """
+    The numbers of a calculation, each converted to its declared type before anything reads them: a count is a whole
+    number of 0 or more (1200.0 is the count 1200; a fraction, a negative number, a yes or no are refused), a
+    quantity a finite number. ValueError names the number, never its value.
+    """
+    if not isinstance(typed, Mapping):
+        raise ValueError("the numbers typed are not of the type expected")
+    if set(typed) - set(kind.typed_inputs):
+        # not named: a received file can hold anything there
+        raise ValueError(
+            f"the {kind.id} calculation holds a number this version does not know; its numbers: "
+            f"{', '.join(kind.typed_inputs)}"
+        )
+    optional = set(kind.typed_optional)
+    missing = [name for name in kind.typed_inputs if name not in optional and name not in typed]
+    if missing:
+        raise ValueError(f"the {kind.id} calculation lacks its number {', '.join(missing)}")
+    if optional & set(typed) not in (set(), optional):
+        raise ValueError(
+            f"the numbers {', '.join(kind.typed_optional)} of the {kind.id} calculation are given together or not "
+            "at all"
+        )
+    numbers: dict[str, int | float] = {}
+    for name, declared in kind.typed_inputs.items():
+        if name not in typed:
+            continue
+        value = typed[name]
+        if isinstance(value, np.generic):
+            value = value.item()
+        if not _holds_a_number(value):
+            raise ValueError(
+                f"the number {name} of the {kind.id} calculation is not a finite number"
+            )
+        if declared == COUNT:
+            if value < 0 or value != int(value):
+                raise ValueError(
+                    f"the number {name} of the {kind.id} calculation is not a count (a whole number of 0 or more)"
+                )
+            numbers[name] = int(value)
+        else:
+            numbers[name] = float(value)
+    return numbers
 
 
 def read_spec(value: Any) -> tuple[AnalysisSpec | None, str]:
@@ -432,12 +561,16 @@ def read_spec(value: Any) -> tuple[AnalysisSpec | None, str]:
     """
     if not isinstance(value, Mapping):
         return None, "not an analysis spec"
+    # a later version first: what it added (a number, an option) would otherwise be read as a defect of the file
+    known, written = KINDS.get(str(value.get("kind"))), value.get("kind_version")
+    if known is not None and isinstance(written, int) and not isinstance(written, bool):
+        current = known.typed_version if value.get("typed") is not None else known.version
+        if written > current:
+            return None, f"the {known.id} analysis was specified by a later version of CohortStudio"
     try:
         spec = AnalysisSpec.from_dict(value)
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, ArithmeticError, RecursionError) as exc:
         return None, str(exc) if isinstance(exc, ValueError) else "holds a value that is not JSON"
-    if spec.kind_version > kind_named(spec.kind).version:
-        return None, f"the {spec.kind} analysis was specified by a later version of CohortStudio"
     return spec, ""
 
 
@@ -574,7 +707,8 @@ class ResultRecord:
     another version is not compared number by number. ``warnings`` is wording: never compared, and never copied into
     a shared package (a warning can name a level); what a check needs of them is in the numbers (``converged``,
     ``extreme``, the groups skipped). ``complete_case`` is the record of the complete-case analysis a pooled result
-    carries for comparison.
+    carries for comparison. ``typed`` marks the record of a calculation from numbers typed (written only then): it
+    is never pooled, and no reader takes it for a result of the dataset.
     """
 
     kind: str
@@ -583,9 +717,12 @@ class ResultRecord:
     warnings: tuple[str, ...] = ()
     complete_case: ResultRecord | None = None
     record_version: int = 1
+    typed: bool = False
 
     def __post_init__(self) -> None:
         kind_named(self.kind)
+        if self.typed and (self.pooled or self.complete_case is not None):
+            raise ValueError("the record of a calculation from numbers typed is never pooled")
         object.__setattr__(self, "parts", tuple(self.parts))
         object.__setattr__(self, "warnings", tuple(str(w) for w in self.warnings))
         ids = [p.id for p in self.parts]
@@ -599,7 +736,7 @@ class ResultRecord:
         raise KeyError(part_id)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        written: dict[str, Any] = {
             "kind": self.kind,
             "record_version": self.record_version,
             "pooled": self.pooled,
@@ -607,6 +744,9 @@ class ResultRecord:
             "warnings": list(self.warnings),
             "complete_case": None if self.complete_case is None else self.complete_case.to_dict(),
         }
+        if self.typed:  # only then: a record of the dataset keeps its JSON
+            written["typed"] = True
+        return written
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> ResultRecord:
@@ -619,6 +759,7 @@ class ResultRecord:
             parts=tuple(Part.from_dict(p) for p in _typed(value, "parts", list)),
             warnings=tuple(_typed(value, "warnings", list)),
             complete_case=None if inner is None else cls.from_dict(inner),
+            typed=bool(_typed(value, "typed", bool, optional=True)),
         )
 
     def to_json(self) -> str:
@@ -648,6 +789,12 @@ class AnalysisKind:
     ``choices`` closes the values of the options that hold stored ids (a sampling, a form, a design): a spec holding
     another value is refused with the option named, and a received one reads as written by a later version, where
     its runner would have raised on a word. A value added to a closed set moves ``version``.
+
+    A kind with ``typed_inputs`` can be computed from numbers typed: each number by name (a stored id) with its type
+    (``COUNT`` or ``QUANTITY``); ``typed_optional`` names those left out together (the reference group of one rate);
+    ``typed_options`` are the options of the calculation, with their defaults (their closed values are in
+    ``choices`` too); ``typed_run`` computes it from the spec alone. The kind's ``record`` is shared by its sources:
+    the share of a column and the share of two numbers typed are one record shape.
     """
 
     id: str
@@ -665,6 +812,19 @@ class AnalysisKind:
     record: Callable[[Any], tuple[list[Part], ResultRecord | None]] | None = None
     pooled_record: Callable[[Any], tuple[list[Part], ResultRecord | None]] | None = None
     optional: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    typed_title: str | None = (
+        None  # of a calculation from numbers typed; None: not computed from them
+    )
+    typed_inputs: Mapping[str, str] = field(
+        default_factory=dict
+    )  # each number typed: COUNT or QUANTITY
+    typed_optional: tuple[str, ...] = ()  # those left out together
+    typed_options: Mapping[str, Any] = field(default_factory=dict)  # with their defaults
+    typed_run: Callable[[AnalysisSpec], tuple[Any, dict[str, Any], dict[str, Any]]] | None = None
+    # of a typed spec: its numbers, its options, their closed values, what typed_run computes. Apart from
+    # ``version``: declaring the kind's roles for the dataset later must not make this version unable to read a
+    # calculation it computes the same way
+    typed_version: int = 1
     version: int = 1  # of the spec: its roles, its options, what its runner computes
     record_version: int = 1  # of the record: its parts, its numbers, their classes
 
@@ -698,25 +858,39 @@ def titles() -> dict[str, str]:
 
 
 def specify(
-    kind: str, *, pooled: bool = False, options: Mapping[str, Any] | None = None, **variables: Any
+    kind: str,
+    *,
+    pooled: bool = False,
+    typed: Mapping[str, Any] | None = None,
+    options: Mapping[str, Any] | None = None,
+    **variables: Any,
 ) -> AnalysisSpec:
-    """A spec of ``kind`` for these variables (by role), with the kind's default options unless ``options`` says
-    otherwise."""
+    """A spec of ``kind`` for these variables (by role), or for these numbers ``typed``, with the kind's default
+    options (those of the calculation for numbers typed) unless ``options`` says otherwise."""
     found = kind_named(kind)
-    defaults = {**found.options, **(found.pooled_options if pooled else {})}
+    if typed is not None:
+        defaults = dict(found.typed_options)
+    else:
+        defaults = {**found.options, **(found.pooled_options if pooled else {})}
     return AnalysisSpec(
         kind=kind,
-        kind_version=found.version,
+        kind_version=found.version if typed is None else found.typed_version,
         pooled=pooled,
         variables=variables,
         options={**defaults, **dict(options or {})},
+        typed=typed,
     )
 
 
-def runnable(kind: str, *, pooled: bool = False) -> bool:
-    """Whether :func:`run` can compute this kind (the others have their titles only for now)."""
+def runnable(kind: str, *, pooled: bool = False, typed: bool = False) -> bool:
+    """Whether :func:`run` can compute this kind, on the rows, on imputed data or from numbers typed (the others
+    have their titles only for now)."""
     found = KINDS.get(kind)
-    return found is not None and (found.pool if pooled else found.run) is not None
+    if found is None:
+        return False
+    if typed:
+        return found.typed_run is not None
+    return (found.pool if pooled else found.run) is not None
 
 
 def _versions(kind: AnalysisKind, pooled: bool) -> dict[str, Any]:
@@ -737,18 +911,25 @@ def _versions(kind: AnalysisKind, pooled: bool) -> dict[str, Any]:
 
 def run(spec: AnalysisSpec, frame: pd.DataFrame | None = None, *, mi: Any = None) -> Computed:
     """
-    Compute ``spec``: on ``frame`` (the rows of the analysis population), or on the imputed data ``mi`` when it is
-    pooled. The spec returned holds the decisions the run used and the libraries' versions. The factor levels a spec
+    Compute ``spec``: on ``frame`` (the rows of the analysis population), on the imputed data ``mi`` when it is
+    pooled, or from its numbers alone when they were typed (no frame and no imputed data are then taken: a
+    calculation reads no data). The spec returned holds the decisions the run used and the libraries' versions. The factor levels a spec
     already holds are used as recorded (the same terms, the same reference); what the data give on their own is
     returned beside (``derived``), for the caller to compare. :class:`LaterVersion` for a spec written by a later
     version of its kind.
     """
     kind = kind_named(spec.kind)
-    if spec.kind_version > kind.version:
+    if spec.kind_version > (kind.version if spec.typed is None else kind.typed_version):
         raise LaterVersion(
             f"the {spec.kind} analysis was specified by a later version of CohortStudio"
         )
-    if spec.pooled:
+    if spec.typed is not None:
+        if frame is not None or mi is not None:
+            raise ValueError("a calculation from numbers typed reads no data")
+        if kind.typed_run is None:
+            raise ValueError(f"the {spec.kind} calculation cannot be computed from a spec yet")
+        result, used, derived = kind.typed_run(spec)
+    elif spec.pooled:
         if kind.pool is None:
             raise ValueError(f"the pooled {spec.kind} analysis cannot be computed from a spec yet")
         if mi is None:
@@ -781,6 +962,191 @@ def record(key: str, result: Any) -> ResultRecord | None:
         complete_case=complete_case,
         record_version=kind.record_version,
     )
+
+
+def record_of(spec: AnalysisSpec, result: Any) -> ResultRecord | None:
+    """The record of a result computed from ``spec``, stamped with its kind's record version and with its source
+    (a calculation from numbers typed is marked so); None for a kind that has no record yet."""
+    kind = kind_named(spec.kind)
+    build = kind.pooled_record if spec.pooled else kind.record
+    if build is None or result is None:
+        return None
+    parts, complete_case = build(result)
+    return ResultRecord(
+        kind.id,
+        pooled=spec.pooled,
+        parts=tuple(parts),
+        warnings=tuple(getattr(result, "warnings", ()) or ()),
+        complete_case=complete_case,
+        record_version=kind.record_version,
+        typed=spec.typed is not None,
+    )
+
+
+# ----------------------------------------------------------------------------- calculations from numbers typed
+# Each runner computes from the spec's numbers and options alone, through the function the page's calculator shows.
+
+
+def _typed_proportion(spec: AnalysisSpec) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    from biostats.paired import one_sample_proportion
+
+    numbers, reference = spec.typed or {}, spec.options.get("reference")
+    if isinstance(reference, bool) or not isinstance(reference, int | float):
+        raise ValueError("a share is compared with a reference share, fixed beforehand")
+    if not 0 < reference < 1:
+        # at 0 or at 1 every count but one is impossible: nothing to test (the page refuses them too)
+        raise ValueError("a reference share lies strictly between 0 and 1")
+    if numbers["total"] < 1 or numbers["count"] > numbers["total"]:
+        raise ValueError(
+            "the number with the characteristic is at most the number of participants, which is at least 1"
+        )
+    found = one_sample_proportion(
+        numbers["count"], numbers["total"], float(reference), alpha=float(spec.options["alpha"])
+    )
+    return found, {}, {}
+
+
+def _typed_rates(spec: AnalysisSpec) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    from biostats.rates import rates
+
+    numbers, options = spec.typed or {}, spec.options
+    found = rates(
+        numbers["events"],
+        numbers["person_time"],
+        numbers.get("reference_events"),
+        numbers.get("reference_person_time"),
+        per=float(options["per"]),
+        alpha=float(options["alpha"]),
+        unit=str(options["unit"]),
+    )
+    return found, {}, {}
+
+
+def _typed_standardised(spec: AnalysisSpec) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    from biostats.rates import standardised_ratio
+
+    numbers = spec.typed or {}
+    found = standardised_ratio(
+        numbers["observed"],
+        numbers["expected"],
+        alpha=float(spec.options["alpha"]),
+        events_are=str(spec.options["events_are"]),
+    )
+    return found, {}, {}
+
+
+def _record_proportion(result: Any) -> tuple[list[Part], None]:
+    """
+    A share against a reference fixed beforehand (``biostats.paired.one_sample_proportion``), whatever its source:
+    the share with its Wilson interval, and the exact binomial test with whether the interval holds the reference
+    (the two are two methods, and can part). The support counts those with the characteristic and those without it:
+    a count typed is counted as a participant's.
+    """
+    total = int(result.n_total)
+    count = round(float(result.statistic))
+    support = {"with": count, "without": total - count, "rows": total}
+    ci, reference = result.estimate_ci, result.reference_value
+    holds = ci is not None and reference is not None and ci.lower <= reference <= ci.upper
+    return [
+        Part(
+            "share",
+            support=support,
+            numbers=(
+                Number("count", count, EXACT),
+                Number("total", total, EXACT),
+                *_with_interval(result.estimate, ci, scale=1.0),
+            ),
+        ),
+        Part(
+            "test:exact_binomial",
+            support=support,
+            numbers=(
+                Number("reference", reference, EXACT),
+                Number("p", result.p_value, DETERMINISTIC, rule=LOG),
+                Number("interval_holds_reference", bool(holds), EXACT),
+            ),
+        ),
+    ], None
+
+
+def _record_rates(result: Any) -> tuple[list[Part], None]:
+    """
+    One rate, or two and their ratio (``biostats.rates.RatesResult``): ``rate#0`` is the group compared and
+    ``rate#1`` the reference group, each with its events (the part's support), its person-time, and its rate per
+    unit of person-time with the exact interval; ``ratio`` holds the ratio with its interval (``bounded`` false
+    when the reference group has no event: the upper end is then infinite), the test and its p-value, and the
+    difference of the two rates. No ``ratio`` part for one rate, nor for two groups without an event.
+    """
+    groups = ("compared", "reference")
+    parts: list[Part] = []
+    for place, rate in enumerate(result.rates):
+        parts.append(
+            Part(
+                f"rate#{place}",
+                labels={"group": groups[place]} if len(result.rates) > 1 else {},
+                support={"events": int(rate.events)},
+                numbers=(
+                    Number("events", int(rate.events), EXACT),
+                    Number("person_time", float(rate.person_time), DETERMINISTIC),
+                    # how the rate is shown, and of what: without them "12.50" is no rate a reader can use
+                    Number("unit", str(result.unit), EXACT),
+                    Number(
+                        "per", int(rate.per) if float(rate.per).is_integer() else rate.per, EXACT
+                    ),
+                    *_with_interval(
+                        rate.rate,
+                        rate.ci,
+                        scale=math.sqrt(max(rate.events, 1)) / rate.person_time,
+                    ),
+                ),
+            )
+        )
+    ratio = result.ratio
+    if ratio is not None:
+        first, second = ratio.exposed, ratio.reference
+        spread = math.sqrt(
+            max(first.events, 1) / first.person_time**2
+            + max(second.events, 1) / second.person_time**2
+        )
+        parts.append(
+            Part(
+                "ratio",
+                support={
+                    "events": int(first.events),
+                    "reference_events": int(second.events),
+                },
+                numbers=(
+                    *_with_interval(ratio.ratio, ratio.ci, scale=None),
+                    Number("p", ratio.p_value, DETERMINISTIC, rule=LOG),
+                    Number("test", str(ratio.test), EXACT),
+                    Number("difference", ratio.rate_difference, DETERMINISTIC, scale=spread),
+                    Number(
+                        "bounded",
+                        bool(math.isfinite(ratio.ratio) and math.isfinite(ratio.ci.upper)),
+                        EXACT,
+                    ),
+                ),
+            )
+        )
+    return parts, None
+
+
+def _record_standardised(result: Any) -> tuple[list[Part], None]:
+    """Observed against expected (``biostats.rates.StandardisedRatio``): the observed events (the part's support),
+    the expected number taken as known, their ratio with its exact Poisson interval, and the exact p-value."""
+    return [
+        Part(
+            "ratio",
+            support={"observed": int(result.observed)},
+            numbers=(
+                Number("observed", int(result.observed), EXACT),
+                Number("expected", float(result.expected), DETERMINISTIC),
+                Number("events_are", str(result.events_are), EXACT),  # mortality or incidence
+                *_with_interval(result.ratio, result.ci, scale=None),
+                Number("p", result.p_value, DETERMINISTIC, rule=LOG),
+            ),
+        )
+    ], None
 
 
 # ----------------------------------------------------------------------------- runners
@@ -1486,13 +1852,14 @@ def _record_survival(result: Any) -> tuple[list[Part], None]:
 
 
 def _with_interval(value: Any, ci: Any, *, scale: float | None) -> tuple[Number, ...]:
-    """An estimate, the ends of its interval and the interval's method, when it has one."""
+    """An estimate, the ends of its interval, the interval's method and its level, when it has one."""
     numbers = [Number("estimate", value, DETERMINISTIC, scale=scale)]
     if ci is not None:
         numbers += [
             Number("lower", ci.lower, DETERMINISTIC, scale=scale),
             Number("upper", ci.upper, DETERMINISTIC, scale=scale),
             Number("method", str(ci.method), EXACT),
+            Number("level", float(ci.level), EXACT),
         ]
     return tuple(numbers)
 
@@ -2173,24 +2540,74 @@ KINDS: dict[str, AnalysisKind] = {
         AnalysisKind("bland_altman", "Bland-Altman agreement"),
         AnalysisKind("icc", "Intraclass correlation"),
         AnalysisKind("kappa", "Cohen's kappa"),
-        AnalysisKind("proportion", "One-sample proportion"),
+        AnalysisKind(
+            "proportion",
+            "Share against a reference",
+            libraries=("scipy", "statsmodels"),
+            record=_record_proportion,
+            # typed: the calculator "A share against a reference, numbers I type"; its dataset runner comes later
+            typed_title="Share against a reference (numbers typed)",
+            typed_inputs={"count": COUNT, "total": COUNT},
+            typed_options={"alpha": 0.05, "reference": None},
+            # one level: every writer says "95%" from the record, and another level is a later version's
+            choices={"alpha": (0.05,)},
+            typed_run=_typed_proportion,
+        ),
+        AnalysisKind(
+            "rates",
+            "Incidence rates",
+            libraries=("scipy", "statsmodels"),
+            record=_record_rates,
+            # typed only for now: rates read from the dataset come with the incidence analyses, as a later version
+            typed_title="Incidence rates (numbers typed)",
+            typed_inputs={
+                "events": COUNT,
+                "person_time": QUANTITY,
+                "reference_events": COUNT,
+                "reference_person_time": QUANTITY,
+            },
+            typed_optional=("reference_events", "reference_person_time"),
+            typed_options={"alpha": 0.05, "unit": "person-years", "per": 1000},
+            choices={
+                "alpha": (0.05,),
+                "unit": ("person-years", "person-months", "person-days"),
+                "per": (100, 1000, 10000, 100000),
+            },
+            typed_run=_typed_rates,
+        ),
+        AnalysisKind(
+            "standardised_ratio",
+            "Standardised ratio (observed against expected)",
+            libraries=("scipy", "statsmodels"),
+            record=_record_standardised,
+            typed_title="Standardised ratio (numbers typed)",
+            typed_inputs={"observed": COUNT, "expected": QUANTITY},
+            typed_options={"alpha": 0.05, "events_are": "deaths"},
+            choices={"alpha": (0.05,), "events_are": ("deaths", "cases")},
+            typed_run=_typed_standardised,
+        ),
     )
 }
 
 
 __all__ = [
     "CLASSES",
+    "COUNT",
     "DETERMINISTIC",
     "EXACT",
+    "IMPUTED",
     "ITERATIVE",
     "ITERATIVE_LOOSE",
     "KINDS",
     "LOG",
+    "OBSERVED",
     "PLAIN",
     "POOLED_SUFFIX",
+    "QUANTITY",
     "RECIPROCAL",
     "RULES",
     "SEEDED",
+    "TYPED",
     "AnalysisKind",
     "AnalysisSpec",
     "Computed",
@@ -2205,6 +2622,7 @@ __all__ = [
     "kind_of",
     "read_spec",
     "record",
+    "record_of",
     "run",
     "runnable",
     "specify",

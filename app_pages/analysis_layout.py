@@ -22,6 +22,7 @@ from app_pages.clean_categories import take_done
 from app_pages.clean_dialog import clean_actions
 from biostats._types import TestResult
 from biostats.assumptions import read_assumptions
+from manage.report_tables import TYPED_SOURCE
 from ui import nav
 from ui.components import glossary_popover, help_popover, status_chip
 from ui.components.text import plain
@@ -43,7 +44,7 @@ from ui.results import MISSING, STALE_CONFIG, recall, status, stored_settings
 from ui.state import get_state
 
 PAGE = "analyze"  # the page of the two tabs, as the navigation names it
-TYPED = "Not from the dataset: the analysis population and the imputation do not apply."
+TYPED = TYPED_SOURCE  # the sentence is the dossier's too (manage.report_tables)
 _ICON = {
     "ok": ":material/check_circle:",
     "info": ":material/info:",
