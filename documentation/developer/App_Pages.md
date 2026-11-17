@@ -2766,7 +2766,7 @@ Handles:
 _No module description._
 
 **Imports**:
-`copy`, `json`, `os`, `collections.abc.Mapping`, `collections.abc.Sequence`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.clean_categories.clean_candidates`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `core.criteria.RULES_VERSION`, `core.criteria.CriterionError`, `core.criteria.criterion_columns`, `core.criteria.criterion_unknown`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.EXCLUSION`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criteria_changes`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.family_words`, `core.population.merge_families`, `core.population.rules_population`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `ui.waiting.computing`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
+`copy`, `json`, `os`, `collections.abc.Mapping`, `collections.abc.Sequence`, `io.BytesIO`, `typing.Any`, `pandas`, `streamlit`, `biostats.outliers`, `monitor.changes`, `utils.clustering_utils`, `app_pages.clean_categories.clean_candidates`, `app_pages.data_quality_dashboard.render_dashboard`, `app_pages.validate_dates.date_candidates`, `app_pages.validate_dates.dates_found`, `core.criteria.RULES_VERSION`, `core.criteria.CriterionError`, `core.criteria.criterion_columns`, `core.criteria.criterion_unknown`, `core.criteria.expression_rule`, `core.criteria.listed_rows_rule`, `core.criteria.numeric_rule`, `core.derived.CONFIG_KEY`, `core.derived.merge_definitions`, `core.fingerprint.ids_to_ranges`, `core.population.EXCLUSION`, `core.population.SharedConfiguration`, `core.population.catalogue`, `core.population.configuration_for_sharing`, `core.population.configuration_problems`, `core.population.criteria_changes`, `core.population.criterion_id`, `core.population.family_masks`, `core.population.family_words`, `core.population.merge_families`, `core.population.rules_population`, `core.privacy.PRIVACY_KEY`, `core.registry.as_code`, `ingest.analyzer.DataAnalyzer`, `ingest.loaders.UPLOAD_TYPES`, `ui.components.no_dataset`, `ui.components.page_link`, `ui.components.criteria.criterion_cards`, `ui.components.csv_options.csv_options`, `ui.components.population.activate_family`, `ui.components.population.render_population_panel`, `ui.components.tabs.PageTab`, `ui.components.tabs.lazy_tabs`, `ui.components.text.plain`, `ui.session_scope.get_current_scope`, `ui.state.get_state`, `ui.waiting.computing`, `utils.config_loader.create_empty_config`, `utils.config_loader.transform_expression`, `utils.export_utils.to_excel`, `utils.multipage.load_dataframe`, `utils.optional.available_methods`
 
 ### class `OutlierHandler` (data_monitoring.py)
 
@@ -3015,6 +3015,17 @@ What to do with the detected outliers: exclude them from the population, or clip
 - **Returns**: `None`
 
 Display the results of the enrichment process.
+
+### def `whole_configuration` (data_monitoring.py)
+
+- **Arguments**: `config: Mapping[ComplexType]`
+
+- **Returns**: `str`
+
+The whole configuration as its file holds it, to load it again with this dataset: with the version of how
+its rules are read (a file loaded later under other rules says what reads otherwise), and without a study's
+privacy choices, which no file brings into a study: the session keeps them apart from the configuration
+(``AppState.set_privacy_choices``), and a key of that name in a configuration is left out all the same.
 
 ### def `left_out_text` (data_monitoring.py)
 
