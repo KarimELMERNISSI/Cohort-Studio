@@ -62,7 +62,7 @@ def _measures(value: dict[str, Any]) -> list[str]:
 
 def _auc_cell(value: dict[str, Any]) -> str:
     _, table = result_blocks(value).tables[0]
-    return str(table.loc[table["Measure"] == "AUC (DeLong)", "Estimate"].iloc[0])
+    return str(table.loc[table["Measure"] == "Area under the ROC curve (AUC)", "Estimate"].iloc[0])
 
 
 def test_the_threshold_of_the_dossier_is_one_number() -> None:
@@ -78,7 +78,7 @@ def test_a_cut_off_found_on_the_data_that_calls_one_participant_positive_is_not_
     assert value["cutoff"] == largest and (acc.tp, acc.fp) == (1, 0)
     title = result_blocks(value).tables[0][0]
     assert title.endswith("(a cut-off found on these data, not written)")
-    assert _measures(value) == ["AUC (DeLong)"]  # the AUC has no cut-off: written
+    assert _measures(value) == ["Area under the ROC curve (AUC)"]  # the AUC has no cut-off: written
     assert _auc_cell(value) != "not shown: fewer than 10"
     said = _written(value)
     assert f"{largest:.0f}" not in said and f"{largest:,.0f}" not in said
@@ -95,7 +95,7 @@ def test_a_cut_off_found_on_the_data_that_calls_one_participant_positive_is_not_
 def test_nine_called_positive_are_too_few_and_ten_are_not() -> None:
     nine, ten = _found(_top(9)), _found(_top(10))
     assert nine["acc"].tp + nine["acc"].fp == 9 and ten["acc"].tp + ten["acc"].fp == 10
-    assert _measures(nine) == ["AUC (DeLong)"]
+    assert _measures(nine) == ["Area under the ROC curve (AUC)"]
     assert "Sensitivity" in _measures(ten) and "Negative likelihood ratio (LR-)" in _measures(ten)
     assert result_blocks(ten).tables[0][0].endswith(f"(positive at least {ten['cutoff']:,.0f})")
 
@@ -131,7 +131,7 @@ def test_a_falling_marker_counts_the_side_it_calls_positive() -> None:
     value = _found(frame, m.LOWER)
     acc = value["acc"]
     assert value["cutoff"] == frame["score"].iloc[2] and (acc.tp, acc.fp) == (3, 0)
-    assert _measures(value) == ["AUC (DeLong)"]
+    assert _measures(value) == ["Area under the ROC curve (AUC)"]
     assert "calls fewer than 10 participants positive" in _written(value)
 
 
@@ -142,7 +142,7 @@ def test_a_cut_off_that_calls_few_participants_negative_is_not_written_either() 
     value = _found(frame)
     acc = value["acc"]
     assert (acc.fn + acc.tn, acc.tn) == (4, 4)
-    assert _measures(value) == ["AUC (DeLong)"]
+    assert _measures(value) == ["Area under the ROC curve (AUC)"]
     assert "calls fewer than 10 participants negative" in _written(value)
 
 
@@ -191,7 +191,7 @@ def test_the_auc_is_not_written_beside_one_participant_with_the_condition() -> N
     """One participant with the condition among 400, with the largest score: "AUC 1 (1 to 1)" said so."""
     value = _found(_top(1, ill=1))
     assert value["auc"]["auc"] == 1.0 and value["auc"]["n_positive"] == 1
-    assert _measures(value) == ["AUC (DeLong)"]
+    assert _measures(value) == ["Area under the ROC curve (AUC)"]
     assert _auc_cell(value) == "not shown: fewer than 10"
     said = _written(value)
     assert "Fewer than 10 " + THIN.format(side="have the condition") in said
@@ -221,14 +221,17 @@ def test_a_typed_cut_off_beside_a_small_side_is_written_without_its_measures() -
         frame["score"].iloc[200]
     )  # in the middle of the scores: it calls 200 participants positive
     value = _typed(frame, cut)
-    assert _measures(value) == ["AUC (DeLong)"] and _auc_cell(value) == "not shown: fewer than 10"
+    assert (
+        _measures(value) == ["Area under the ROC curve (AUC)"]
+        and _auc_cell(value) == "not shown: fewer than 10"
+    )
     assert result_blocks(value).tables[0][0].endswith(f"(positive at least {cut:,.0f})")
     assert "Sensitivity" not in _written(value)
     # typed at the second-largest score, it calls two participants positive: its value is not written either
     cut = float(frame["score"].iloc[-2])
     value = _typed(frame, cut)
     said = _written(value)
-    assert _measures(value) == ["AUC (DeLong)"] and "Sensitivity" not in said
+    assert _measures(value) == ["Area under the ROC curve (AUC)"] and "Sensitivity" not in said
     assert "a cut-off fixed beforehand, not written" in said
     assert f"{cut:,.0f}" not in said and f"{cut:g}" not in said
     assert result_blocks(value).held_settings == (f"{cut:g}",)

@@ -177,3 +177,23 @@ def test_a_prevalence_typed_keeps_the_figures_it_has() -> None:
         "2%",
         "50%",
     ]
+
+
+def test_an_area_keeps_the_decimals_that_tell_it_from_0_and_from_1() -> None:
+    assert n.area_parts(0.921, _ci(0.897, 0.946)) == ("0.921", "0.897 to 0.946")
+    assert n.area_parts(0.073, _ci(0.0473, 0.0981)) == ("0.073", "0.047 to 0.098")
+    # an area of 0.9996 read "1.000"; a bound of exactly 1 is written as it is
+    assert n.area_parts(0.9996, _ci(0.9989, 1.0)) == ("0.9996", "0.9989 to 1.0000")
+    assert n.area_parts(0.5, _ci(0.0002, 0.9)) == ("0.5000", "0.0002 to 0.9000")
+    assert n.area_parts(1.0) == ("1.000", "") and n.area_parts(None) == ("n/a", "")
+    assert n.area_parts(0.8, _ci(float("nan"), 0.9)) == ("0.800", "")
+
+
+def test_a_ratio_with_a_very_wide_interval_keeps_three_figures_for_each_number() -> None:
+    """ "441.0 (8.0 to 24,372.7)": the decimals of the lower bound gave the upper one figures the data do not carry."""
+    assert n.ratio_parts(441.0, _ci(7.98, 24372.7)) == ("441", "7.98 to 24,373")
+    assert n.ratio_parts(146.4, _ci(7.0, 3078.1)) == ("146", "7 to 3,078")
+    # an interval less than a hundred times its lower bound: the same decimals for the three, as before
+    assert n.ratio_parts(495.0, _ci(169.0, 1453.0)) == ("495", "169 to 1,453")
+    assert n.ratio_parts(15.1, _ci(11.0, 20.7)) == ("15.1", "11.0 to 20.7")
+    assert n.ratio_parts(0.164, _ci(0.1, 0.266)) == ("0.164", "0.100 to 0.266")

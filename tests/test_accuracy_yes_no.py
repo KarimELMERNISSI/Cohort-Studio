@@ -420,7 +420,7 @@ def test_the_dossier_writes_a_yes_no_test_s_table_with_its_measures() -> None:
     (title, measures), (_, counts) = blocks.tables
     assert title == "rapid = Positive (positive) for ill = Yes"
     assert list(measures["Measure"])[:2] == ["Sensitivity", "Specificity"]
-    assert "AUC (DeLong)" not in list(measures["Measure"])
+    assert "Area under the ROC curve (AUC)" not in list(measures["Measure"])
     assert "Diagnostic odds ratio" in list(measures["Measure"])
     assert counts.iloc[1].tolist() == ["Test negative (Negative)", 5, 858, 863]
     assert list(counts.columns) == ["", "Condition present (Yes)", "Condition absent (No)", "Total"]
@@ -496,9 +496,9 @@ def test_a_score_and_the_yes_no_column_cut_from_it_write_the_same_measures_or_no
         mine = yes_no.tables[0][1].set_index("Measure") if yes_no.tables else None
         theirs = score.tables[0][1].set_index("Measure")
         if mine is None:
-            assert list(theirs.index) == ["AUC (DeLong)"]
+            assert list(theirs.index) == ["Area under the ROC curve (AUC)"]
         else:
-            pd.testing.assert_frame_equal(mine, theirs.drop(index="AUC (DeLong)"))
+            pd.testing.assert_frame_equal(mine, theirs.drop(index="Area under the ROC curve (AUC)"))
 
 
 # ----------------------------------------------------------------------------- the record
@@ -1271,3 +1271,58 @@ def test_the_dossier_s_block_reads_as_the_page_for_the_tutorial_s_table() -> Non
         "98.0%",
         "96.7% to 98.8%",
     ]
+
+
+def test_an_area_of_1_is_written_without_an_interval_of_no_width() -> None:
+    """Forty and forty participants that a score separates without overlap read "1.000 (95% CI 1.000 to 1.000)", on
+    the page and in the dossier, without a word: DeLong's variance is 0 there, and the interval says nothing of how
+    precisely the area is known. An area of 0.9997 read "1.000"."""
+    from manage.report_tables import AUC_NAME, auc_row
+
+    frame = pd.DataFrame(
+        {"ill": ["Yes"] * 40 + ["No"] * 40, "score": [*range(100, 140), *range(40)]}
+    ).astype({"score": float})
+    result = accuracy_of(frame, "ill", "Yes", "score", m.HIGHER, m.FIXED, 50.0, None, SERIES)
+    (said,) = [text for text in result["cautions"] if "no width" in text]
+    assert said.startswith(
+        "The two groups do not overlap: every participant with the condition has a higher value than every "
+        "participant without it."
+    )
+    assert (
+        "With 40 with the condition and 40 without, an area of 1 does not show a test without error."
+        in said
+    )
+    assert auc_row(result["auc"]) == (AUC_NAME, "1.000", "")
+    blocks = result_blocks(result)
+    assert blocks.tables[0][1].set_index("Measure").loc[AUC_NAME].tolist() == ["1.000", ""]
+    assert said in blocks.warnings
+    # lower values pointing to the condition: the words follow the direction asked
+    reverse = accuracy_of(
+        frame.assign(score=-frame["score"]),
+        "ill",
+        "Yes",
+        "score",
+        m.LOWER,
+        m.FIXED,
+        -50.0,
+        None,
+        SERIES,
+    )
+    assert any(
+        "has a lower value than every participant without it" in text
+        for text in reverse["cautions"]
+    )
+    # one tie between the two groups (half a pair of 1,600): the area keeps the decimals that tell it from 1, and
+    # its interval
+    near = frame.copy()
+    near.loc[0, "score"] = 39.0
+    name, area, bounds = auc_row(
+        accuracy_of(near, "ill", "Yes", "score", m.HIGHER, m.FIXED, 50.0, None, SERIES)["auc"]
+    )
+    assert (name, area) == (AUC_NAME, "0.9997") and bounds.endswith(" (DeLong)")
+    assert not bounds.startswith("1.000") and len(bounds.split(" to ")[0]) == len(area)
+    # an ordinary area: three decimals, the method with its bounds, as the page's headline writes it
+    usual = accuracy_of(_cohort(), "ill", "Yes", "score", m.HIGHER, m.FIXED, 52.0, None, SERIES)
+    name, area, bounds = auc_row(usual["auc"])
+    assert len(area) == 5 and bounds.count(" to ") == 1 and bounds.endswith(" (DeLong)")
+    assert not any("no width" in text for text in usual["cautions"])

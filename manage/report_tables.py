@@ -18,8 +18,10 @@ from typing import Any
 import pandas as pd
 
 from utils.numbers import (
+    area_parts,
     decimals,
     fixed,
+    known,
     number,
     p_text,
     percent,
@@ -611,6 +613,28 @@ def _small_side(acc: Any, auc: Any, least: int) -> str:
     return _thin_side(auc, least) if isinstance(auc, dict) else ""
 
 
+AUC_NAME = "Area under the ROC curve (AUC)"
+
+
+def auc_no_width(auc: Mapping[str, Any]) -> bool:
+    """Whether the DeLong interval of an area has no width: its variance is 0 when the two groups do not overlap
+    (an area of 1, or of 0), when every value is the same, or with one participant in a group."""
+    ci = auc.get("ci")
+    lower, upper = getattr(ci, "lower", None), getattr(ci, "upper", None)
+    return known(lower) and known(upper) and float(lower) == float(upper)
+
+
+def auc_row(auc: Mapping[str, Any]) -> tuple[str, str, str]:
+    """
+    The area under the ROC curve, as the page's headline and the dossier's block write it: its name, the area, and
+    the bounds of its interval with the method ("0.897 to 0.946 (DeLong)"), the three with the same decimals
+    (``utils.numbers.area_parts``). No interval where DeLong's has no width: "1.000 (95% CI 1.000 to 1.000)" stood
+    for two groups that do not overlap, as if the area were known exactly; the result's caution says why.
+    """
+    area, bounds = area_parts(auc.get("auc"), None if auc_no_width(auc) else auc.get("ci"))
+    return AUC_NAME, area, f"{bounds} (DeLong)" if bounds else ""
+
+
 def measure_rows(
     acc: Any,
     prevalence: Any = None,
@@ -711,13 +735,8 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     held_back = bool(thin or few)
     rows: list[tuple[str, str, str]] = []
     if auc is not None:
-        # three decimals for the area and for its bounds, as the page's headline writes them
-        area, around = with_interval(auc.get("auc"), auc.get("ci"), places=3)
-        rows.append(
-            ("AUC (DeLong)", f"not shown: fewer than {least}", "")
-            if thin
-            else ("AUC (DeLong)", area, around.removeprefix("95% CI "))
-        )
+        # the page's headline, name for name and number for number
+        rows.append((AUC_NAME, f"not shown: fewer than {least}", "") if thin else auc_row(auc))
     written = acc is not None and not held_back
     sampling = getattr(acc, "sampling", "") if acc is not None else ""
     # the reference standard done unequally by test result: the share with the condition is then that of those who

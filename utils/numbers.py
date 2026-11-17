@@ -19,6 +19,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 MOST = 6  # decimals at most for numbers written together
+WIDE = 100  # an interval whose upper bound is more than this many times its lower one (two orders of magnitude)
 
 
 def known(value: Any) -> bool:
@@ -202,7 +203,8 @@ def ratio_parts(value: Any, ci: Any = None) -> tuple[str, str]:
     A ratio and the bounds of its interval, as a row of measures writes them: the same decimals for the three
     (:func:`with_interval`: "0.164", "0.100 to 0.266"; the dossier's block read "0.1 to 0.266"), the ratio alone
     without an interval, "n/a" without a value. At a zero cell, the one bound the data leave ("0" stood alone, and
-    "n/a" for a ratio without an upper bound).
+    "n/a" for a ratio without an upper bound). An interval whose upper bound is more than ``WIDE`` times its lower
+    one: three significant figures for each of the three.
     """
     lower, upper = getattr(ci, "lower", None), getattr(ci, "upper", None)
     bounded = known(lower) and known(upper)
@@ -212,9 +214,34 @@ def ratio_parts(value: Any, ci: Any = None) -> tuple[str, str]:
         if float(value) == 0 and bounded and float(lower) == 0:
             return "0", f"at most {number(upper)}"
     if known(value) and bounded:
+        if float(lower) > 0 and float(upper) / float(lower) > WIDE:
+            # an interval that wide: three figures for each of the three, the whole part kept ("441.0, 8.0 to
+            # 24,372.7" gave the upper bound figures the data do not carry: "441, 7.98 to 24,373")
+            return number(value), f"{number(lower)} to {number(upper)}"
         estimate, bounds = with_interval(value, ci)
         return estimate, bounds.removeprefix("95% CI ")
     return number(value), ""
+
+
+def area_parts(value: Any, ci: Any = None) -> tuple[str, str]:
+    """
+    An area under the ROC curve and the bounds of its interval, with the same decimals: three ("0.921", "0.897 to
+    0.946"; "0.073, 95% CI 0.0473 to 0.0981" stood for an area below 0.1), and those that tell each of the three
+    from 0 and from 1, six at most: an area of 0.9996 read "1.000". "" for an interval without bounds, "n/a" for an
+    area without a value.
+    """
+    lower, upper = getattr(ci, "lower", None), getattr(ci, "upper", None)
+    bounded = known(lower) and known(upper)
+    written = [float(v) for v in ((value, lower, upper) if bounded else (value,)) if known(v)]
+    places = 3
+    while places < MOST and any(
+        fixed(area, places) in (fixed(0, places), fixed(1, places))
+        for area in written
+        if 0 < area < 1
+    ):
+        places += 1
+    bounds = f"{fixed(lower, places)} to {fixed(upper, places)}" if bounded else ""
+    return fixed(value, places), bounds
 
 
 def prevalence_text(prevalence: float) -> str:
@@ -245,6 +272,7 @@ def p_text(p: Any) -> str:
 
 __all__ = [
     "alike",
+    "area_parts",
     "decimals",
     "fixed",
     "interval",

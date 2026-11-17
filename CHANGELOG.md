@@ -39,6 +39,13 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   page and in the dossier. 2,499 of 2,500 read "more than 99.9%", and now read "99.960%". 9,990 of 9,991 read
   "more than 99.9% (95% CI 99.9% to 100.0%)", where the upper bound is 99.998%: it now reads "99.990% (95% CI
   99.943% to 99.998%)". No bound below 100% is written "100.0%", and none above 0 "0.0%".
+- **An area under the curve of 1 is written without an interval.** Where a score separates the two groups without
+  overlap, the result read "1.000 (95% CI 1.000 to 1.000)", as if the area were known exactly: the DeLong interval
+  has no width there. No interval is written, and a warning says why. An area next to 1 keeps the decimals that
+  tell it from 1 (0.9997 read "1.000"). In the Word dossier the row has the page's name, *Area under the ROC curve
+  (AUC)*, with the interval's method beside its bounds.
+- **A ratio with a very wide interval keeps three figures for each number:** a diagnostic odds ratio read "441.0
+  (8.0 to 24,372.7)", and now reads "441 (7.98 to 24,373)".
 
 ### Accuracy of a test: the 2x2 table of a paper, typed
 

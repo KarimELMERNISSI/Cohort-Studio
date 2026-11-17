@@ -7,6 +7,7 @@ dossier writes by it too; the plans, the readings and the screens read it here.
 from utils.numbers import (
     MOST,
     alike,
+    area_parts,
     decimals,
     fixed,
     interval,
@@ -26,6 +27,7 @@ from utils.numbers import (
 __all__ = [
     "MOST",
     "alike",
+    "area_parts",
     "decimals",
     "fixed",
     "interval",

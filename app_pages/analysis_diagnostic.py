@@ -51,11 +51,17 @@ from biostats.reliability import (
     rater_table,
 )
 from core.registry import as_code
-from manage.report_tables import dossier_min_n, measure_rows, table_cautions
+from manage.report_tables import (
+    auc_no_width,
+    auc_row,
+    dossier_min_n,
+    measure_rows,
+    table_cautions,
+)
 from ui.components import empty_state, error_card, help_popover
 from ui.guidance import measures as m
 from ui.guidance.measures import HELP
-from ui.guidance.numbers import share_decimals, share_parts
+from ui.guidance.numbers import area_parts, share_decimals, share_parts
 from ui.progress import mark_step
 from ui.results import CURRENT, provenance, remember, status
 from ui.theme import OKABE_ITO
@@ -235,9 +241,11 @@ def accuracy_of(
         other = m.HIGHER if lower else m.LOWER
         cautions.append(
             f"These data contradict the direction chosen: read with {direction} values pointing to the condition, "
-            f"the area under the curve is {auc['auc']:.3f}, below 0.5. Choose {other} above, or check the value "
-            "that means the condition is present."
+            f"the area under the curve is {area_parts(auc['auc'])[0]}, below 0.5. Choose {other} above, or check "
+            "the value that means the condition is present."
         )
+    if auc_no_width(auc):
+        cautions.append(_no_width(auc, lower))
     verified = None
     if at is not None:
         # the reference standard done unequally on the two sides of the cut-off, among the rows that hold the test
@@ -329,7 +337,7 @@ def _roc_figure(
             x=fpr,
             y=tpr,
             mode="lines",
-            name=f"ROC curve (AUC {auc['auc']:.3f})",
+            name=f"ROC curve (AUC {area_parts(auc['auc'])[0]})",
             line={"color": OKABE_ITO[0], "width": 2},
         )
     )
@@ -795,6 +803,24 @@ def _accuracy_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         provenance("diagnostic")
 
 
+def _no_width(auc: dict[str, Any], lower: bool) -> str:
+    """Why the area is written without an interval: DeLong's variance is 0, and "1.000 (95% CI 1.000 to 1.000)" read
+    as an area known exactly. ``lower``: lower values point to the condition (the area is that of the reversed
+    marker)."""
+    if auc["auc"] == 1:
+        return (
+            "The two groups do not overlap: every participant with the condition has a "
+            f"{'lower' if lower else 'higher'} value than every participant without it. The area under the curve is "
+            "1 in these data, and the DeLong interval, which is computed from the overlap, has no width: none is "
+            f"written. With {auc['n_positive']:,} with the condition and {auc['n_negative']:,} without, an area of 1 "
+            "does not show a test without error."
+        )
+    return (
+        "The DeLong interval of the area has no width in these data: the values of the two groups leave it nothing "
+        "to measure (no overlap, the same value for all, or one participant in a group). No interval is written."
+    )
+
+
 def _counts_table(table: pd.DataFrame) -> None:
     """A 2x2 table with its totals, the counts written as the headline writes them ("1,072": the table read "1072"
     under "667 of 1,072")."""
@@ -1156,11 +1182,10 @@ def _show_accuracy(res: dict[str, Any]) -> None:
         as_code(res["outcome"]),
         as_code(res["pos_label"]),
     )
-    # three decimals for the area and for its interval: "0.073, 95% CI 0.0473 to 0.0981" stood for an area below 0.1
-    area, around = layout.with_interval(auc["auc"], auc["ci"], places=3)
-    metrics = [
-        Metric("Area under the ROC curve (AUC)", area, f"{around} (DeLong)" if around else "")
-    ]
+    # the area and its interval as the dossier's block writes them (``auc_row``): the decimals that tell them from 0
+    # and from 1, and no interval where DeLong's has no width (the caution says why)
+    name, area, around = auc_row(auc)
+    metrics = [Metric(name, area, f"95% CI {around}" if around else "")]
     words = f"{score} against {outcome} = {present}, {'lower' if lower else 'higher'} values pointing to the condition."
     cautions: list[str] = list(res.get("cautions") or [])
     if acc is None:
