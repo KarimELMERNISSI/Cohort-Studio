@@ -44,6 +44,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   has no width there. No interval is written, and a warning says why. An area next to 1 keeps the decimals that
   tell it from 1 (0.9997 read "1.000"). In the Word dossier the row has the page's name, *Area under the ROC curve
   (AUC)*, with the interval's method beside its bounds.
+- **No interval either for an area where one group holds a single participant:** the DeLong interval needs two in
+  each group, and read far too narrow ("0.400 (95% CI 0.222 to 0.578)" for one participant with the condition among
+  30 without). A warning says so.
 - **A ratio with a very wide interval keeps three figures for each number:** a diagnostic odds ratio read "441.0
   (8.0 to 24,372.7)", and now reads "441 (7.98 to 24,373)".
 

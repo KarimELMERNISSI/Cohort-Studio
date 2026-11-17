@@ -52,7 +52,8 @@ from biostats.reliability import (
 )
 from core.registry import as_code
 from manage.report_tables import (
-    auc_no_width,
+    ONE_IN_A_GROUP,
+    auc_interval_missing,
     auc_row,
     dossier_min_n,
     measure_rows,
@@ -244,8 +245,9 @@ def accuracy_of(
             f"the area under the curve is {area_parts(auc['auc'])[0]}, below 0.5. Choose {other} above, or check "
             "the value that means the condition is present."
         )
-    if auc_no_width(auc):
-        cautions.append(_no_width(auc, lower))
+    missing = auc_interval_missing(auc)
+    if missing:
+        cautions.append(_no_interval(auc, lower, missing))
     verified = None
     if at is not None:
         # the reference standard done unequally on the two sides of the cut-off, among the rows that hold the test
@@ -803,21 +805,30 @@ def _accuracy_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         provenance("diagnostic")
 
 
-def _no_width(auc: dict[str, Any], lower: bool) -> str:
-    """Why the area is written without an interval: DeLong's variance is 0, and "1.000 (95% CI 1.000 to 1.000)" read
-    as an area known exactly. ``lower``: lower values point to the condition (the area is that of the reversed
-    marker)."""
+def _no_interval(auc: dict[str, Any], lower: bool, why: str) -> str:
+    """Why the area is written without an interval (``manage.report_tables.auc_interval_missing``): a group of one
+    participant, for which the DeLong interval reads far too narrow, or a variance of 0, where "1.000 (95% CI 1.000
+    to 1.000)" read as an area known exactly. ``lower``: lower values point to the condition (the area is that of
+    the reversed marker)."""
+    with_it, without = int(auc["n_positive"]), int(auc["n_negative"])
+    if why == ONE_IN_A_GROUP:
+        alone = "has the condition" if with_it < 2 else "is without the condition"
+        return (
+            f"Only one participant {alone} here: the DeLong interval needs at least two in each group to measure "
+            "how their values spread, and would read far too narrow. No interval is written for the area."
+        )
     if auc["auc"] == 1:
         return (
             "The two groups do not overlap: every participant with the condition has a "
             f"{'lower' if lower else 'higher'} value than every participant without it. The area under the curve is "
-            "1 in these data, and the DeLong interval, which is computed from the overlap, has no width: none is "
-            f"written. With {auc['n_positive']:,} with the condition and {auc['n_negative']:,} without, an area of 1 "
-            "does not show a test without error."
+            "1 in these data. The DeLong interval is computed from the overlap, so here it would read 1.000 to "
+            "1.000, as if the area were known exactly: none is written. With "
+            f"{with_it:,} with the condition and {without:,} without, an area of 1 does not show that the test "
+            "never errs."
         )
     return (
         "The DeLong interval of the area has no width in these data: the values of the two groups leave it nothing "
-        "to measure (no overlap, the same value for all, or one participant in a group). No interval is written."
+        "to measure (no overlap, or the same value for all). No interval is written."
     )
 
 

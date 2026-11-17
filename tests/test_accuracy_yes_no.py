@@ -1283,13 +1283,17 @@ def test_an_area_of_1_is_written_without_an_interval_of_no_width() -> None:
         {"ill": ["Yes"] * 40 + ["No"] * 40, "score": [*range(100, 140), *range(40)]}
     ).astype({"score": float})
     result = accuracy_of(frame, "ill", "Yes", "score", m.HIGHER, m.FIXED, 50.0, None, SERIES)
-    (said,) = [text for text in result["cautions"] if "no width" in text]
+    (said,) = [text for text in result["cautions"] if "do not overlap" in text]
     assert said.startswith(
         "The two groups do not overlap: every participant with the condition has a higher value than every "
         "participant without it."
     )
     assert (
-        "With 40 with the condition and 40 without, an area of 1 does not show a test without error."
+        "so here it would read 1.000 to 1.000, as if the area were known exactly: none is written."
+        in said
+    )
+    assert (
+        "With 40 with the condition and 40 without, an area of 1 does not show that the test never errs."
         in said
     )
     assert auc_row(result["auc"]) == (AUC_NAME, "1.000", "")
@@ -1325,4 +1329,72 @@ def test_an_area_of_1_is_written_without_an_interval_of_no_width() -> None:
     usual = accuracy_of(_cohort(), "ill", "Yes", "score", m.HIGHER, m.FIXED, 52.0, None, SERIES)
     name, area, bounds = auc_row(usual["auc"])
     assert len(area) == 5 and bounds.count(" to ") == 1 and bounds.endswith(" (DeLong)")
-    assert not any("no width" in text for text in usual["cautions"])
+    assert not any("interval" in text for text in usual["cautions"])
+
+
+def test_an_area_has_no_interval_when_a_group_holds_one_participant() -> None:
+    """One participant with the condition placed among 30 without it read "0.400 (95% CI 0.222 to 0.578)": the
+    share of the variance of a group of one cannot be estimated, and was taken as 0, which made the interval far
+    too narrow."""
+    from manage.report_tables import (
+        AUC_NAME,
+        NO_WIDTH,
+        ONE_IN_A_GROUP,
+        auc_interval_missing,
+        auc_row,
+    )
+
+    frame = pd.DataFrame({"ill": ["Yes"] + ["No"] * 30, "score": [11.5, *range(30)]}).astype(
+        {"score": float}
+    )
+    result = accuracy_of(frame, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES)
+    auc = result["auc"]
+    assert (auc["n_positive"], auc["n_negative"]) == (1, 30)
+    assert (
+        auc["ci"].lower < auc["ci"].upper
+    )  # the interval the function still computes: not one to write
+    assert auc_interval_missing(auc) == ONE_IN_A_GROUP
+    assert auc_row(auc) == (AUC_NAME, "0.400", "")
+    (said,) = [text for text in result["cautions"] if "interval" in text]
+    assert said == (
+        "Only one participant has the condition here: the DeLong interval needs at least two in each group to "
+        "measure how their values spread, and would read far too narrow. No interval is written for the area."
+    )
+    # the same on the other side, in its own words
+    other = accuracy_of(
+        frame.assign(ill=["No"] + ["Yes"] * 30),
+        "ill",
+        "Yes",
+        "score",
+        m.HIGHER,
+        m.FIXED,
+        20.0,
+        None,
+        SERIES,
+    )
+    assert any(
+        "Only one participant is without the condition here" in text for text in other["cautions"]
+    )
+    # every value the same: an area of 0.5 whose interval has no width, said as such
+    flat = accuracy_of(
+        frame.assign(ill=["Yes"] * 15 + ["No"] * 16, score=7.0),
+        "ill",
+        "Yes",
+        "score",
+        m.HIGHER,
+        CUTOFF_MODES[0],  # no cut-off
+        None,
+        None,
+        SERIES,
+    )
+    assert auc_interval_missing(flat["auc"]) == NO_WIDTH and auc_row(flat["auc"])[1:] == (
+        "0.500",
+        "",
+    )
+    assert any(
+        "leave it nothing to measure (no overlap, or the same value for all)" in text
+        for text in flat["cautions"]
+    )
+    # two in each group: the interval is written
+    two = {**auc, "n_positive": 2}
+    assert auc_interval_missing(two) == "" and auc_row(two)[2].endswith(" (DeLong)")

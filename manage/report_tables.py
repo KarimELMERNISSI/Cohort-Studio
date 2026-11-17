@@ -616,22 +616,38 @@ def _small_side(acc: Any, auc: Any, least: int) -> str:
 AUC_NAME = "Area under the ROC curve (AUC)"
 
 
-def auc_no_width(auc: Mapping[str, Any]) -> bool:
-    """Whether the DeLong interval of an area has no width: its variance is 0 when the two groups do not overlap
-    (an area of 1, or of 0), when every value is the same, or with one participant in a group."""
+# why the DeLong interval of an area is not written (:func:`auc_interval_missing`)
+ONE_IN_A_GROUP = "one_in_a_group"
+NO_WIDTH = "no_width"
+
+
+def auc_interval_missing(auc: Mapping[str, Any]) -> str:
+    """
+    Why the DeLong interval of an area is not written; "" when it is.
+
+    - ``ONE_IN_A_GROUP``: a group holds fewer than two participants. Its share of the variance cannot be estimated
+      and is taken as 0, so the interval reads far too narrow: "0.400 (95% CI 0.222 to 0.578)" stood for one
+      participant with the condition placed among 30 without it.
+    - ``NO_WIDTH``: the interval has no width, its variance being 0: the two groups do not overlap (an area of 1, or
+      of 0), or every value is the same.
+    """
+    counts = [auc.get("n_positive"), auc.get("n_negative")]
+    if all(known(count) for count in counts) and min(int(count) for count in counts) < 2:
+        return ONE_IN_A_GROUP
     ci = auc.get("ci")
     lower, upper = getattr(ci, "lower", None), getattr(ci, "upper", None)
-    return known(lower) and known(upper) and float(lower) == float(upper)
+    return NO_WIDTH if known(lower) and known(upper) and float(lower) == float(upper) else ""
 
 
 def auc_row(auc: Mapping[str, Any]) -> tuple[str, str, str]:
     """
     The area under the ROC curve, as the page's headline and the dossier's block write it: its name, the area, and
     the bounds of its interval with the method ("0.897 to 0.946 (DeLong)"), the three with the same decimals
-    (``utils.numbers.area_parts``). No interval where DeLong's has no width: "1.000 (95% CI 1.000 to 1.000)" stood
-    for two groups that do not overlap, as if the area were known exactly; the result's caution says why.
+    (``utils.numbers.area_parts``). No interval where DeLong's cannot be read (:func:`auc_interval_missing`):
+    "1.000 (95% CI 1.000 to 1.000)" stood for two groups that do not overlap, as if the area were known exactly; the
+    result's caution says why.
     """
-    area, bounds = area_parts(auc.get("auc"), None if auc_no_width(auc) else auc.get("ci"))
+    area, bounds = area_parts(auc.get("auc"), None if auc_interval_missing(auc) else auc.get("ci"))
     return AUC_NAME, area, f"{bounds} (DeLong)" if bounds else ""
 
 
