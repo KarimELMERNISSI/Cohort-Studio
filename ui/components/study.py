@@ -5,14 +5,15 @@ definition (the Study dossier now, Versions & traces with the package's screens)
 :class:`StudyStatus` (:func:`study_status`), so that two pages never tell two stories about one study.
 
 A revision keeps the criteria with their descriptions, which of them are ticked, the follow-up and the declared derived
-variables with their notes, as written when it is saved; it is never changed afterwards (``manage.protocol_store``),
-holds no data and no result, and can be deleted. A corrected description or note is saved as the next revision, which
-differs in its labels only. The strip names a revision by its number, never by its fingerprint.
+variables with their notes, as written when it is saved, and the study's privacy choices (``core.privacy``); it is
+never changed afterwards (``manage.protocol_store``), holds no data and no result, and can be deleted. A corrected
+description or note is saved as the next revision, which differs in its labels only; so is a change of the privacy
+choices, which selects the same rows too. The strip names a revision by its number, never by its fingerprint.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
@@ -21,6 +22,7 @@ import streamlit as st
 
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.population import catalogue
+from core.privacy import PRIVACY_KEY
 from core.protocol import body_checksum, hashed_view, protocol_hash
 from core.registry import as_code
 from ui.components import confirm, page_link, status_chip
@@ -30,7 +32,9 @@ SAID_KEY = (
     "study_strip_said"  # {strip key: (kind, text)}: a strip's message, shown once (ui/keys.py)
 )
 
-StudyState = Literal["none", "saved", "labels", "changed", "not_loaded", "unreadable"]
+# "labels" and "privacy": the definition selects the same rows as the latest revision, and differs from it in its
+# descriptions or notes (alone, or with the privacy choices), or in the privacy choices alone
+StudyState = Literal["none", "saved", "labels", "privacy", "changed", "not_loaded", "unreadable"]
 # the sections of a definition, as a sentence names them
 _PARTS = {
     "mask_families": "the criteria",
@@ -38,6 +42,9 @@ _PARTS = {
     "follow_up": "the follow-up",
     DERIVED_KEY: "the derived variables",
 }
+# what two definitions that select the same rows can differ in
+LABELS = "descriptions or notes"
+PRIVACY = "the privacy choices"
 TITLE_HELP = (
     "What the study decides apart from the data: its inclusion and exclusion criteria, which of them are ticked, the "
     "follow-up and the derived variables' formulas. A revision keeps it as it is when saved, and is never changed "
@@ -46,9 +53,9 @@ TITLE_HELP = (
 )
 SAVE_HELP = (
     "Keeps the study definition as it is now: the criteria with their descriptions, which of them are ticked, the "
-    "follow-up and the derived variables with their notes, as written (check that none names a person). It keeps "
-    "neither the data (the sidebar's Save keeps a version of the data) nor the results. A later change, a corrected "
-    "description included, is saved as the next revision."
+    "follow-up and the derived variables with their notes, as written (check that none names a person), and the "
+    "study's privacy choices. It keeps neither the data (the sidebar's Save keeps a version of the data) nor the "
+    "results. A later change, a corrected description included, is saved as the next revision."
 )
 
 
@@ -71,10 +78,37 @@ def _holds_nothing(body: Mapping[str, Any]) -> bool:
     return not any(body.get(key) for key in ("mask_families", "follow_up", DERIVED_KEY))
 
 
+def _listed(parts: Sequence[str]) -> str:
+    """The parts of a sentence in a row: "a", "a and b", "a, b and c" ("the criteria and the follow-up and the
+    privacy choices" stood for three)."""
+    parts = list(parts)
+    return " and ".join(parts) if len(parts) < 3 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+def _privacy_differs(old: Mapping[str, Any], new: Mapping[str, Any]) -> bool:
+    """Whether two definitions hold other privacy choices, compared as written."""
+    return body_checksum({PRIVACY_KEY: old.get(PRIVACY_KEY) or {}}) != body_checksum(
+        {PRIVACY_KEY: new.get(PRIVACY_KEY) or {}}
+    )
+
+
 def _changed_parts(old: Mapping[str, Any], new: Mapping[str, Any]) -> tuple[str, ...]:
-    """The sections in which two definitions select differently (their labels left out)."""
+    """The sections in which two definitions select differently (their labels left out), and the privacy choices
+    when they differ too."""
     before, after = hashed_view(old), hashed_view(new)
-    return tuple(words for key, words in _PARTS.items() if before.get(key) != after.get(key))
+    parts = [words for key, words in _PARTS.items() if before.get(key) != after.get(key)]
+    return (*parts, *((PRIVACY,) if _privacy_differs(old, new) else ()))
+
+
+def _same_rows_parts(old: Mapping[str, Any], new: Mapping[str, Any]) -> tuple[str, ...]:
+    """What differs between two definitions that select the same rows (one fingerprint, two checksums): their
+    descriptions or notes, the privacy choices, or both."""
+
+    def labelled(body: Mapping[str, Any]) -> str:
+        return body_checksum({key: value for key, value in body.items() if key != PRIVACY_KEY})
+
+    labels = (LABELS,) if labelled(old) != labelled(new) else ()
+    return (*labels, *((PRIVACY,) if _privacy_differs(old, new) else ()))
 
 
 def study_status() -> StudyStatus | None:
@@ -106,10 +140,14 @@ def study_status() -> StudyStatus | None:
     elif _holds_nothing(body) and not _holds_nothing(latest.body):
         kind = "not_loaded"
     elif latest.hash == protocol_hash(body):
-        kind = "labels"
+        kind = "privacy" if _same_rows_parts(latest.body, body) == (PRIVACY,) else "labels"
     else:
         kind = "changed"
-    changed = _changed_parts(latest.body, body) if kind == "changed" else ()
+    changed: tuple[str, ...] = ()
+    if latest is not None and kind == "changed":
+        changed = _changed_parts(latest.body, body)
+    elif latest is not None and kind in ("labels", "privacy"):
+        changed = _same_rows_parts(latest.body, body)
     return StudyStatus(study, latest, body, kind, changed, number, unreadable)
 
 
@@ -143,10 +181,12 @@ def status_text(status: StudyStatus | None) -> str:
     if status is None:
         return "n/a"
     latest = status.latest.meta.revision if status.latest is not None else None
+    with_privacy = " and its privacy choices" if PRIVACY in status.changed else ""
     said = {
         "none": "no revision saved",
         "saved": f"revision {latest}",
-        "labels": f"revision {latest}, its descriptions or notes changed since (not saved)",
+        "labels": f"revision {latest}, its descriptions or notes{with_privacy} changed since (not saved)",
+        "privacy": f"revision {latest}, its privacy choices changed since (not saved)",
         "changed": f"changed since revision {latest} (not saved)",
         "not_loaded": f"revision {latest} saved, not loaded in this session",
         "unreadable": "its revisions cannot be read",
@@ -209,8 +249,8 @@ def _load(key: str, revision: Any) -> None:
     _say(
         key,
         "ok",
-        f"Revision {revision.meta.revision} loaded: its criteria, which of them are ticked, the follow-up and the "
-        "derived variables are this session's again. No row changed.",
+        f"Revision {revision.meta.revision} loaded: its criteria, which of them are ticked, the follow-up, the "
+        "derived variables and the study's privacy choices are this session's again. No row changed.",
     )
 
 
@@ -262,7 +302,10 @@ def study_strip(key: str) -> StudyStatus | None:
             elif status.state == "not_loaded":
                 status_chip(f"revision {number} not loaded", "info")
             elif status.state == "labels":
-                status_chip(f"labels changed since revision {number}", "caution")
+                what = "labels and privacy choices" if PRIVACY in status.changed else "labels"
+                status_chip(f"{what} changed since revision {number}", "caution")
+            elif status.state == "privacy":
+                status_chip(f"privacy choices changed since revision {number}", "caution")
             else:
                 status_chip(f"changed since revision {number}", "caution")
         if status.state == "unreadable":
@@ -279,17 +322,27 @@ def study_strip(key: str) -> StudyStatus | None:
         else:
             st.caption(definition_summary(status.body))
         if status.state == "changed" and status.changed:
-            st.caption(f"Changed since revision {number}: {' and '.join(status.changed)}.")
+            st.caption(f"Changed since revision {number}: {_listed(status.changed)}.")
         elif status.state == "labels":
+            what = (
+                "descriptions or notes, and the privacy choices"
+                if PRIVACY in status.changed
+                else "descriptions or notes only"
+            )
             st.caption(
-                f"Changed since revision {number}: descriptions or notes only (the definition selects the same "
-                "rows). Save them as the next revision, and delete the earlier one if it named a person."
+                f"Changed since revision {number}: {what} (the definition selects the same rows). Save them as "
+                "the next revision, and delete the earlier one if it named a person."
+            )
+        elif status.state == "privacy":
+            st.caption(
+                f"Changed since revision {number}: the privacy choices (the definition selects the same rows). "
+                "Save them as the next revision."
             )
         if status.unreadable:
             shown = ", ".join(str(n) for n in status.unreadable)
             st.caption(
-                f":material/warning: Revision{'s' if len(status.unreadable) > 1 else ''} {shown} cannot be read: "
-                "changed outside CohortStudio. "
+                f":material/warning: Revision{'s' if len(status.unreadable) > 1 else ''} {shown} cannot be read "
+                "here: changed outside CohortStudio, or written by a later version. "
                 + (f"The next revision follows revision {number}." if number else "")
             )
         if status.state == "none" and _holds_nothing(status.body):
@@ -310,10 +363,10 @@ def study_strip(key: str) -> StudyStatus | None:
                     icon=":material/download:",
                     on_click=_load,
                     args=(key, latest),
-                    help="Makes the revision's criteria, which of them are ticked, the follow-up and the derived "
-                    "variables this session's. Criteria are filters: no row changes.",
+                    help="Makes the revision's criteria, which of them are ticked, the follow-up, the derived "
+                    "variables and the study's privacy choices this session's. Criteria are filters: no row changes.",
                 )
-            elif status.state in ("none", "changed", "labels"):
+            elif status.state in ("none", "changed", "labels", "privacy"):
                 st.button(
                     f"Save revision {status.next_number}",
                     key=f"{key}_save",

@@ -40,6 +40,7 @@ from core.population import (
     merge_families,
     rules_population,
 )
+from core.privacy import PRIVACY_KEY
 from core.registry import as_code
 from ingest.analyzer import DataAnalyzer
 from ingest.loaders import UPLOAD_TYPES
@@ -1093,8 +1094,7 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
         config = st.session_state.config
         st.download_button(
             label="Download Configuration File",
-            # the version of how its rules are read: a file loaded later under other rules says what reads otherwise
-            data=json.dumps({**config, "rules_version": RULES_VERSION}, indent=4, default=str),
+            data=whole_configuration(config),
             file_name="config.json",
             mime="application/json",
             key=f"{key_base}_config",
@@ -1117,6 +1117,15 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
         st.caption(left_out_text(shared))
 
 
+def whole_configuration(config: Mapping[str, Any]) -> str:
+    """The whole configuration as its file holds it, to load it again with this dataset: with the version of how
+    its rules are read (a file loaded later under other rules says what reads otherwise), and without a study's
+    privacy choices, which no file brings into a study: the session keeps them apart from the configuration
+    (``AppState.set_privacy_choices``), and a key of that name in a configuration is left out all the same."""
+    kept = {key: value for key, value in config.items() if key != PRIVACY_KEY}
+    return json.dumps({**kept, "rules_version": RULES_VERSION}, indent=4, default=str)
+
+
 def left_out_text(shared: SharedConfiguration) -> str:
     """What the file for sharing leaves out of this session's configuration, and what it keeps as written."""
     def names(items: tuple[str, ...]) -> str:
@@ -1135,6 +1144,8 @@ def left_out_text(shared: SharedConfiguration) -> str:
         parts.append("the notes of the derived variables")
     if shared.settings:
         parts.append("this installation's settings (folders, uploaded files)")
+    if shared.privacy:
+        parts.append("the study's privacy choices (no file brings them into another study)")
     text = f"For sharing, left out: {'; '.join(parts)}. " if parts else ""
     if shared.trimmed:
         text += f"Shared without the keys this version does not read: {names(shared.trimmed)}. "
@@ -1173,6 +1184,12 @@ def refusal_text(problems: list[str]) -> str:
     return "This configuration was not loaded:\n\n" + "\n".join(f"- {plain(p, limit=300)}" for p in problems)
 
 
+PRIVACY_NOT_LOADED = (
+    "This file's privacy choices were not loaded: a study's privacy choices never come from a file, and its "
+    "revisions keep its own."
+)
+
+
 def _merge_uploaded(config: dict[str, Any], new_config: dict[str, Any]) -> list[str]:
     """
     An uploaded configuration added to the session's; returns the notices to show. The criteria and the derived
@@ -1182,8 +1199,11 @@ def _merge_uploaded(config: dict[str, Any], new_config: dict[str, Any]) -> list[
     """
     uploaded_families = new_config.pop("mask_families", None)
     uploaded_derived = new_config.pop(DERIVED_KEY, None)
+    # a study's privacy choices never enter it from a file, unread and unasked: the file's are dropped, and the
+    # session's own stay as they were (the merge neither adds nor removes one)
+    dropped = new_config.pop(PRIVACY_KEY, None) not in (None, "", [], {})
     deep_merge_dicts(config, new_config)
-    notices = []
+    notices = [PRIVACY_NOT_LOADED] if dropped else []
     if uploaded_families:
         merged, differing = merge_families(config.get("mask_families"), uploaded_families)
         config["mask_families"] = merged

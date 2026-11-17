@@ -2,10 +2,10 @@
 The study definition (M6): what a study decides, apart from the data it is applied to, and saved in the user's
 workspace (manage.protocol_store).
 
-Its *body* holds the decisions: the criteria (``mask_families``), the ticked population, the follow-up and the declared
-derived variables. A section is written only when it is not empty, so a study keeps its fingerprint across versions of
-the application. Its *metadata* stays outside: the study's id, title and description, the revision and the one it
-follows, when and with which version it was saved.
+Its *body* holds the decisions: the criteria (``mask_families``), the ticked population, the follow-up, the declared
+derived variables, and the study's privacy choices (``privacy``: ``core.privacy``). A section is written only when it
+is not empty, so a study keeps its fingerprint across versions of the application. Its *metadata* stays outside: the
+study's id, title and description, the revision and the one it follows, when and with which version it was saved.
 
 The fingerprint (``protocol_hash``) is a SHA-256 of a canonical view of the body. The view leaves out the labels (a
 rule's description, a derived variable's note, origin and kind, the follow-up's note), the order of keys and the order
@@ -15,6 +15,11 @@ order of the derived variables, which decides which one fills a variable when tw
 the population does ("All" is "all"), and holds the version of how rules are evaluated (core.criteria.RULES_VERSION).
 It changes when a criterion, an operator, an order, a tick, a definition, the follow-up or that version changes. The
 hash stays in the workspace and the trace; documents name a revision by its number.
+
+The privacy choices are outside the fingerprint, as the labels are: they decide what a document writes, never which
+rows are selected nor what is computed, so no result goes stale for one. They are inside the checksum: a change of
+them alone is the next revision, with the same fingerprint, and the revisions are then the history of the study's
+choices. A shared study definition leaves them out (:func:`protocol_for_sharing`).
 
 The fingerprint is computed again whenever it is needed: a later version may read a study more finely, and its
 fingerprint then changes. A file is checked by its *checksum* instead (:func:`body_checksum`), a SHA-256 of the body
@@ -40,12 +45,14 @@ from core.criteria import RULES_VERSION
 from core.derived import CONFIG_KEY as DERIVED_KEY
 from core.lineage import canonical_json, normalise
 from core.population import catalogue, configuration_for_sharing, family_operator
+from core.privacy import PRIVACY_KEY, StudyPrivacy
 from core.workspace import is_device_name
 
 SCHEMA = 1
-# The sections of a body, in this order. M8 adds the analysis plan, the disclosure policy and the variables contract,
-# M9 the concepts: each written only when not empty, so a study without them keeps its hash.
-BODY_KEYS = ("mask_families", "population", "follow_up", DERIVED_KEY)
+# The sections of a body, in this order. The privacy choices come last, so that every body written before them keeps
+# its checksum. M8 adds the analysis plan and the variables contract, M9 the concepts: each written only when not
+# empty, so a study without them keeps its hash.
+BODY_KEYS = ("mask_families", "population", "follow_up", DERIVED_KEY, PRIVACY_KEY)
 _DERIVED_LABELS = ("note", "origin", "kind")
 # a study's id is its folder: lower-case ASCII letters and digits, with "_" and "-" after the first, 64 at most
 STUDY_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
@@ -156,7 +163,13 @@ class StudyProtocol:
     meta: ProtocolMeta
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "body", _frozen(body_of(self.body)))
+        body = body_of(self.body)
+        # the reader of a file, run on what is about to be one: a privacy section this version could not read back
+        # is never written (ValueError, in words that quote nothing of it)
+        _, refused = StudyPrivacy.from_section(body.get(PRIVACY_KEY))
+        if refused:
+            raise ValueError(refused[0])
+        object.__setattr__(self, "body", _frozen(body))
 
     @cached_property
     def hash(self) -> str:
@@ -181,8 +194,10 @@ class StudyProtocol:
     def from_file(cls, data: Any) -> tuple[StudyProtocol | None, list[str]]:
         """
         A study definition read from its file, or none with the reasons: a file of another schema or of a later
-        version, metadata that place it wrongly, or a body that no longer matches its checksum (changed outside the
-        application). The reasons quote nothing from the file, and nothing in it raises.
+        version, metadata that place it wrongly, a body that no longer matches its checksum (changed outside the
+        application), or a privacy section this version cannot read (``core.privacy.StudyPrivacy.from_section``: the
+        whole file is then refused, never read without it, which would drop a k the study asked for). The reasons
+        quote nothing from the file, and nothing in it raises.
         """
         if not isinstance(data, Mapping) or not isinstance(data.get("body"), Mapping):
             return None, ["not a study definition"]
@@ -209,6 +224,9 @@ class StudyProtocol:
                 return None, [
                     "its body no longer matches its checksum: it was changed outside CohortStudio"
                 ]
+            _, refused = StudyPrivacy.from_section(data["body"].get(PRIVACY_KEY))
+            if refused:
+                return None, refused
             return cls(data["body"], meta), []
         except (
             ArithmeticError,
@@ -352,6 +370,11 @@ def _view(body: Mapping[str, Any], *, labels: bool) -> dict[str, Any]:
             if isinstance(derived, Mapping)
             else normalise(derived)
         )
+    privacy = body.get(PRIVACY_KEY)
+    if labels and _filled(privacy):
+        # shown as written (the diff of two revisions), never hashed: a privacy choice selects no row and computes
+        # no number
+        view[PRIVACY_KEY] = normalise(privacy)
     return view
 
 
@@ -406,6 +429,10 @@ def protocol_for_sharing(body: Mapping[str, Any]) -> SharedProtocol:
     dataset (their row ids are participants), no note of a derived variable or of the follow-up (a user's own
     commentary), no tick of a criterion that was left out. The descriptions of the criteria stay: they are the
     study's own text, and the package's scan reads them.
+
+    The study's privacy choices are left out whole, whatever they are: whoever opens the definition chooses for
+    their own data, and inherits no declaration and no k of another person's. They are outside the fingerprint, so
+    the shared body stays ``complete`` without them; the package's policy records what applied.
     """
     source = {key: body[key] for key in ("mask_families", DERIVED_KEY) if _filled(body.get(key))}
     shared = configuration_for_sharing(source)

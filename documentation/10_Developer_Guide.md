@@ -726,6 +726,55 @@ result is left out until it is corrected.
 `assets/tutorial/tutorial_config.json` is a complete, tested example (8 plausibility rules, 4 inclusion criteria).
 `ui.state.tutorial_config()` merges it into the default configuration (`folder_names` stay machine-specific).
 
+#### The study's privacy choices
+
+A study definition may hold a section `privacy` (`core/privacy.py`): what the study asks for the documents made from
+it. No screen sets it in this version. It is a file format with one writer and a closed reader, written now so that
+the Data privacy settings to come change no study file.
+
+```json
+"privacy": {"k": 20,
+            "followed_to_the_event": {"death": {}, "visits": {"beyond_the_cap": true}},
+            "rows_not_people": "animal_data",
+            "rows_word": "animals"}
+```
+
+- **What it holds:**
+  - `k`: the smallest count the study's documents give, a whole number never below 5 (`FLOOR_K`);
+  - `followed_to_the_event`: the outcomes declared followed to the event, each with `beyond_the_cap` only when the
+    override of the cap was asked for;
+  - `rows_not_people`: the reason of the declaration that the study's rows are not people, an id of
+    `NOT_PEOPLE_REASONS` (animal data, simulated data, the tutorial cohort, a teaching set);
+  - `rows_word`: the word the documents use for the rows, `animals` or `subjects`.
+
+  Nothing in it is typed by a person: no reason in words, no date, no account. Its keys and its closed values are
+  stored ids, never renamed.
+- **One writer.** `StudyPrivacy.to_section()` writes the keys in one order and writes no default (no `k` of 10, no
+  `participants`, no `false`), so that equal choices have one checksum. Never write the key by hand.
+- **A closed reader.** `StudyPrivacy.from_section` gives the choices, or why the section is refused: a key or a
+  closed value it does not know reads "written by a later version"; a value of the wrong kind, a `k` below the
+  floor, or a section the writer would write otherwise (a default written out, its keys or its outcomes in another
+  order) is refused too. Nothing is ignored (a `k` of 20 written as text and skipped would apply 10), and a reason
+  quotes nothing of the file. `StudyProtocol.from_file` then refuses the whole file, and a `StudyProtocol` is never
+  built with a section its own reader would refuse.
+- **In the session, the choices are a study's.** `AppState.set_privacy_choices` keeps them under a session key of
+  their own, with the id of the study they are of; `privacy_choices()` and `protocol_body()` read them for that
+  study only, and loading a dataset of another study drops them. They are never in `st.session_state.config`,
+  which stays for the next dataset loaded and is written to files: a declaration that one study's rows are animals
+  must not be saved with the next study's first revision. Loading a revision makes its choices the session's.
+- **Outside the fingerprint, inside the checksum.** The choices select no row and compute no number: they are left
+  out of `protocol_hash`, as the labels are, so no result goes stale for one. They are in the body's checksum: a
+  change of them alone is the next revision, and the study's strip says it apart (`ui/components/study.py`, the
+  state `privacy`).
+- **It never travels.** `protocol_for_sharing` and `core.population.configuration_for_sharing` leave the section out
+  (`SharedConfiguration.privacy` says that it was there), and so does the whole configuration's file
+  (`app_pages.data_monitoring.whole_configuration`). An uploaded configuration's `privacy` key is dropped, with a
+  notice, and the session's own choices stay as they were: whoever opens a study chooses for their own data.
+- **What applies is decided where an output is made,** never in the section, which holds what was asked:
+  `core.disclosure.DisclosurePolicy.for_study` takes the `k` asked, the declarations and the installation's floor.
+  `rows_not_people` and `rows_word` are read and kept, and applied by nothing in this version: the rules stay on and
+  the documents say "participants".
+
 ### Settings, preferences and API keys
 
 **One settings object.** `utils/settings.py` holds every setting the application reads, one field per environment

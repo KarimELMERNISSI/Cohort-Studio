@@ -6,6 +6,26 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### The study definition can hold a study's privacy choices
+
+- **A section `privacy` of the study definition** holds what a study asks for the documents made from it: the
+  smallest count they give (k), the outcomes declared followed to the event, the declaration that its rows are not
+  people (animal data, simulated data, the tutorial cohort, a teaching set), and the word the documents use for its
+  rows. No screen sets it yet: this fixes the file format and its reader, so that the Data privacy settings to come
+  change no study file. It holds whole numbers and ids of closed lists only: no reason in words, no date and no
+  name.
+- **The choices are part of a revision, and select no row.** They are outside the study's fingerprint, so no result
+  goes stale for one, and inside the file's checksum. A change of them alone is said for itself ("privacy choices
+  changed since revision 2") and is saved as the next revision.
+- **They never travel, and they are one study's.** A study definition prepared for sharing and the configuration
+  files leave the section out, and a configuration file that holds one is loaded without it, with a notice. In a
+  session, the choices are kept with their study, apart from the configuration: a dataset of another study loaded
+  afterwards starts without them, where the criteria stay.
+- **A section this version cannot read refuses the whole file,** in words that quote nothing of it: a key or a
+  value written by a later version, a k below 5, a value of the wrong kind, the same choices written in another
+  order. Nothing is skipped: a k of 20 written as text and ignored would apply 10.
+- Nothing changes for a study without the section, which keeps its fingerprint and its checksum.
+
 ### Accuracy of a test: a measure is written one way, on the page and in the Word dossier
 
 - **The Word dossier writes the measures of a test's accuracy as the page does.** Its table read "Sensitivity |

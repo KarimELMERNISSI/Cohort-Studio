@@ -239,8 +239,9 @@ from core.attrition import DATA, LOADED, SOURCE, AnalysisCount, FlowBox, Partici
 from core.expressions.errors import WorkerUnavailable
 from core.expressions.safe_eval import DEFAULT_POLICY, evaluate_tree
 
-DEFAULT_K = 10
-FLOOR_K = 5  # nothing lower is accepted, whatever a study or an installation asks
+# the default and the floor of k live with the study's privacy choices, which a study file reads without this module
+from core.privacy import DEFAULT_K, FLOOR_K
+
 POLICY_VERSION = 2  # of the rules below: a package records it with its k
 # the share of a result's rows without the event above which its outcome is not one followed to the event
 MOST_WITHOUT_THE_EVENT = 0.05

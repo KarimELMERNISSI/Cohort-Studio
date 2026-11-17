@@ -102,6 +102,14 @@ KEYS: tuple[Key, ...] = (
         "the study configuration: the criteria definitions (edited on Validate), the enrichments, the folders",
     ),
     Key(
+        "_study_privacy",
+        "ui.state",
+        "session",
+        note="a study's privacy choices, as their section, with the id of the study they are of: read for that "
+        "study only and dropped when a dataset of another study is loaded; apart from the configuration, which "
+        "stays for the next dataset and is written to files",
+    ),
+    Key(
         "_preferences",
         "ui.preferences",
         "session",

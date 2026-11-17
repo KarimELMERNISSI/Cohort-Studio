@@ -203,3 +203,55 @@ def test_validates_upload_says_what_a_file_gave() -> None:
         False,
         ["Invalid JSON file. Please upload a valid configuration file."],
     )
+
+
+def test_an_uploaded_file_brings_no_privacy_choice_into_a_study() -> None:
+    """A study's privacy choices are kept in its revisions, and by the session apart from its configuration. A
+    file's are dropped, with a notice: the upload neither adds nor removes one, so that no declaration enters a
+    study from a file, unread and unasked."""
+    from app_pages.data_monitoring import PRIVACY_NOT_LOADED, read_uploaded_config
+
+    theirs = {"k": 5, "rows_not_people": "animal_data"}
+    mine = {"k": 20}
+    # the file's are not loaded, and the rest of the file is
+    config: dict = {"mask_families": {"study_inclusion": {"operator": "all", "age": NUMERIC_AGE}}}
+    loaded, messages = read_uploaded_config(
+        config, _file({"description": "theirs", "privacy": theirs})
+    )
+    assert loaded and PRIVACY_NOT_LOADED in messages
+    assert "privacy" not in config and config["description"] == "theirs"
+    # a configuration that held the key (the session keeps the choices elsewhere) is not written to either
+    config = {"privacy": dict(mine)}
+    loaded, messages = read_uploaded_config(config, _file({"privacy": theirs}))
+    assert loaded and PRIVACY_NOT_LOADED in messages and config["privacy"] == mine
+    # a file without choices removes none, and nothing is said of them
+    loaded, messages = read_uploaded_config(config, _file({"description": "theirs"}))
+    assert loaded and PRIVACY_NOT_LOADED not in messages and config["privacy"] == mine
+    # an empty section in a file is no choice to tell about
+    loaded, messages = read_uploaded_config(config, _file({"privacy": {}}))
+    assert loaded and PRIVACY_NOT_LOADED not in messages and config["privacy"] == mine
+    assert "animal" not in PRIVACY_NOT_LOADED  # the notice quotes nothing of the file
+
+
+def test_the_configuration_files_hold_no_privacy_choice() -> None:
+    from app_pages.data_monitoring import left_out_text, whole_configuration
+    from core.population import configuration_for_sharing
+
+    config = {
+        "description": "mine",
+        "mask_families": {"study_inclusion": {"operator": "all", "age": NUMERIC_AGE}},
+        "privacy": {"k": 20, "rows_not_people": "animal_data"},
+    }
+    whole = json.loads(whole_configuration(config))
+    assert "privacy" not in whole and whole["description"] == "mine" and "rules_version" in whole
+    assert whole["mask_families"] == config["mask_families"]
+    assert "privacy" in config  # the mapping given is not changed
+    shared = configuration_for_sharing(config)
+    assert "privacy" not in shared.config and "animal" not in json.dumps(shared.config)
+    said = left_out_text(shared)
+    assert "the study's privacy choices (no file brings them into another study)" in said
+    assert (
+        "this installation's settings" not in said
+    )  # the choices are no setting of the installation
+    plain = left_out_text(configuration_for_sharing({"description": "mine"}))
+    assert "privacy" not in plain

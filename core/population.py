@@ -46,6 +46,7 @@ from core.derived import ORIGINS as DERIVED_ORIGINS
 from core.derived import DerivedVariable
 from core.derived import shape_problems as derived_shape_problems
 from core.fingerprint import ids_fingerprint, ids_to_ranges
+from core.privacy import PRIVACY_KEY
 
 EXCLUSION, INCLUSION = "exclusion", "inclusion"
 _INLINE_IDS = 20_000  # row-id ranges are written into the trace up to this many rows
@@ -352,6 +353,8 @@ class SharedConfiguration:
     notes: tuple[str, ...] = ()
     # the other keys of the configuration
     settings: tuple[str, ...] = ()
+    # whether the study's privacy choices were left out (they never travel: core.privacy)
+    privacy: bool = False
 
 
 def _shared_operator(operator: Any) -> Any:
@@ -471,7 +474,8 @@ def configuration_for_sharing(config: Mapping[str, Any] | None) -> SharedConfigu
     settings = tuple(
         str(key)
         for key, value in source.items()
-        if key not in SHARED_KEYS and value not in (None, "", [], {})
+        # the study's privacy choices are no setting of the installation: left out, and said apart
+        if key not in (*SHARED_KEYS, PRIVACY_KEY) and value not in (None, "", [], {})
     )
     return SharedConfiguration(
         shared,
@@ -481,6 +485,7 @@ def configuration_for_sharing(config: Mapping[str, Any] | None) -> SharedConfigu
         trimmed=tuple(left["trimmed"]),
         notes=tuple(left["notes"]),
         settings=settings,
+        privacy=source.get(PRIVACY_KEY) not in (None, "", [], {}),
     )
 
 

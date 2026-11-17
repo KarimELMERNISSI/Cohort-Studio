@@ -21,6 +21,7 @@ Pages read the legacy keys ``data`` and ``working_df`` (the analysis population)
 from __future__ import annotations
 
 import contextlib
+import copy
 import hashlib
 import logging
 import os
@@ -90,6 +91,9 @@ KEPT_ON_DATA_CHANGE: frozenset[str] = frozenset(
 DATA_DERIVED_KEYS: tuple[str, ...] = tuple(k for k in DERIVED_KEYS if k not in KEPT_ON_DATA_CHANGE)
 
 _SESSION_KEY = "_data_session"
+PRIVACY_STATE_KEY = (
+    "_study_privacy"  # {"study": id, "section": {...}}: a study's privacy choices (ui/keys.py)
+)
 MI_KEY = "_mi"
 _VIEWS_KEY = "_data_views"
 
@@ -290,6 +294,9 @@ class AppState:
         ss["current_dataset_name"] = f"{ref.name}_v{ref.version}" if ref.version else ref.name
         ss["last_uploaded_file_hash"] = ref.file_hash
         ss["dataset_ref"] = ref
+        self._keep_privacy_of(
+            self.study_id()
+        )  # a study's privacy choices do not follow the user into another
         self._install_views()
         self._delete_snapshots(dropped, ended)
         return ref
@@ -302,6 +309,7 @@ class AppState:
         self.session.clear()
         self._delete_snapshots(dropped)
         ss["dataset_ref"] = None
+        self._keep_privacy_of(None)
         ss.pop("current_dataset_name", None)
         ss.pop("last_uploaded_file_hash", None)
         self._install_views()
@@ -1433,10 +1441,57 @@ class AppState:
 
     def protocol_body(self) -> dict[str, Any]:
         """The study definition the session holds now: the criteria, the ticks, the follow-up and the declared derived
-        variables (``core.protocol.body_of``)."""
+        variables, from the configuration (``core.protocol.body_of``), and the privacy choices the session holds for
+        this study (:meth:`privacy_choices`), which the configuration never holds."""
+        from core.privacy import PRIVACY_KEY
         from core.protocol import body_of
 
-        return body_of(self.config, self.ticked)
+        config = {key: value for key, value in self.config.items() if key != PRIVACY_KEY}
+        section = self._privacy_section()
+        if section:
+            config[PRIVACY_KEY] = section
+        return body_of(config, self.ticked)
+
+    def _privacy_section(self) -> dict[str, Any]:
+        """
+        The privacy section the session holds for the study of its dataset; {} when it holds none, or another
+        study's. The choices are a study's: they are kept with its id, apart from the configuration (which stays for
+        the next dataset, and is written to files), so that a declaration made for one study, that its rows are
+        animals, never reaches the next one loaded in the session.
+        """
+        kept = st.session_state.get(PRIVACY_STATE_KEY)
+        study = self.study_id()
+        if not isinstance(kept, dict) or study is None or kept.get("study") != study:
+            return {}
+        section = kept.get("section")
+        return copy.deepcopy(section) if isinstance(section, dict) else {}
+
+    def _keep_privacy_of(self, study: str | None) -> None:
+        """Drop the privacy choices the session holds unless they are this study's (another version of the same
+        study keeps them, as it keeps its revisions)."""
+        kept = st.session_state.get(PRIVACY_STATE_KEY)
+        if not (isinstance(kept, dict) and study is not None and kept.get("study") == study):
+            st.session_state.pop(PRIVACY_STATE_KEY, None)
+
+    def privacy_choices(self):
+        """The privacy choices of the session's study (``core.privacy.StudyPrivacy``; none set when the session
+        holds none for it). ValueError, with a reason that quotes nothing, for a section this version cannot read."""
+        from core.privacy import PRIVACY_KEY, study_privacy
+
+        return study_privacy({PRIVACY_KEY: self._privacy_section() or None})
+
+    def set_privacy_choices(self, choices) -> None:
+        """Make ``choices`` (a ``StudyPrivacy``) those of the session's study, written by the one writer; nothing is
+        kept when nothing is set. They are part of the study definition: saved with its next revision, and applied
+        where an output is made, never here. ValueError without a dataset: the choices are a study's."""
+        study = self.study_id()
+        if study is None:
+            raise ValueError("load a dataset first")
+        section = choices.to_section()
+        if section:
+            st.session_state[PRIVACY_STATE_KEY] = {"study": study, "section": section}
+        else:
+            st.session_state.pop(PRIVACY_STATE_KEY, None)
 
     def latest_revision(self):
         """The study's latest saved revision, or None when none is saved (or readable). ValueError without a signed-in
@@ -1474,11 +1529,15 @@ class AppState:
         return saved
 
     def load_protocol_revision(self, revision) -> None:
-        """Put a saved revision's study definition into the session: its criteria, derived variables and follow-up
-        replace the session's, and its ticks become the session's. Criteria are filters: no row changes."""
+        """Put a saved revision's study definition into the session: its criteria, derived variables, follow-up and
+        privacy choices replace the session's (a revision without choices leaves the session none), and its ticks
+        become the session's. Criteria are filters: no row changes."""
+        from core.privacy import PRIVACY_KEY, study_privacy
         from core.protocol import with_body
 
-        st.session_state["config"] = with_body(self.config, revision.body)
+        body = {key: value for key, value in revision.body.items() if key != PRIVACY_KEY}
+        st.session_state["config"] = with_body(self.config, body)
+        self.set_privacy_choices(study_privacy(revision.body))
         st.session_state.pop(
             "rules_earlier", None
         )  # its criteria are no longer those of an earlier file
