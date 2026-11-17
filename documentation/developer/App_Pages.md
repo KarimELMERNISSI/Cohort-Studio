@@ -75,7 +75,7 @@ says what Run will do, one click runs it, and the result reads the estimate firs
 function of its own here (``accuracy_of``, ``kappa_of``), so that the numbers are checked without the page._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.KOOPMAN`, `biostats.diagnostic.SAMPLING_NOT_STATED`, `biostats.diagnostic.SAMPLINGS`, `biostats.diagnostic.SCORE_CARRIED`, `biostats.diagnostic.SERIES`, `biostats.diagnostic.TWO_GATE`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.reads_share`, `biostats.diagnostic.verification`, `biostats.diagnostic.yes_no_table`, `biostats.diagnostic.youden_cutoff`, `biostats.references.cite`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.KOOPMAN`, `biostats.diagnostic.SAMPLING_NOT_STATED`, `biostats.diagnostic.SAMPLINGS`, `biostats.diagnostic.SCORE_CARRIED`, `biostats.diagnostic.SERIES`, `biostats.diagnostic.TWO_GATE`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.reads_share`, `biostats.diagnostic.verification`, `biostats.diagnostic.yes_no_table`, `biostats.diagnostic.youden_cutoff`, `biostats.plan.run`, `biostats.plan.specify`, `biostats.references.cite`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `manage.report_tables.dossier_min_n`, `manage.report_tables.table_cautions`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.share_decimals`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
 
 ### def `_rgba` (analysis_diagnostic.py)
 
@@ -205,17 +205,38 @@ test's column, whatever its form), with ``index_form``, the test's two values, a
 The reference standard and the value that means the condition is present: asked once for a score and for a
 yes/no test of the same study (their keys are shared).
 
+### def `_share_text` (analysis_diagnostic.py)
+
+- **Arguments**: `share: Any`
+
+- **Returns**: `str`
+
+The share with the condition as a percentage, with the decimals that tell it from 0% and from 100%
+(``share_decimals``): 24 of 50,000 read "0.0%" beside a negative predictive value of 99.992%.
+
+### def `_sampling_question` (analysis_diagnostic.py)
+
+- **Arguments**: `sampling_key: str, prevalence_key: str, share: ComplexType`
+
+- **Returns**: `tuple[ComplexType]`
+
+How the participants entered the study, and under it the prevalence where the test will be used: two of the
+three answers read predictive values only at that prevalence, so it stands in view (it was the one field of a
+folded "More options"). Under the question, in half the width: beside it, in a third of the row, its label
+wrapped onto two lines in a 1,280-pixel window and its field sat below the question's first option. ``share``:
+the share with the condition in ``where`` ("these data", "this table"), said for a series only: beside another
+answer it is the share that answer has just set aside, and typing it back would read the predictive values
+withheld.
+
 ### def `_sampling_and_prevalence` (analysis_diagnostic.py)
 
 - **Arguments**: `outcome: ComplexType, share: ComplexType`
 
 - **Returns**: `tuple[ComplexType]`
 
-How the participants entered the study, and beside it the prevalence where the test will be used: two of the
-three answers read predictive values only at that prevalence, so it stands in view (it was the one field of a
-folded "More options"). The question is a statement about who was taken into the study, asked once the reference
-standard is chosen and again for another; it starts at "Not stated", which reads no predictive value at the share
-in the data.
+The question and the prevalence of a test of the dataset (:func:`_sampling_question`). The question is a
+statement about who was taken into the study, asked once the reference standard is chosen and again for
+another; it starts at "Not stated", which reads no predictive value at the share in the data.
 
 ### def `_prevalence_setting` (analysis_diagnostic.py)
 
@@ -234,6 +255,36 @@ as one).
 - **Returns**: `None`
 
 No description available.
+
+### def `_table_cell` (analysis_diagnostic.py)
+
+- **Arguments**: `label: str, key: str, column: Any, example: str, help_key: str`
+
+- **Returns**: `ComplexType`
+
+One count of the 2x2 table typed. ``shown``: the label is drawn (the second row keeps it for screen readers
+only: its row names the test's result and the first row's labels head the columns).
+
+### def `_accuracy_typed` (analysis_diagnostic.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+The accuracy of a test from the four counts of a 2x2 table typed (a paper's, another study's): a calculator,
+computed as the numbers are typed and through the plan, as the dossier computes it again from the same numbers.
+It reads no row: no plan, no Run, no line of imputed data. The fields are laid out as the table, so no table is
+echoed under the result; its margins are, to compare with the source's.
+
+### def `_show_accuracy_typed` (analysis_diagnostic.py)
+
+- **Arguments**: `acc: Any`
+
+- **Returns**: `None`
+
+The result of a 2x2 table typed: the headline of a yes/no test, the predictive values its sampling allows,
+every measure folded. What to know of the table (a test that points the other way) is said with the measures'
+own warnings, as the dossier writes them.
 
 ### def `_accuracy_yes_no` (analysis_diagnostic.py)
 
@@ -271,7 +322,8 @@ The predictive values under the 2x2 table, by the sampling: at the share in the 
 prevalence given whatever the sampling (its interval carried from the likelihood ratio's, the prevalence taken
 as known). The numbers first; where none is read, why, with the share named and what to do. ``unequal``: the
 reference standard was done unequally by test result, and the share among those who had it is then no
-prevalence, even in a series.
+prevalence, even in a series. ``typed``: a table typed into the calculator, which has no Run to run again and
+whose share is the table's.
 
 ### def `_measure_rows` (analysis_diagnostic.py)
 
@@ -281,7 +333,8 @@ prevalence, even in a series.
 
 Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
 in the data and the share classified correctly for a series only). ``unequal``: the reference standard was done
-unequally by test result, and the rows name that share as the caption does.
+unequally by test result, and the rows name that share as the caption does. ``typed``: a table typed into the
+calculator, whose share is the table's.
 
 ### def `_intervals` (analysis_diagnostic.py)
 
@@ -480,7 +533,7 @@ what it was computed on. The calculators read the numbers typed: their fields st
 their result says where its numbers came from._
 
 **Imports**:
-`__future__.annotations`, `types.SimpleNamespace`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.plan.KINDS`, `biostats.plan.specify`, `biostats.plan.run`, `biostats.rates.mantel_haenszel`, `biostats.rates.reference_risks`, `biostats.rates.stratum_differences`, `biostats.reliability.category`, `biostats.reliability.category_order`, `biostats.study_designs.DESIGNS`, `biostats.study_designs.DIFFERENCE`, `biostats.study_designs.NOT_STATED`, `biostats.study_designs.OFFERED`, `biostats.study_designs.design_named`, `core.registry.as_code`, `manage.report_tables.typed_numbers`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.decimals`, `ui.guidance.numbers.share_decimals`, `ui.progress.mark_step`, `ui.results.NOTE_MAX`, `ui.results.clean_note`, `ui.results.provenance`, `ui.results.remember`, `ui.results.typed_provenance`, `ui.state.get_state`
+`__future__.annotations`, `types.SimpleNamespace`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.plan.KINDS`, `biostats.plan.specify`, `biostats.plan.run`, `biostats.rates.mantel_haenszel`, `biostats.rates.reference_risks`, `biostats.rates.stratum_differences`, `biostats.reliability.category`, `biostats.reliability.category_order`, `biostats.study_designs.DESIGNS`, `biostats.study_designs.DIFFERENCE`, `biostats.study_designs.NOT_STATED`, `biostats.study_designs.OFFERED`, `biostats.study_designs.design_named`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.decimals`, `ui.guidance.numbers.share_decimals`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.state.get_state`
 
 ### def `_not_pooled` (analysis_extras.py)
 
@@ -582,25 +635,6 @@ No description available.
 - **Returns**: `None`
 
 No description available.
-
-### def `_numbers_source` (analysis_extras.py)
-
-- **Arguments**: `key: str`
-
-- **Returns**: `str`
-
-Where the numbers of a calculator come from (optional), in the user's words: the last field of a calculator,
-kept with the calculation in the study dossier.
-
-### def `_typed_close` (analysis_extras.py)
-
-- **Arguments**: `spec: Any, source: str, key: str`
-
-- **Returns**: `None`
-
-Under a calculator's result, where "Computed on" stands under an analysis: the numbers typed in words, where
-they come from when it was said, that they are not the dataset's, and the button that adds the calculation to
-the study dossier (:func:`ui.results.typed_provenance`; ``key``: the source field's, read when it is clicked).
 
 ### def `_share_metrics` (analysis_extras.py)
 
@@ -926,7 +960,7 @@ another is open. A link can open an entry: the page declares its tabs and entrie
 selectors read the link's labels as their default._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `streamlit`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats._types.TestResult`, `biostats.assumptions.read_assumptions`, `manage.report_tables.TYPED_SOURCE`, `ui.nav`, `ui.components.glossary_popover`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.text.plain`, `ui.guidance.interpretation.how_to_read`, `ui.guidance.measures.HELP`, `ui.guidance.measures.Entry`, `ui.guidance.numbers.alike`, `ui.guidance.numbers.fixed`, `ui.guidance.numbers.interval`, `ui.guidance.numbers.known`, `ui.guidance.numbers.number`, `ui.guidance.numbers.p_text`, `ui.guidance.numbers.percent`, `ui.guidance.numbers.span`, `ui.guidance.numbers.with_interval`, `ui.guidance.outcomes.ModelPlan`, `ui.results.MISSING`, `ui.results.STALE_CONFIG`, `ui.results.recall`, `ui.results.status`, `ui.results.stored_settings`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `streamlit`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats._types.TestResult`, `biostats.assumptions.read_assumptions`, `manage.report_tables.TYPED_SOURCE`, `manage.report_tables.typed_numbers`, `ui.nav`, `ui.components.glossary_popover`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.text.plain`, `ui.guidance.interpretation.how_to_read`, `ui.guidance.measures.HELP`, `ui.guidance.measures.Entry`, `ui.guidance.numbers.alike`, `ui.guidance.numbers.fixed`, `ui.guidance.numbers.interval`, `ui.guidance.numbers.known`, `ui.guidance.numbers.number`, `ui.guidance.numbers.p_text`, `ui.guidance.numbers.percent`, `ui.guidance.numbers.span`, `ui.guidance.numbers.with_interval`, `ui.guidance.outcomes.ModelPlan`, `ui.results.MISSING`, `ui.results.NOTE_MAX`, `ui.results.STALE_CONFIG`, `ui.results.clean_note`, `ui.results.recall`, `ui.results.status`, `ui.results.stored_settings`, `ui.results.typed_provenance`, `ui.state.get_state`
 
 ### class `Metric` (analysis_layout.py)
 
@@ -1088,6 +1122,25 @@ What an analysis reads while imputed data are selected in the sidebar: pooled, o
 - **Returns**: `None`
 
 Under a calculator's result, in place of the line "computed on": where its numbers came from.
+
+### def `numbers_source` (analysis_layout.py)
+
+- **Arguments**: `key: str`
+
+- **Returns**: `str`
+
+Where the numbers of a calculator come from (optional), in the user's words: the last field of a calculator,
+kept with the calculation in the study dossier.
+
+### def `typed_close` (analysis_layout.py)
+
+- **Arguments**: `spec: Any, source: str, key: str`
+
+- **Returns**: `None`
+
+Under a calculator's result, where "Computed on" stands under an analysis: the numbers typed in words, where
+they come from when it was said, that they are not the dataset's, and the button that adds the calculation to
+the study dossier (:func:`ui.results.typed_provenance`; ``key``: the source field's, read when it is clicked).
 
 ### def `advice_lines` (analysis_layout.py)
 
@@ -4898,7 +4951,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `logging`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `enrich.transformation_logic.added_columns`, `manage.report_tables.SOURCE_NOT_GIVEN`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.components.study.status_text`, `ui.components.study.study_status`, `ui.components.study.study_strip`, `ui.components.text.plain`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.remove_typed`, `ui.results.report_items`, `ui.results.report_status`, `ui.results.typed_stored`, `ui.state.get_state`, `utils.environment.environment_text`
+`__future__.annotations`, `logging`, `collections.abc.Mapping`, `collections.abc.Sequence`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `enrich.transformation_logic.added_columns`, `manage.report_tables.SOURCE_NOT_GIVEN`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.components.study.status_text`, `ui.components.study.study_status`, `ui.components.study.study_strip`, `ui.components.text.plain`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.held_tables_kept`, `ui.results.remove_from_report`, `ui.results.remove_typed`, `ui.results.report_items`, `ui.results.report_status`, `ui.results.stored_value`, `ui.results.typed_stored`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 
@@ -4981,16 +5034,57 @@ No description available.
 What the dossier needs from the session, read during the page run: the download builds the document later,
 outside the run, where the session is not available (finish_input and build_dossier are pure).
 
+### def `held_tables` (study_dossier.py)
+
+- **Arguments**: `items: list[ReportItem]`
+
+- **Returns**: `list[tuple[ComplexType]]`
+
+The four counts of each accuracy result of the session's dataset whose 2x2 table the dossier does not write:
+every such result computed since the dataset was loaded (``ui.results.held_tables_kept``: a result is replaced
+on the page by the next run, and its table typed back afterwards was written), the result the page holds, and
+those of the dossier's list, whatever their age. Counts only, sorted, and no name: a table typed that holds the
+same four, in any order, is not written either (the plain copy of what is held back).
+
+### def `_table_cells` (study_dossier.py)
+
+- **Arguments**: `stored: Mapping[ComplexType]`
+
+- **Returns**: `ComplexType`
+
+The four counts, sorted, of a 2x2 table typed, from what the session keeps of it; None for another kind of
+calculation, or for an item that cannot be read.
+
+### def `calculations_of` (study_dossier.py)
+
+- **Arguments**: `typed: Sequence[dict[ComplexType]], held: Sequence[tuple[ComplexType]]`
+
+- **Returns**: `list`
+
+The calculations of the dossier, in the order they were added, for the Word file and for the page's list
+(:func:`_calculation` of each).
+
+A table typed that a side too small holds back is held back in every arrangement of its four counts: typed
+again with its rows and its columns exchanged (an ordinary correction of a table read the other way round) it
+has other sides, and was written whole, counts and measures. So the tables held back join what every table is
+compared with, whatever the order they were added in.
+
 ### def `_calculation` (study_dossier.py)
 
-- **Arguments**: `stored: dict[ComplexType]`
+- **Arguments**: `stored: dict[ComplexType], held: Sequence[tuple[ComplexType]]`
 
 - **Returns**: `None`
 
 A calculation from numbers typed for the Word dossier and for the page's list, from what the session keeps of
 it (JSON): computed again from its numbers, its words and its blocks written afresh from its spec and its
 record. One that this version cannot read or compute any more keeps its place with a fixed line, and its
-numbers in words: those of its spec when it reads, else as they were when it was added.
+numbers in words: those of its spec when it reads, else as they were when it was added. A 2x2 table that the
+dossier holds back (``held``: :func:`held_tables`) keeps its title and its source, without the line of its
+numbers: the four counts are the table.
+
+The numbers of a kind the dossier may hold back are written only once its rule has read them: a table that
+cannot be read or computed again writes none, the words kept with it included (the rule cannot judge them,
+and they are the four counts).
 
 ### def `_result_blocks` (study_dossier.py)
 

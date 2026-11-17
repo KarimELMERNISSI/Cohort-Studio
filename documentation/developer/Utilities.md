@@ -672,7 +672,8 @@ What is implemented here:
 
 - ANCOVA diagnostics (homogeneity of slopes, residual normality, Breusch-Pagan homoscedasticity)
 
-- Diagnostic test accuracy (sensitivity, specificity, PPV, NPV with Wilson score CIs; LR+/LR-, Youden J)
+The accuracy of a test against a reference standard has one engine, :func:`biostats.diagnostic.diagnostic_accuracy`:
+none here.
 
 No compliance with reporting guidelines is implied by this module; see documentation/05_Epidemiology.md._
 
@@ -694,10 +695,6 @@ Standardized effect size estimates with confidence intervals.
 ### class `ANCOVADiagnosticsResult` (epidemiology_utils.py)
 
 Diagnostic tests and assumptions verification for ANCOVA.
-
-### class `DiagnosticTestResult` (epidemiology_utils.py)
-
-Clinical diagnostic accuracy metrics with Wilson score confidence intervals.
 
 ### def `calculate_2x2_epidemiology_metrics` (epidemiology_utils.py)
 
@@ -765,29 +762,6 @@ Args:
 
 Returns:
     ANCOVADiagnosticsResult with test statistics, warnings, and clinical recommendations.
-
-### def `_wilson_score_interval` (epidemiology_utils.py)
-
-- **Arguments**: `p: float, n: int, alpha: float`
-
-- **Returns**: `tuple[ComplexType]`
-
-Compute Wilson score interval for proportions.
-
-### def `calculate_diagnostic_accuracy` (epidemiology_utils.py)
-
-- **Arguments**: `tp: int, fp: int, fn: int, tn: int, alpha: float`
-
-- **Returns**: `DiagnosticTestResult`
-
-Calculate clinical diagnostic accuracy parameters with 95% Wilson score confidence intervals.
-
-Args:
-    tp: True Positives
-    fp: False Positives
-    fn: False Negatives
-    tn: True Negatives
-    alpha: Significance level (default 0.05 for 95% CI)
 
 ---
 

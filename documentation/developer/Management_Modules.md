@@ -3915,7 +3915,7 @@ pages store (biostats results, pooled results over imputed datasets, the diction
 returns plain data that the Word builder (:mod:`manage.dossier`) lays out._
 
 **Imports**:
-`__future__.annotations`, `math`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.share_decimals`, `utils.numbers.with_interval`
+`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Collection`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.share_decimals`, `utils.numbers.with_interval`
 
 ### class `ResultBlocks` (report_tables.py)
 
@@ -4193,6 +4193,40 @@ value being a code of the data, not a score found on them. The table goes with t
 specificity and the predictive values give its cells back, so writing it adds nothing, and holding it back
 alone would protect nothing.
 
+### def `_table_held` (report_tables.py)
+
+- **Arguments**: `value: Mapping[ComplexType], least: int`
+
+- **Returns**: `tuple[ComplexType]`
+
+Why the dossier holds back the 2x2 table of an accuracy result and its measures, as two words ("" when it does
+not): the side of the reference standard that holds fewer than ``least`` participants (the AUC and the measures
+rank them one by one, and stay on the page), and, for a cut-off found on these data, the side it calls fewer
+than ``least`` participants to (its value, its range and the measures at it stay on the page; a cut-off typed
+beforehand is no participant's value). One test for the block and for what a table typed is compared with.
+
+### def `table_held_back` (report_tables.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `ComplexType`
+
+The four counts, sorted, of an accuracy result of the dataset whose 2x2 table the dossier does not write; None
+when it writes the table, or for a result without one. Counts only: a table typed that holds the same four, in
+any order (its rows or its columns swapped), is not written either (:func:`calculation_blocks`).
+
+### def `table_cautions` (report_tables.py)
+
+- **Arguments**: `acc: Any`
+
+- **Returns**: `list[str]`
+
+What to know of a 2x2 table typed, beyond its measures' own warnings: said under the calculator's result and
+written with its block, from this one place. A test positive more often without the condition than with it
+points the other way: its two rows, or its two columns, may be exchanged. (A table typed with the condition in
+its rows is not caught here: it reads predictive values as sensitivity and specificity, and only its margins,
+written under the grid, show it.)
+
 ### def `source_line` (report_tables.py)
 
 - **Arguments**: `note: str`
@@ -4290,6 +4324,37 @@ events are, the test named by its rule (R's ``poisson.test`` computes its p-valu
 
 The report blocks of a result from its record (``biostats.plan.ResultRecord``), for the kinds of
 ``RECORD_BLOCKS``.
+
+### def `result_title` (report_tables.py)
+
+- **Arguments**: `key: str, value: Any, title: str`
+
+- **Returns**: `str`
+
+The title of a result of the dataset in the dossier's list and in the Word file: its kind's ``title``, and for
+the accuracy of a test the form of its index test with it ("Diagnostic accuracy of a score", "... of a yes/no
+test"). A score and a yes/no test of the same columns are two items of the dossier, and read as one under one
+title; a table typed is named as the yes/no test it is ("... of a yes/no test (numbers typed)").
+
+### def `calculation_blocks` (report_tables.py)
+
+- **Arguments**: `spec: Any, result: Any, record: Any`
+
+- **Returns**: `ResultBlocks`
+
+The report blocks of a calculation from numbers typed, computed again from its spec: from its record for a
+share, rates and a standardised ratio, which the dossier writes as typed.
+
+A 2x2 table typed is counted as people's, under the rule of a table of the dataset: with fewer than the
+dossier's threshold on a side of the reference standard, neither the table nor a measure is written. Nor are
+they when the table holds the four counts, in any order, of a table the dossier does not write (``held``: the
+sorted counts of each, an accuracy result of the dataset or another table typed): the plain copy of what is
+held back. A block that holds its table back says so (``held_numbers``), and the line of the numbers typed is
+not written either.
+
+For the full dossier only: the table is written from its result, through the accuracy block of the dataset's
+results. A document written from disclosed records (the package's sharing mode) must not call this: the kind
+stays out of ``RECORD_BLOCKS``, so that ``record_blocks`` refuses it, until the accuracy block reads records.
 
 ### def `result_blocks` (report_tables.py)
 
