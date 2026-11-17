@@ -460,9 +460,7 @@ def app() -> None:
             if calculation.blocks.lines == [CALCULATION_NOT_COMPUTED]:
                 st.caption(
                     ":material/warning: This version of CohortStudio cannot compute this calculation again; the "
-                    "Word dossier writes a line in its place."
-                    + (f" Its numbers, as added: {calculation.numbers}." if calculation.numbers else "")
-                    + " Type them again on the calculator's page."
+                    "Word dossier writes a line in its place. Type its numbers again on the calculator's page."
                 )
 
     section(

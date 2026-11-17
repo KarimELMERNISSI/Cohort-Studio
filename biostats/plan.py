@@ -783,12 +783,16 @@ class AnalysisKind:
     comparison, they cannot be compared.
 
     A kind may declare its roles and options before its runner (for its record's labels). Its request id then moves
-    with the declaration until the first spec of the kind is written (by its runner, a typed source or the package
-    writer); from then on, a change of the declaration moves ``version``.
+    with the declaration until the first spec of the dataset is written (by its runner or the package writer); from
+    then on, a change of the declaration moves ``version``. A calculation from numbers typed has a version of its
+    own, ``typed_version``: writing one fixes nothing of the dataset's declaration, and declaring the dataset's
+    moves no calculation's id.
 
     ``choices`` closes the values of the options that hold stored ids (a sampling, a form, a design): a spec holding
     another value is refused with the option named, and a received one reads as written by a later version, where
-    its runner would have raised on a word. A value added to a closed set moves ``version``.
+    its runner would have raised on a word. One set serves the kind's two sources. A value added to it moves the
+    version of each source that offers the option: ``version`` for an option of the dataset's analysis,
+    ``typed_version`` for one of the calculation, both for an option the two share.
 
     A kind with ``typed_inputs`` can be computed from numbers typed: each number by name (a stored id) with its type
     (``COUNT`` or ``QUANTITY``); ``typed_optional`` names those left out together (the reference group of one rate);
@@ -826,7 +830,9 @@ class AnalysisKind:
     # calculation it computes the same way
     typed_version: int = 1
     version: int = 1  # of the spec: its roles, its options, what its runner computes
-    record_version: int = 1  # of the record: its parts, its numbers, their classes
+    # of the record: its parts, its numbers, their classes. A draft until the package writer writes records: none
+    # leaves a session before, so a part that gains a number until then (each interval's level) stays at 1
+    record_version: int = 1
 
 
 def kind_named(kind_id: str) -> AnalysisKind:
@@ -1088,8 +1094,9 @@ def _record_rates(result: Any) -> tuple[list[Part], None]:
                 numbers=(
                     Number("events", int(rate.events), EXACT),
                     Number("person_time", float(rate.person_time), DETERMINISTIC),
-                    # how the rate is shown, and of what: without them "12.50" is no rate a reader can use
-                    Number("unit", str(result.unit), EXACT),
+                    # how the rate is shown, and of what: without them "12.50" is no rate a reader can use.
+                    # No unit is written for a result that names none: its block is then not written
+                    *(() if result.unit is None else (Number("unit", str(result.unit), EXACT),)),
                     Number(
                         "per", int(rate.per) if float(rate.per).is_integer() else rate.per, EXACT
                     ),
@@ -1141,7 +1148,12 @@ def _record_standardised(result: Any) -> tuple[list[Part], None]:
             numbers=(
                 Number("observed", int(result.observed), EXACT),
                 Number("expected", float(result.expected), DETERMINISTIC),
-                Number("events_are", str(result.events_are), EXACT),  # mortality or incidence
+                # mortality or incidence; not written for a result that does not say
+                *(
+                    ()
+                    if result.events_are is None
+                    else (Number("events_are", str(result.events_are), EXACT),)
+                ),
                 *_with_interval(result.ratio, result.ci, scale=None),
                 Number("p", result.p_value, DETERMINISTIC, rule=LOG),
             ),

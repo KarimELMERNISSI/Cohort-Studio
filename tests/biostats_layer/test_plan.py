@@ -376,8 +376,8 @@ def test_today_s_ids_and_record_json_are_kept() -> None:
     for kind, request_id in (
         ("proportion", "6d63a6a20240efe84020ca819c62b2d51dc14a36cb55042aa7abbecf08bbc469"),
         # declared with its roles and options when its record was (the yes/no index test). This id moves with the
-        # declaration until the first spec of the kind is written (its runner, its typed source or the package
-        # writer); after that, a change bumps the kind's version
+        # declaration until the first spec of the dataset is written (its runner or the package writer); after
+        # that, a change bumps the kind's version. A calculation from numbers typed has its own (typed_version)
         ("diagnostic", "651b0f6002c54b519034c2c4cf97351b9ae263070e1a06cc10bc4d5d5c678eb8"),
         # declared with its roles, its options and its design's values, under the same rule: no spec of the kind
         # was written before

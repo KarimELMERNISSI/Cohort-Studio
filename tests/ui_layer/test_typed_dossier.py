@@ -239,7 +239,8 @@ def test_the_other_calculators_add_their_own_kinds(app: AppTest) -> None:
     _type(app, "smr_exp", 18.4)
     text = _texts(app)
     assert "From the numbers typed: 25 observed deaths against 18.4 expected." in text
-    assert "(exact Poisson, twice the smaller tail)" in text  # the test named by its rule
+    # the test named by its rule, in the words of the Word file
+    assert "(exact Poisson test, twice the smaller tail)" in text
     (add,) = _buttons(app, "report_typed_add::typed:standardised_ratio:")
     app.button(key=add).click().run()
     _open(app, m.ONE_GROUP, one_compare=m.SHARE, prop_source=m.TYPED)
@@ -301,7 +302,9 @@ def test_nothing_typed_reaches_a_log_the_trace_or_the_flow(
     app: AppTest, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Typed numbers, their source and the name of a calculation stay in the session's list: no log record holds
-    one, no step is recorded, and the participant flow is the same with and without them."""
+    one, no step is recorded, the study definition's checksum does not move, and the participant flow is the
+    same with and without them."""
+    from core.protocol import body_checksum, body_of
 
     def trace() -> Any:
         if "transformation_manager" not in app.session_state:
@@ -309,8 +312,13 @@ def test_nothing_typed_reaches_a_log_the_trace_or_the_flow(
         tm = app.session_state["transformation_manager"]
         return getattr(tm, "head_hash", None), len((tm.get_trace() or {}).get("steps", []))
 
+    def definition() -> str:
+        return body_checksum(
+            body_of(app.session_state["config"], app.session_state["_data_session"].ticked)
+        )
+
     kept = json.loads(json.dumps(_basket(app)))
-    before = trace()
+    before = trace(), definition()
     with caplog.at_level(logging.DEBUG):
         _two_rates(app, events=17)
         (add,) = _buttons(app, "report_typed_add::")
@@ -324,8 +332,9 @@ def test_nothing_typed_reaches_a_log_the_trace_or_the_flow(
         "Wiltz" not in logged and "typed:rates:" not in logged and "typed:proportion:" not in logged
     )
     assert "17 events" not in logged
-    # no step of the trace for a calculation, and no box of the flow: the same with and without the list
-    assert trace() == before
+    # no step of the trace for a calculation, nothing of it in the study definition, and no box of the flow:
+    # the same with and without the list
+    assert (trace(), definition()) == before
     flow_with = list(app.selectbox(key="dossier_flow::item").options)
     app.session_state["_report_typed"] = {}
     app.run()
@@ -350,8 +359,11 @@ def test_a_calculation_this_version_cannot_compute_keeps_its_place_and_its_numbe
     assert "**Calculation from numbers typed** · " + RATIO_WORDS in text
     assert (
         ":material/warning: This version of CohortStudio cannot compute this calculation again; the Word dossier "
-        f"writes a line in its place. Its numbers, as added: {RATIO_WORDS}. Type them again on the calculator's page."
+        "writes a line in its place. Type its numbers again on the calculator's page."
     ) in text
+    assert (
+        text.count(RATIO_WORDS) == 1
+    )  # in the card's heading; said again under it, they stood twice
     app.session_state["_report_typed"] = kept
     app.run()
     _ok(app)
@@ -457,6 +469,13 @@ def test_a_share_next_to_none_or_all_is_written_with_the_decimals_that_show_it()
         "against a reference share of 0.02%" in text
         and "against a reference share of 99.95%" in text
     )
+    # a reference next to none or all beside a share far from it: "against a reference of 0.0%" stood for 0.04%,
+    # a value the page refuses to take
+    low = _stored("proportion", {"count": 3, "total": 10}, reference=0.0004)
+    high = _stored("proportion", {"count": 9, "total": 10}, reference=0.9996)
+    _, text = _document(_parts([low, high]))
+    assert "Share: 30.0% (3 of 10;" in text and "against a reference of 0.040%: p < 0.001" in text
+    assert "Share: 90.0% (9 of 10;" in text and "against a reference of 99.960%: p" in text
 
 
 def test_a_share_counted_in_the_dataset_reads_as_a_share_of_numbers_typed() -> None:
@@ -553,6 +572,32 @@ def test_a_calculation_is_never_stored_as_a_result_of_the_dataset() -> None:
         disclose_record(record, None, spec=spec, analysis=None)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="not disclosed as a result of the dataset"):
         disclose_spec(spec, None, analysis=None)  # type: ignore[arg-type]
+
+
+def test_a_rate_is_not_written_under_a_unit_nobody_named() -> None:
+    """A rate computed without the unit of its person-time took "person-years", and a standardised ratio "deaths":
+    a caller that had not said had its result written under a word of the function's own (15 events over 1,200
+    person-days read "12.50 per 1,000 person-years"). No unit is assumed: the record holds none, and no block
+    is written."""
+    from biostats.rates import rates, standardised_ratio
+    from manage.report_tables import record_blocks
+
+    bare = rates(15, 1200)
+    record = plan.record("rates", bare)
+    assert bare.unit is None and record is not None
+    assert "unit" not in {number.name for number in record.parts[0].numbers}
+    with pytest.raises(ValueError, match="without the unit of its person-time"):
+        record_blocks(record)
+    unnamed = standardised_ratio(25, 18.4)
+    record = plan.record("standardised_ratio", unnamed)
+    assert unnamed.events_are is None and record is not None
+    assert "events_are" not in {number.name for number in record.part("ratio").numbers}
+    with pytest.raises(ValueError, match="without what its events are"):
+        record_blocks(record)
+    # named, they are written as before
+    days = plan.record("rates", rates(15, 1200, unit="person-days", per=100000))
+    assert days is not None
+    assert "Rate, per 100,000 person-days" in str(record_blocks(days).tables[0][1])
 
 
 def test_every_kind_computed_from_numbers_typed_has_its_words_and_its_block() -> None:

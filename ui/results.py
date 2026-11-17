@@ -11,7 +11,8 @@ the result to the study dossier (follow-up programme M3): :func:`report_items` l
 
 A calculation from numbers typed (a calculator's result) is no result of the dataset: it is never stored here with a
 stamp, never stale and never in the participant flow. The dossier keeps it apart (:func:`add_typed`,
-:func:`typed_items`), as JSON only: its spec, where its numbers come from, and when it was added.
+:func:`typed_stored`), as JSON only: its spec, where its numbers come from, and when it was added. One reader
+serves the page's list and the Word file (``app_pages.study_dossier``), which compute it again from that JSON.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ from typing import Any
 import streamlit as st
 
 from biostats.plan import AnalysisSpec, ComputedOn, read_spec, titles
-from manage.report_tables import CALCULATION, typed_numbers, typed_title
+from manage.report_tables import typed_numbers
 from ui.components.text import plain
 
 logger = logging.getLogger(__name__)
@@ -416,24 +417,6 @@ def report_status(item: ReportItem) -> str:
 # ----------------------------------------------------------------------------- calculations from numbers typed
 
 
-@dataclass(frozen=True)
-class TypedItem:
-    """
-    A calculation from numbers typed, added to the study dossier. The session keeps its JSON only, and an item is
-    read back each time by the reader a received package takes: an update of the application leaves no object the
-    new code cannot read. ``spec`` is None, with ``problem`` saying why, for an item this version cannot read;
-    ``words`` are its numbers in words as they were when it was added, which such an item still shows.
-    """
-
-    id: str
-    spec: AnalysisSpec | None
-    title: str
-    note: str = ""
-    added_at: str = ""
-    problem: str = ""
-    words: str = ""
-
-
 def clean_note(note: Any) -> str:
     """
     Where the numbers come from, as it is kept: plain text on one line, ``NOTE_MAX`` characters at most, and only
@@ -509,28 +492,6 @@ def typed_stored() -> list[dict[str, Any]]:
     """The calculations of the dossier as the session keeps them (JSON values), in the order they were added: what
     the Word dossier is built from, after the page run."""
     return [json.loads(json.dumps(stored)) for stored in _typed().values()]
-
-
-def typed_items() -> list[TypedItem]:
-    """The calculations from numbers typed added to the study dossier, in the order they were added; one that this
-    version cannot read is listed with its reason, never dropped unsaid."""
-    items = []
-    for stored in _typed().values():
-        spec, problem = read_spec(stored.get("spec"))
-        if spec is not None and spec.typed is None:
-            spec, problem = None, "not a calculation from numbers typed"
-        items.append(
-            TypedItem(
-                id=str(stored.get("id") or ""),
-                spec=spec,
-                title=typed_title(spec) if spec is not None else CALCULATION,
-                note=str(stored.get("note") or ""),
-                added_at=str(stored.get("added_at") or ""),
-                problem=problem,
-                words=str(stored.get("words") or ""),
-            )
-        )
-    return items
 
 
 def typed_provenance(spec: AnalysisSpec, *, note_key: str | None = None) -> None:
@@ -644,7 +605,6 @@ __all__ = [
     "ReportItem",
     "ResultStamp",
     "StoredResult",
-    "TypedItem",
     "add_to_report",
     "add_typed",
     "clean_note",
@@ -662,7 +622,6 @@ __all__ = [
     "status",
     "stored_settings",
     "typed_id",
-    "typed_items",
     "typed_note",
     "typed_provenance",
     "typed_stored",

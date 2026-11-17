@@ -617,8 +617,9 @@ def _share_metrics(
         ),
         Metric(
             "Against a reference of",
-            layout.percent(reference, places),
-            f"p {layout.p_text(result.p_value)} (exact binomial test)",
+            # with the decimals that show it: beside a share far from it, 0.04% read "0.0%"
+            layout.percent(reference, max(places, share_decimals(reference))),
+            f"p {layout.p_text(result.p_value)} (exact binomial test, two-sided)",
         ),
     ]
     if where:  # counted in the dataset: of a number typed, the field and "3 of 10" have said it
@@ -1717,7 +1718,7 @@ def _expected() -> None:
                 m.RATIO_NAMES[kind],
                 value,
                 # the test named by its rule: R's poisson.test computes its p-value another way
-                f"{bounds} · p {layout.p_text(found.p_value)} (exact Poisson, twice the smaller tail)",
+                f"{bounds} · p {layout.p_text(found.p_value)} (exact Poisson test, twice the smaller tail)",
             )
         ],
         f"{_against_expected(found.ratio, value)}; the interval runs from {_more_or_fewer(found.ci.lower)} to "

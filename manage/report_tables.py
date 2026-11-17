@@ -961,8 +961,11 @@ def _share_block(record: Any) -> ResultBlocks:
             else f"{fixed(abs(gap), max(places, decimals(abs(gap), 2)))} points "
             f"{'below' if gap < 0 else 'above'} the reference"
         )
+        # the reference with the decimals that show it: beside a share far from it, 0.04% read "0.0%", a value
+        # the page refuses to take
+        shown = percent(reference, max(places, share_decimals(reference)))
         line += (
-            f"; against a reference of {percent(reference, places)}: p {p_text(test['p'])} (exact binomial test, "
+            f"; against a reference of {shown}: p {p_text(test['p'])} (exact binomial test, "
             f"two-sided); {apart}"
         )
     return ResultBlocks(
@@ -979,7 +982,9 @@ def _rates_block(record: Any) -> ResultBlocks:
 
     parts = {part.id: part for part in record.parts}
     first = _named(parts["rate#0"])
-    per, unit, two = first["per"], first["unit"], "rate#1" in parts
+    per, unit, two = first["per"], first.get("unit"), "rate#1" in parts
+    if unit is None:  # never guessed: 12.50 per 1,000 person-days is 4,566 per 1,000 person-years
+        raise ValueError("a rate is not written without the unit of its person-time")
     rows: list[tuple[str, str, str]] = []
     for part_id, label in (
         ("rate#0", "Rate, group compared" if two else "Rate"),
@@ -1027,7 +1032,9 @@ def _standardised_block(record: Any) -> ResultBlocks:
     from biostats.references import cite
 
     ratio = _named(record.part("ratio"))
-    name = f"Standardised {'mortality' if ratio.get('events_are') == 'deaths' else 'incidence'} ratio"
+    if ratio.get("events_are") not in ("deaths", "cases"):  # never guessed: it names the ratio
+        raise ValueError("a standardised ratio is not written without what its events are")
+    name = f"Standardised {'mortality' if ratio['events_are'] == 'deaths' else 'incidence'} ratio"
     value, bounds = with_interval(
         ratio["estimate"], SimpleNamespace(lower=ratio["lower"], upper=ratio["upper"])
     )

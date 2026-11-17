@@ -632,13 +632,14 @@ class RatesResult:
     group); ``ratio`` None for one rate, and for two groups without an event in either (two rates of 0 have no
     ratio: ``warnings`` says so). ``unit`` is the unit of the person-time (a stored id): a rate without it is no
     number a reader can use, so the result carries it, as each rate carries the multiplier it is shown with.
+    None when the caller named none: nothing then writes the rates (a unit is never assumed).
     """
 
     rates: tuple[IncidenceRate, ...]
     ratio: RateRatio | None = None
     warnings: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
-    unit: str = "person-years"
+    unit: str | None = None
 
 
 def has_ratio(events: int, reference_events: int | None) -> bool:
@@ -655,10 +656,12 @@ def rates(
     *,
     per: float = 1000.0,
     alpha: float = 0.05,
-    unit: str = "person-years",
+    unit: str | None = None,
 ) -> RatesResult:
     """One rate with its exact interval, or the rates of two groups and their ratio (:func:`rate_ratio`). The
-    reference group is given whole (its events and its person-time) or not at all."""
+    reference group is given whole (its events and its person-time) or not at all. ``unit`` names the unit of
+    the person-time for whoever writes the rates; it changes no number, and none is assumed: a caller that
+    read person-days and did not say so had its rates written "per 1,000 person-years"."""
     if (reference_events is None) != (reference_person_time is None):
         raise ValueError("the reference group needs its events and its person-time")
     first = incidence_rate(events, person_time, per=per, alpha=alpha)
@@ -686,13 +689,14 @@ class StandardisedRatio:
     ci: CI
     p_value: float
     references: list[str] = field(default_factory=list)
-    # what the events are (a stored id, "deaths" or "cases"): it names the ratio, mortality or incidence
-    events_are: str = "deaths"
+    # what the events are (a stored id, "deaths" or "cases"): it names the ratio, mortality or incidence; None
+    # when the caller did not say (nothing then names the ratio: deaths are never assumed)
+    events_are: str | None = None
     warnings: list[str] = field(default_factory=list)
 
 
 def standardised_ratio(
-    observed: int, expected: float, *, alpha: float = 0.05, events_are: str = "deaths"
+    observed: int, expected: float, *, alpha: float = 0.05, events_are: str | None = None
 ) -> StandardisedRatio:
     """
     SMR / SIR = observed / expected with the exact Poisson interval on the observed count (Garwood) and the test

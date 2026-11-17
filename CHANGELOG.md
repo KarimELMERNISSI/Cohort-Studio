@@ -36,8 +36,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   "One-sample proportion").
 - **A share next to 0% or 100% is written with the decimals that show it,** on the page and in the dossier: 24 of
   50,000 against 0.02% read "0.0%" against a reference of "0.0%" beside p < 0.001 (now "0.048%" against "0.020%").
-  The headline says "equals the reference" only when it does.
-- **The standardised ratio's test is named by its rule** ("exact Poisson, twice the smaller tail"): it agrees with
+  The headline says "equals the reference" only when it does. A reference next to 0% or 100% takes its own
+  decimals beside a share far from it (3 of 10 against 0.04% read "against a reference of 0.0%").
+- **The standardised ratio's test is named by its rule** ("exact Poisson test, twice the smaller tail"): it agrees with
   the exact interval, and R's `poisson.test` computes its p-value another way (0.128 where this gives 0.165 for 25
   observed against 18.4 expected). Fewer than 1 event expected is said with the result wherever it is written.
 - **The Word dossier's first section** reads "Trace integrity: intact (the hash chain holds)".
