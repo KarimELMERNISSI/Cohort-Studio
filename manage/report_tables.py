@@ -17,7 +17,18 @@ from typing import Any
 
 import pandas as pd
 
-from utils.numbers import decimals, fixed, number, p_text, percent, share_decimals, with_interval
+from utils.numbers import (
+    decimals,
+    fixed,
+    number,
+    p_text,
+    percent,
+    prevalence_text,
+    ratio_parts,
+    share_decimals,
+    share_parts,
+    with_interval,
+)
 
 ESTIMATE_COLUMNS = {"hr": "hazard ratio", "odds_ratio": "odds ratio", "rate_ratio": "rate ratio"}
 
@@ -568,8 +579,8 @@ def sampling_line(
     from biostats.diagnostic import SERIES, TWO_GATE
 
     stem = SAMPLING_WORDS[sampling]
-    given = None if prevalence is None or not read else f"{_num(100 * float(prevalence))}%"
-    caveat = f" {TWO_GATE_SPECTRUM}" if sampling == TWO_GATE else ""
+    given = None if prevalence is None or not read else prevalence_text(prevalence)
+    caveat =f" {TWO_GATE_SPECTRUM}" if sampling == TWO_GATE else ""
     if sampling == SERIES:
         also = "" if given is None else f", and at the prevalence given ({given})"
         if unequal:
@@ -600,51 +611,78 @@ def _small_side(acc: Any, auc: Any, least: int) -> str:
     return _thin_side(auc, least) if isinstance(auc, dict) else ""
 
 
-def _bounds(ci: Any) -> str:
-    """An interval's two bounds, or nothing when it has none ("n/a to n/a" stood beside a predictive value that no
-    test result gives)."""
-    if ci is None or not all(
-        isinstance(bound, int | float) and math.isfinite(bound) for bound in (ci.lower, ci.upper)
-    ):
-        return ""
-    return _ci(ci)
+def measure_rows(
+    acc: Any,
+    prevalence: Any = None,
+    *,
+    unequal: bool = False,
+    typed: bool = False,
+    every: bool = False,
+) -> list[tuple[str, str, str]]:
+    """
+    The measures of a 2x2 table, each with its estimate and the bounds of its interval: the rows of the page's
+    table of every measure and of the dossier's block, from one list, so that a measure has one name and one number
+    on the screen and in the document. The block read "Sensitivity | 0.861 | 0.781 to 0.916", "NPV, ..." and "LR- |
+    0.164 | 0.1 to 0.266" under a page that read 86.1% (78.1% to 91.6%), "Negative predictive value, ..." and 0.100
+    to 0.266. A share is a percentage (``utils.numbers.share_parts``), a ratio has the decimals of its bounds
+    (``ratio_parts``).
 
+    The rows are those the sampling supports: the predictive values at the share with the condition for a series
+    only (sampled apart, that share is the sampling's), those at a prevalence given whatever the sampling.
+    ``unequal``: the reference standard was done unequally by test result, and the rows name that share as the
+    page's caption does. ``typed``: a table typed into the calculator, whose share is the table's. ``every``: the
+    page's table, with Youden's J, the share classified correctly (a series), and the diagnostic odds ratio's row
+    when it has no value; the dossier's block writes the others (a ratio without a value has its warning there).
+    """
+    from biostats.diagnostic import reads_share
 
-def _share_row(name: str, value: Any, ci: Any) -> tuple[str, str, str]:
-    """A share's row: three significant figures, and the decimals that tell a share from 0 and from 1, and its two
-    bounds from each other ("1 | 1 to 1" stood for a negative predictive value of 99.993%, 99.989% to 99.996%)."""
-    bounds = _bounds(ci)
-    try:
-        numbers = [float(value), *((float(ci.lower), float(ci.upper)) if bounds else ())]
-    except TypeError, ValueError:
-        return name, _num(value), bounds
-    if not all(math.isfinite(number) for number in numbers):
-        return name, _num(value), bounds
-
-    def clear(written: list[str]) -> bool:
-        inside = all(
-            0 < float(text) < 1
-            for text, number in zip(written, numbers, strict=True)
-            if 0 < number < 1
-        )
-        apart = len(numbers) < 3 or numbers[1] == numbers[2] or written[1] != written[2]
-        return inside and apart
-
-    written, places = [_num(number) for number in numbers], 3
-    while not clear(written) and places < 8:
-        places += 1
-        written = [f"{number:.{places}f}" for number in numbers]
-    return name, written[0], f"{written[1]} to {written[2]}" if bounds else ""
-
-
-def _ratio_row(name: str, value: Any, ci: Any) -> tuple[str, str, str]:
-    """A likelihood ratio's row: at a zero cell, the one bound the data leave ("0" stood alone, and "inf")."""
-    if value is not None and ci is not None:
-        if math.isinf(float(value)):
-            return name, "no upper bound", f"at least {_num(ci.lower)}"
-        if float(value) == 0 and float(ci.lower) == 0 and math.isfinite(float(ci.upper)):
-            return name, "0", f"at most {_num(ci.upper)}"
-    return name, _num(value), _ci(ci)
+    share = percent(acc.prevalence_observed, share_decimals(acc.prevalence_observed))
+    at_share = reads_share(acc.sampling)
+    where = (
+        f"among those who had the reference standard ({share} with the condition)"
+        if unequal
+        else f"at the share in {'this table' if typed else 'these data'} ({share})"
+    )
+    # name, value, interval, whether it is a share
+    rows: list[tuple[str, Any, Any, bool]] = [
+        ("Sensitivity", acc.sensitivity, acc.sensitivity_ci, True),
+        ("Specificity", acc.specificity, acc.specificity_ci, True),
+    ]
+    if at_share:
+        rows += [
+            (f"Positive predictive value, {where}", acc.ppv, acc.ppv_ci, True),
+            (f"Negative predictive value, {where}", acc.npv, acc.npv_ci, True),
+        ]
+    if prevalence is not None and acc.ppv_at_prevalence is not None:
+        given = prevalence_text(prevalence)
+        rows += [
+            (
+                f"Positive predictive value, at a prevalence of {given}",
+                acc.ppv_at_prevalence,
+                getattr(acc, "ppv_at_prevalence_ci", None),
+                True,
+            ),
+            (
+                f"Negative predictive value, at a prevalence of {given}",
+                acc.npv_at_prevalence,
+                getattr(acc, "npv_at_prevalence_ci", None),
+                True,
+            ),
+        ]
+    rows += [
+        ("Positive likelihood ratio (LR+)", acc.lr_positive, acc.lr_positive_ci, False),
+        ("Negative likelihood ratio (LR-)", acc.lr_negative, acc.lr_negative_ci, False),
+    ]
+    if every or acc.dor is not None:
+        rows.append(("Diagnostic odds ratio", acc.dor, acc.dor_ci, False))
+    if every:
+        rows.append(("Youden's J", acc.youden, None, False))
+        if at_share:
+            rows.append(("Share classified correctly", acc.accuracy, None, True))
+    return [
+        (name, *(share_parts(value, ci) if is_share else ratio_parts(value, ci)))
+        for name, value, ci, is_share in rows
+    ]
 
 
 def _accuracy_blocks(value: dict) -> ResultBlocks:
@@ -659,7 +697,7 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     specificity and the predictive values give its cells back, so writing it adds nothing, and holding it back
     alone would protect nothing.
     """
-    from biostats.diagnostic import FOUND_CUTOFF, LOWER, YES_NO_FORM, reads_share
+    from biostats.diagnostic import FOUND_CUTOFF, LOWER, YES_NO_FORM
     from biostats.references import cite
 
     acc, auc = value["acc"], value.get("auc")
@@ -673,10 +711,12 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     held_back = bool(thin or few)
     rows: list[tuple[str, str, str]] = []
     if auc is not None:
+        # three decimals for the area and for its bounds, as the page's headline writes them
+        area, around = with_interval(auc.get("auc"), auc.get("ci"), places=3)
         rows.append(
             ("AUC (DeLong)", f"not shown: fewer than {least}", "")
             if thin
-            else ("AUC (DeLong)", _num(auc.get("auc")), _ci(auc.get("ci")))
+            else ("AUC (DeLong)", area, around.removeprefix("95% CI "))
         )
     written = acc is not None and not held_back
     sampling = getattr(acc, "sampling", "") if acc is not None else ""
@@ -684,41 +724,8 @@ def _accuracy_blocks(value: dict) -> ResultBlocks:
     # had it, and the rows and the sampling line name it so
     unequal = bool(getattr(value.get("verified"), "partial", False))
     if written:
-        share = f"{_num(100 * acc.prevalence_observed)}%"
-        rows += [
-            _share_row("Sensitivity", acc.sensitivity, acc.sensitivity_ci),
-            _share_row("Specificity", acc.specificity, acc.specificity_ci),
-        ]
-        if reads_share(sampling):  # for a series only: sampled apart, that share is the sampling's
-            where = (
-                f"among those who had the reference standard ({share} with the condition)"
-                if unequal
-                else f"at the share in {'this table' if typed else 'these data'} ({share})"
-            )
-            rows += [
-                _share_row(f"PPV, {where}", acc.ppv, acc.ppv_ci),
-                _share_row(f"NPV, {where}", acc.npv, acc.npv_ci),
-            ]
-        if value.get("prevalence") is not None and acc.ppv_at_prevalence is not None:
-            given = f"{_num(100 * float(value['prevalence']))}%"
-            rows += [
-                _share_row(
-                    f"PPV, at a prevalence of {given}",
-                    acc.ppv_at_prevalence,
-                    getattr(acc, "ppv_at_prevalence_ci", None),
-                ),
-                _share_row(
-                    f"NPV, at a prevalence of {given}",
-                    acc.npv_at_prevalence,
-                    getattr(acc, "npv_at_prevalence_ci", None),
-                ),
-            ]
-        rows += [
-            _ratio_row("LR+", acc.lr_positive, acc.lr_positive_ci),
-            _ratio_row("LR-", acc.lr_negative, acc.lr_negative_ci),
-        ]
-        if acc.dor is not None:  # its zero-cell warning was written, and not the ratio
-            rows.append(("Diagnostic odds ratio", _num(acc.dor), _ci(acc.dor_ci)))
+        # the page's rows, name for name and number for number
+        rows += measure_rows(acc, value.get("prevalence"), unequal=unequal, typed=typed)
     table = pd.DataFrame(rows, columns=["Measure", "Estimate", "95% CI"])
     # what the numbers are of: the value that means the condition, the way the test points, the cut-off; a table
     # typed names none of them (its heading and the line of its numbers have said what it is)

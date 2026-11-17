@@ -792,7 +792,8 @@ def test_an_interval_ends_at_none_or_all_exactly_and_a_result_is_titled_by_its_f
     none_right = diagnostic_accuracy(0, 5, 12, 12)
     assert none_right.sensitivity_ci.lower == 0.0 and 0 < none_right.sensitivity_ci.upper < 1
     _, text = _document(_parts([_stored("diagnostic", {"tp": 12, "fp": 0, "fn": 0, "tn": 12})]))
-    assert "Sensitivity\n1\n0.758 to 1" in text and "1.00000000" not in text and "e-17" not in text
+    assert "Sensitivity\n100.0%\n75.8% to 100.0%" in text
+    assert "1.00000000" not in text and "e-17" not in text
     # the form of the test in the title: two results of the same columns read alike under one title
     title = "Diagnostic accuracy"
     assert (

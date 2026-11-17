@@ -87,7 +87,7 @@ def test_a_cut_off_found_on_the_data_that_calls_one_participant_positive_is_not_
         "measures at it are not written in the dossier; the page shows them."
     ) in said
     assert "called positive" not in said  # the engine's caution gives the count: not copied
-    assert "Sensitivity" not in said and "PPV" not in said and "LR+" not in said
+    assert "Sensitivity" not in said and "predictive value" not in said and "LR+" not in said
     # the page keeps them: the result itself is unchanged
     assert value["youden"]["cutoff"] == largest
 
@@ -96,7 +96,7 @@ def test_nine_called_positive_are_too_few_and_ten_are_not() -> None:
     nine, ten = _found(_top(9)), _found(_top(10))
     assert nine["acc"].tp + nine["acc"].fp == 9 and ten["acc"].tp + ten["acc"].fp == 10
     assert _measures(nine) == ["AUC (DeLong)"]
-    assert "Sensitivity" in _measures(ten) and "LR-" in _measures(ten)
+    assert "Sensitivity" in _measures(ten) and "Negative likelihood ratio (LR-)" in _measures(ten)
     assert result_blocks(ten).tables[0][0].endswith(f"(positive at least {ten['cutoff']:,.0f})")
 
 
@@ -205,7 +205,8 @@ def test_the_auc_is_not_written_beside_one_participant_with_the_condition() -> N
 def test_a_side_of_nine_is_too_small_and_one_of_ten_is_not() -> None:
     nine, ten = _found(_top(9, ill=9)), _found(_top(10, ill=10))
     assert _auc_cell(nine) == "not shown: fewer than 10"
-    assert _auc_cell(ten) == "1" and "Sensitivity" in _measures(ten)
+    # three decimals for the area, as the page's headline writes it
+    assert _auc_cell(ten) == "1.000" and "Sensitivity" in _measures(ten)
     # four without the condition, among 300: the same, on the other side
     four = _found(_scored(["No"] * 4 + ["Yes"] * 296))
     assert four["auc"]["n_negative"] == 4 and _auc_cell(four) == "not shown: fewer than 10"

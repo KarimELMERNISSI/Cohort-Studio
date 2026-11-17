@@ -6,6 +6,20 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### Accuracy of a test: a measure is written one way, on the page and in the Word dossier
+
+- **The Word dossier writes the measures of a test's accuracy as the page does.** Its table read "Sensitivity |
+  0.861 | 0.781 to 0.916", "NPV, at the share in these data (10.9%) | 0.98 | 0.967 to 0.988" and "LR- | 0.164 |
+  0.1 to 0.266" under a page that read 86.1% (95% CI 78.1% to 91.6%), 98.0% and 0.100 to 0.266. It now writes a
+  share as a percentage, a ratio with the decimals of its bounds, the area under the curve to three decimals, and
+  each measure under the page's name (*Negative predictive value*, *Negative likelihood ratio (LR-)*): for a
+  score, for a yes/no test and for a table typed. The page's table of every measure and the dossier's table are
+  built from one list; the estimates themselves do not change.
+- **A share next to 0% or 100% takes the decimals that show its distance to it,** and its bounds with it, on the
+  page and in the dossier. 2,499 of 2,500 read "more than 99.9%", and now read "99.960%". 9,990 of 9,991 read
+  "more than 99.9% (95% CI 99.9% to 100.0%)", where the upper bound is 99.998%: it now reads "99.990% (95% CI
+  99.943% to 99.998%)". No bound below 100% is written "100.0%", and none above 0 "0.0%".
+
 ### Accuracy of a test: the 2x2 table of a paper, typed
 
 - **Counts from: Numbers I type**, under *Accuracy of a test* > *Positive or negative*, is a calculator for the
@@ -136,7 +150,7 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **Indeterminate results:** the help of a yes/no test and the handbook say how to read them (the test on its
   definite results, then with them counted as positive, and as negative; Shinkins et al. 2013).
 - **A small prevalence reads as typed** ("0.04%" for 1 in 2,500, which read "0.0%" beside "100.0% (95% CI 100.0%
-  to 100.0%)", now "99.993% (95% CI 99.989% to 99.996%)").
+  to 100.0%)", now "99.9933% (95% CI 99.9893% to 99.9958%)").
 - **The prevalence where the test will be used** stands beside the question, no longer folded under "More
   options"; both are asked with a cut-off only (the curve and its AUC do not depend on them).
 - **The study dossier** writes a yes/no test's 2x2 table with its measures, and the table of a score at a cut-off

@@ -136,3 +136,44 @@ def test_the_reading_of_a_test_writes_its_numbers_as_the_result_does() -> None:
         name="Mann-Whitney U test", p_value=0.03, family="nonparametric", groups=["a", "b"]
     )
     assert "which group tends to have larger values" in how_to_read(two)
+
+
+def test_a_share_and_its_bounds_are_percentages_with_the_decimals_that_show_them() -> None:
+    """One rule for a result's headline, its table of every measure and the dossier's block."""
+    assert n.share_parts(0.861, _ci(0.781, 0.916)) == ("86.1%", "78.1% to 91.6%")
+    assert n.share_parts(0.5) == ("50.0%", "") and n.share_parts(None) == ("n/a", "")
+    assert n.share_parts(float("nan"), _ci(0.1, 0.2)) == ("n/a", "10.0% to 20.0%")
+    assert n.share_parts(0.4, _ci(float("nan"), 0.5)) == ("40.0%", "")
+    # none and all are written as they are; their bounds decide the decimals
+    assert n.share_parts(1.0, _ci(0.7578, 1.0)) == ("100.0%", "75.8% to 100.0%")
+    assert n.share_parts(0.0, _ci(0.0, 0.2422)) == ("0.0%", "0.0% to 24.2%")
+    # next to an end: two figures of the distance to it, for the share and for its bounds
+    assert n.share_parts(0.00048, _ci(0.00032, 0.00071)) == ("0.048%", "0.032% to 0.071%")
+    assert n.share_parts(0.995, _ci(0.9722, 0.9991)) == ("99.50%", "97.22% to 99.91%")
+    # bounds that the share's decimals write alike are told apart, and none of the three reads 0% or 100%
+    assert n.share_parts(0.5, _ci(0.49996, 0.50004)) == ("50.000%", "49.996% to 50.004%")
+    assert n.share_parts(0.95, _ci(0.90, 0.9996)) == ("95.00%", "90.00% to 99.96%")
+    # past six decimals: never all for less than all, nor none for some
+    assert n.share_parts(1 - 1e-9)[0] == "more than 99.999999%"
+    assert n.share_parts(1e-9)[0] == "less than 0.000001%"
+
+
+def test_a_ratio_and_its_bounds_share_their_decimals_and_a_zero_cell_leaves_one_bound() -> None:
+    assert n.ratio_parts(0.164, _ci(0.1, 0.266)) == ("0.164", "0.100 to 0.266")
+    assert n.ratio_parts(3.125, _ci(0.996, 12.935)) == ("3.125", "0.996 to 12.935")
+    assert n.ratio_parts(0.7) == ("0.7", "") and n.ratio_parts(None) == ("n/a", "")
+    assert n.ratio_parts(float("inf"), _ci(1303.2, float("inf"))) == (
+        "no upper bound",
+        "at least 1,303",
+    )
+    assert n.ratio_parts(0.0, _ci(0.0, 0.1421)) == ("0", "at most 0.142")
+    assert n.ratio_parts(float("nan"), _ci(0.1, 0.2)) == ("n/a", "")
+
+
+def test_a_prevalence_typed_keeps_the_figures_it_has() -> None:
+    assert [n.prevalence_text(p) for p in (0.0004, 0.109, 0.02, 0.5)] == [
+        "0.04%",
+        "10.9%",
+        "2%",
+        "50%",
+    ]

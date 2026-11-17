@@ -24,6 +24,7 @@ from statsmodels.stats.proportion import confint_proportions_2indep
 from app_pages import analysis_diagnostic as page
 from app_pages.analysis_diagnostic import accuracy_of, accuracy_settings, accuracy_yes_no_of
 from biostats import plan
+from biostats._types import CI
 from biostats.diagnostic import (
     CUTOFF_MODES,
     DELONG,
@@ -48,6 +49,7 @@ from biostats.diagnostic import (
 )
 from manage.report_tables import SAMPLING_WORDS, result_blocks, sampling_line
 from ui.guidance import measures as m
+from ui.guidance.numbers import share_parts
 
 LIVER = (231, 32, 27, 54)  # tp, fp, fn, tn
 
@@ -459,19 +461,25 @@ def test_ten_on_each_side_are_written_and_the_side_the_test_calls_does_not_count
     assert len(blocks.tables) == 2 and "Sensitivity" in list(blocks.tables[0][1]["Measure"])
     # at the edge of a cell: the one bound, in words
     measures = blocks.tables[0][1].set_index("Measure")
-    assert measures.loc["LR+", "Estimate"] == "no upper bound"
-    assert measures.loc["LR+", "95% CI"].startswith("at least ")
+    assert measures.loc["Positive likelihood ratio (LR+)", "Estimate"] == "no upper bound"
+    assert measures.loc["Positive likelihood ratio (LR+)", "95% CI"].startswith("at least ")
 
 
 def test_the_dossier_writes_predictive_values_by_the_sampling() -> None:
     series = list(result_blocks(_yes_no((25, 40, 5, 858), SERIES)).tables[0][1]["Measure"])
-    assert any(name.startswith("PPV, at the share in these data") for name in series)
+    assert any(
+        name.startswith("Positive predictive value, at the share in these data") for name in series
+    )
     for sampling in (TWO_GATE, SAMPLING_NOT_STATED):
         blocks = result_blocks(_yes_no((25, 40, 5, 858), sampling, 0.02))
         names = list(blocks.tables[0][1]["Measure"])
         assert not any("at the share in these data" in name for name in names), sampling
-        assert "PPV, at a prevalence of 2%" in names
-        at = blocks.tables[0][1].set_index("Measure").loc["PPV, at a prevalence of 2%"]
+        assert "Positive predictive value, at a prevalence of 2%" in names
+        at = (
+            blocks.tables[0][1]
+            .set_index("Measure")
+            .loc["Positive predictive value, at a prevalence of 2%"]
+        )
         assert at["95% CI"]  # the likelihood ratio's interval, carried
         assert blocks.lines == [sampling_line(sampling, 0.02)]
 
@@ -678,7 +686,8 @@ def test_under_partial_verification_a_series_does_not_call_its_share_a_prevalenc
     blocks = result_blocks(result)
     names = list(blocks.tables[0][1]["Measure"])
     assert any(
-        name.startswith("PPV, among those who had the reference standard (") for name in names
+        name.startswith("Positive predictive value, among those who had the reference standard (")
+        for name in names
     )
     assert not any("at the share in these data" in name for name in names)
     assert blocks.lines[-1].endswith(
@@ -824,17 +833,19 @@ def test_a_share_is_written_with_the_figures_that_tell_it_from_all_or_none() -> 
     acc = diagnostic_accuracy(85, 10, 15, 90, prevalence=0.0004, sampling=TWO_GATE)
     caption = page._predictive_caption(acc, 0.0004)
     assert caption.startswith(
-        "At a prevalence of 0.04%: positive 0.3% (95% CI 0.2% to 0.6%), negative 99.993% (95% CI 99.989% to "
-        "99.996%), the prevalence taken as known."
+        "At a prevalence of 0.04%: positive 0.34% (95% CI 0.19% to 0.61%), negative 99.9933% (95% CI 99.9893% "
+        "to 99.9958%), the prevalence taken as known."
     )
     rows = page._measure_rows(acc, 0.0004).set_index("Measure")
     assert rows.loc["Negative predictive value, at a prevalence of 0.04%"].tolist() == [
-        "99.993%",
-        "99.989% to 99.996%",
+        "99.9933%",
+        "99.9893% to 99.9958%",
     ]
-    # without an interval to carry the decimals: never "100.0%" for less than all, nor "0.0%" for some
-    assert page._share(0.9996, None) == "more than 99.9%"
-    assert page._share(0.0004, None) == "less than 0.1%"
+    # without an interval: the decimals that show the distance to all or to none ("more than 99.9%" stood for
+    # 2,499 of 2,500), and past six decimals never "100%" for less than all, nor "0%" for some
+    assert page._share(0.9996, None) == "99.960%" and page._share(0.0004, None) == "0.040%"
+    assert page._share(1 - 1e-9, None) == "more than 99.999999%"
+    assert page._share(1e-9, None) == "less than 0.000001%"
     assert page._share(1.0, None) == "100.0%" and page._share(0.0, None) == "0.0%"
     assert page._share(None, None) == "n/a"
     assert m.prevalence_text(0.0004) == "0.04%" and m.prevalence_text(0.109) == "10.9%"
@@ -1157,25 +1168,25 @@ def test_a_cut_off_found_on_the_data_calls_the_share_a_prevalence_on_a_condition
 def test_a_share_next_to_all_is_written_one_way_on_the_page_and_in_the_dossier() -> None:
     """2,499 of 2,500 read "100.0%" in the headline and "more than 99.9%" in the table of every measure; at a
     prevalence of 1 in 2,500 the dossier wrote "NPV | 1 | 1 to 1"; at 1 in 100,000 the page wrote "more than 99.999%
-    (95% CI 100.000% to 100.000%)"."""
+    (95% CI 100.000% to 100.000%)"; and 9,990 of 9,991 read "more than 99.9% (95% CI 99.9% to 100.0%)", its upper
+    bound being 99.998%."""
     metric = page._share_metric("Sensitivity", 2499 / 2500, None, 2499, 2500)
-    assert (metric.value, metric.caption) == ("more than 99.9%", "2,499 of 2,500")
+    assert (metric.value, metric.caption) == ("99.960%", "2,499 of 2,500")
     usual = diagnostic_accuracy(85, 10, 15, 90)
     metric = page._share_metric("Sensitivity", usual.sensitivity, usual.sensitivity_ci, 85, 100)
     assert (metric.value, metric.caption) == ("85.0%", "85 of 100 · 95% CI 76.7% to 90.7%")
     rare = diagnostic_accuracy(48, 3, 2, 947, prevalence=0.00001, sampling=TWO_GATE)
-    estimate, bounds = page._share_parts(rare.npv_at_prevalence, rare.npv_at_prevalence_ci)
+    estimate, bounds = share_parts(rare.npv_at_prevalence, rare.npv_at_prevalence_ci)
     lower, upper = bounds.split(" to ")
     # the decimals that tell the two bounds apart; the share itself is never written as all
     assert lower != upper and not estimate.startswith("100")
-    # the dossier: the decimals that tell a share from 1, and its bounds from each other
-    measures = result_blocks(_yes_no((85, 10, 15, 90), TWO_GATE, 0.0004)).tables[0][1]
-    measures = measures.set_index("Measure")
-    at = measures.loc["NPV, at a prevalence of 0.04%"]
-    lower, upper = (float(end) for end in at["95% CI"].split(" to "))
-    assert 0 < lower < float(at["Estimate"]) < upper < 1
-    # an ordinary share keeps its three significant figures
-    assert measures.loc["Sensitivity"].tolist() == ["0.85", "0.767 to 0.907"]
+    # a bound below 100% is not written as 100% either, nor one above 0 as 0%
+    near = diagnostic_accuracy(9990, 1, 10, 9999, sampling=SERIES)
+    assert share_parts(near.ppv, near.ppv_ci) == ("99.990%", "99.943% to 99.998%")
+    for share, low, high in ((0.95, 0.90, 0.9996), (0.05, 0.0004, 0.10)):
+        estimate, bounds = share_parts(share, CI(lower=low, upper=high, level=0.95, method=""))
+        assert not any(end in ("0.0%", "100.0%") for end in bounds.split(" to ")), bounds
+        assert estimate in ("95.00%", "5.00%")  # the three with the same decimals
 
 
 def test_a_bound_in_a_caution_is_written_as_the_table_writes_it_at_any_size() -> None:
@@ -1217,3 +1228,46 @@ def test_the_caveat_of_a_sample_taken_apart_is_one_sentence_on_the_page_and_in_t
     from manage.report_tables import TWO_GATE_SPECTRUM
 
     assert m.TWO_GATE_SPECTRUM == TWO_GATE_SPECTRUM.removesuffix(".") + " (Lijmer et al. 1999)."
+
+
+@pytest.mark.parametrize(
+    ("cells", "sampling", "prevalence", "only_on_the_page"),
+    [
+        ((85, 10, 15, 90), TWO_GATE, 0.0004, ["Youden's J"]),
+        ((85, 10, 15, 90), SERIES, None, ["Youden's J", "Share classified correctly"]),
+        ((25, 40, 5, 858), SERIES, 0.02, ["Youden's J", "Share classified correctly"]),
+        # a zero cell: one bound for a likelihood ratio, in words, and the odds ratio with 0.5 added to every cell
+        ((30, 0, 6, 60), SAMPLING_NOT_STATED, 0.02, ["Youden's J"]),
+    ],
+)
+def test_the_dossier_writes_a_measure_as_the_page_writes_it(
+    cells: tuple[int, int, int, int],
+    sampling: str,
+    prevalence: float | None,
+    only_on_the_page: list[str],
+) -> None:
+    """The block read "Sensitivity | 0.861 | 0.781 to 0.916", "NPV, ..." and "LR- | 0.164 | 0.1 to 0.266" under a
+    page that read 86.1% (95% CI 78.1% to 91.6%), "Negative predictive value, ..." and 0.100 to 0.266: the rows are
+    now one list, name for name and number for number."""
+    result = _yes_no(cells, sampling, prevalence)
+    measures = result_blocks(result).tables[0][1].set_index("Measure")
+    shown = page._measure_rows(result["acc"], prevalence).set_index("Measure")
+    assert [name for name in shown.index if name not in measures.index] == only_on_the_page
+    pd.testing.assert_frame_equal(measures, shown.loc[list(measures.index)])
+    assert all(
+        text.endswith("%") for text in measures.loc[["Sensitivity", "Specificity"], "Estimate"]
+    )
+    assert not any("PPV" in name or "NPV" in name for name in measures.index)
+
+
+def test_the_dossier_s_block_reads_as_the_page_for_the_tutorial_s_table() -> None:
+    tutorial = result_blocks(_yes_no((87, 126, 14, 701))).tables[0][1].set_index("Measure")
+    assert tutorial.loc["Sensitivity"].tolist() == ["86.1%", "78.1% to 91.6%"]
+    assert tutorial.loc["Specificity"].tolist() == ["84.8%", "82.2% to 87.1%"]
+    assert tutorial.loc["Negative likelihood ratio (LR-)"].tolist() == ["0.164", "0.100 to 0.266"]
+    assert tutorial.loc[
+        "Negative predictive value, at the share in these data (10.9%)"
+    ].tolist() == [
+        "98.0%",
+        "96.7% to 98.8%",
+    ]

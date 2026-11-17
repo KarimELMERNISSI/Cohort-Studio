@@ -43,7 +43,7 @@ from biostats.study_designs import RATIO, design_named
 from biostats.survival import EVENT_WORDS
 from core.registry import as_code
 from ui.guidance.analysis import Advice
-from ui.guidance.numbers import number
+from ui.guidance.numbers import number, prevalence_text
 from ui.guidance.outcomes import ModelPlan, PlanStep, _spellings
 
 # ----------------------------------------------------------------------------- the entries of the two tabs
@@ -828,11 +828,6 @@ def _measures_read(sampling: str, prevalence: float | None, more: str = "") -> s
         if predictive
         else "Sensitivity and specificity"
     )
-
-
-def prevalence_text(prevalence: float) -> str:
-    """A prevalence typed, as a percentage with the figures it has: 1 in 2,500 read "0.0%"."""
-    return f"{100 * prevalence:.3g}%"
 
 
 def predictive_words(

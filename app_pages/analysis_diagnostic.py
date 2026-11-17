@@ -35,7 +35,6 @@ from biostats.diagnostic import (
     confusion_at,
     delong_auc,
     diagnostic_accuracy,
-    reads_share,
     verification,
     yes_no_table,
     youden_cutoff,
@@ -52,11 +51,11 @@ from biostats.reliability import (
     rater_table,
 )
 from core.registry import as_code
-from manage.report_tables import dossier_min_n, table_cautions
+from manage.report_tables import dossier_min_n, measure_rows, table_cautions
 from ui.components import empty_state, error_card, help_popover
 from ui.guidance import measures as m
 from ui.guidance.measures import HELP
-from ui.guidance.numbers import share_decimals
+from ui.guidance.numbers import share_decimals, share_parts
 from ui.progress import mark_step
 from ui.results import CURRENT, provenance, remember, status
 from ui.theme import OKABE_ITO
@@ -869,61 +868,13 @@ def _measure_rows(
     acc: Any, prevalence: float | None, unequal: bool = False, *, typed: bool = False
 ) -> pd.DataFrame:
     """Every measure of a 2x2 table, with its interval: those its sampling supports (predictive values at the share
-    in the data and the share classified correctly for a series only). ``unequal``: the reference standard was done
+    in the data and the share classified correctly for a series only). The rows are those the dossier's block
+    writes (``manage.report_tables.measure_rows``), with Youden's J and the share classified correctly: a measure
+    has one name and one number on the page and in the document. ``unequal``: the reference standard was done
     unequally by test result, and the rows name that share as the caption does. ``typed``: a table typed into the
     calculator, whose share is the table's."""
-    share = _share_text(acc.prevalence_observed)
-    at_share = reads_share(acc.sampling)
-    where = (
-        f"among those who had the reference standard ({share} with the condition)"
-        if unequal
-        else f"at the share in {'this table' if typed else 'these data'} ({share})"
-    )
-    rows: list[tuple[str, Any, Any]] = [
-        ("Sensitivity", acc.sensitivity, acc.sensitivity_ci),
-        ("Specificity", acc.specificity, acc.specificity_ci),
-    ]
-    if at_share:
-        rows += [
-            (
-                f"Positive predictive value, {where}",
-                acc.ppv,
-                acc.ppv_ci,
-            ),
-            (
-                f"Negative predictive value, {where}",
-                acc.npv,
-                acc.npv_ci,
-            ),
-        ]
-    if prevalence is not None and acc.ppv_at_prevalence is not None:
-        given = m.prevalence_text(prevalence)
-        rows += [
-            (
-                f"Positive predictive value, at a prevalence of {given}",
-                acc.ppv_at_prevalence,
-                acc.ppv_at_prevalence_ci,
-            ),
-            (
-                f"Negative predictive value, at a prevalence of {given}",
-                acc.npv_at_prevalence,
-                acc.npv_at_prevalence_ci,
-            ),
-        ]
-    rows += [
-        ("Positive likelihood ratio (LR+)", acc.lr_positive, acc.lr_positive_ci),
-        ("Negative likelihood ratio (LR-)", acc.lr_negative, acc.lr_negative_ci),
-        ("Diagnostic odds ratio", acc.dor, acc.dor_ci),
-        ("Youden's J", acc.youden, None),
-    ]
-    if at_share:
-        rows.append(("Share classified correctly", acc.accuracy, None))
-    shares = {"Sensitivity", "Specificity", "Share classified correctly"}
     return pd.DataFrame(
-        [
-            _measure(name, value, ci, share=name in shares or "predictive value" in name)
-            for name, value, ci in rows
-        ],
+        measure_rows(acc, prevalence, unequal=unequal, typed=typed, every=True),
         columns=["Measure", "Estimate", "95% CI"],
     )
 
@@ -1180,41 +1131,11 @@ def _accuracy_score(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         provenance("diagnostic")
 
 
-def _share_parts(value: Any, ci: Any) -> tuple[str, str]:
-    """
-    A share and the bounds of its interval, as percentages: one decimal ("40.8%", "34.5% to 47.6%"); "" for an
-    interval without bounds. Bounds that one decimal writes alike take the decimals that tell them apart (three to
-    six), and the share with them ("100.0% (95% CI 100.0% to 100.0%)" stood for a negative predictive value at a
-    prevalence of 1 in 2,500). A share below 100% is never written "100.0%" nor one above 0 "0.0%" (the rule of
-    "more than 99 of 100 pairs").
-    """
-    bounded = ci is not None and layout.known(ci.lower) and layout.known(ci.upper)
-    places = 1
-    if bounded and ci.lower != ci.upper:
-        for places in (1, 3, 4, 5, 6):
-            if layout.fixed(100 * ci.lower, places) != layout.fixed(100 * ci.upper, places):
-                break
-    if not layout.known(value):
-        estimate = "n/a"
-    else:
-        share, least = float(value), 10.0**-places
-        estimate = f"{layout.fixed(100 * share, places)}%"
-        if share < 1 and estimate == f"{layout.fixed(100, places)}%":
-            estimate = f"more than {layout.fixed(100 - least, places)}%"
-        elif share > 0 and estimate == f"{layout.fixed(0, places)}%":
-            estimate = f"less than {layout.fixed(least, places)}%"
-    bounds = (
-        f"{layout.fixed(100 * ci.lower, places)}% to {layout.fixed(100 * ci.upper, places)}%"
-        if bounded
-        else ""
-    )
-    return estimate, bounds
-
-
 def _share_metric(label: str, value: Any, ci: Any, count: int, of: int) -> Metric:
     """A share of the headline, with its count and its interval, written as the table of every measure writes it
-    (2,499 of 2,500 read "100.0%" above and "more than 99.9%" in the table)."""
-    estimate, bounds = _share_parts(value, ci)
+    (2,499 of 2,500 read "100.0%" above and "more than 99.9%" in the table): ``share_parts``, the rule of both and of
+    the dossier's block."""
+    estimate, bounds = share_parts(value, ci)
     return Metric(
         label, estimate, f"{count:,} of {of:,}" + (f" · 95% CI {bounds}" if bounds else "")
     )
@@ -1223,27 +1144,8 @@ def _share_metric(label: str, value: Any, ci: Any, count: int, of: int) -> Metri
 def _share(value: Any, ci: Any) -> str:
     """A share with its interval, as a sentence writes it: "40.8% (95% CI 34.5% to 47.6%)", or the share alone when
     it has no interval ("n/a (95% CI n/a% to n/a%)" stood for a predictive value without a value)."""
-    estimate, bounds = _share_parts(value, ci)
+    estimate, bounds = share_parts(value, ci)
     return estimate + (f" (95% CI {bounds})" if bounds else "")
-
-
-def _measure(name: str, value: Any, ci: Any, *, share: bool) -> tuple[str, str, str]:
-    """A row of the table of every measure: a share as a percentage, as the headline writes it (the headline read
-    86.1% and the table 0.861), a ratio to three significant figures; its interval with the same decimals."""
-    known = value is not None and bool(np.isfinite(float(value)))
-    bounded = ci is not None and all(np.isfinite(float(b)) for b in (ci.lower, ci.upper))
-    if not share and value is not None and ci is not None:
-        # at a zero cell: the one bound the data leave ("0" stood alone, and "n/a" for a ratio without an upper bound)
-        if np.isinf(float(value)):
-            return name, "no upper bound", f"at least {layout.num(ci.lower)}"
-        if float(value) == 0 and float(ci.lower) == 0 and bounded:
-            return name, "0", f"at most {layout.num(ci.upper)}"
-    if share:
-        return (name, *_share_parts(value, ci))
-    if known and bounded:
-        estimate, bounds = layout.with_interval(value, ci)
-        return name, estimate, bounds.removeprefix("95% CI ")
-    return name, layout.num(value) if known else "n/a", ""
 
 
 def _show_accuracy(res: dict[str, Any]) -> None:

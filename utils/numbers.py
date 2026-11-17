@@ -158,6 +158,70 @@ def share_decimals(share: Any, *others: Any) -> int:
     return 1 if near is None else min(MOST, max(1, decimals(near, 2)))
 
 
+def share_parts(value: Any, ci: Any = None) -> tuple[str, str]:
+    """
+    A share and the bounds of its interval, as percentages with the same decimals: ("40.8%", "34.5% to 47.6%"); ""
+    for an interval without bounds, "n/a" for a share without a value. One rule for a result's headline, its table
+    of every measure and the dossier's block: the block read "0.861 | 0.781 to 0.916" under a page that read 86.1%
+    (95% CI 78.1% to 91.6%).
+
+    The decimals are those of :func:`share_decimals`, then those that tell the two bounds apart, and each of the
+    three from 0% and from 100%, six at most: "100.0% (95% CI 100.0% to 100.0%)" stood for a negative predictive
+    value at a prevalence of 1 in 2,500, and "more than 99.9% (95% CI 99.9% to 100.0%)" for 9,990 of 9,991, whose
+    upper bound is 99.998%. Past six decimals, a share below 100% is still never written as 100% nor one above 0 as
+    0% (the rule of "more than 99 of 100 pairs").
+    """
+    lower, upper = getattr(ci, "lower", None), getattr(ci, "upper", None)
+    bounded = known(lower) and known(upper)
+    written = [float(v) for v in ((value, lower, upper) if bounded else (value,)) if known(v)]
+
+    def clear(places: int) -> bool:
+        if bounded and lower != upper and fixed(100 * lower, places) == fixed(100 * upper, places):
+            return False
+        ends = (fixed(0, places), fixed(100, places))
+        return all(fixed(100 * share, places) not in ends for share in written if 0 < share < 1)
+
+    places = share_decimals(value, lower, upper)
+    while places < MOST and not clear(places):
+        places += 1
+    if not known(value):
+        estimate = "n/a"
+    else:
+        share, least = float(value), 10.0**-places
+        estimate = f"{fixed(100 * share, places)}%"
+        if share < 1 and estimate == f"{fixed(100, places)}%":
+            estimate = f"more than {fixed(100 - least, places)}%"
+        elif share > 0 and estimate == f"{fixed(0, places)}%":
+            estimate = f"less than {fixed(least, places)}%"
+    bounds = f"{fixed(100 * lower, places)}% to {fixed(100 * upper, places)}%" if bounded else ""
+    return estimate, bounds
+
+
+def ratio_parts(value: Any, ci: Any = None) -> tuple[str, str]:
+    """
+    A ratio and the bounds of its interval, as a row of measures writes them: the same decimals for the three
+    (:func:`with_interval`: "0.164", "0.100 to 0.266"; the dossier's block read "0.1 to 0.266"), the ratio alone
+    without an interval, "n/a" without a value. At a zero cell, the one bound the data leave ("0" stood alone, and
+    "n/a" for a ratio without an upper bound).
+    """
+    lower, upper = getattr(ci, "lower", None), getattr(ci, "upper", None)
+    bounded = known(lower) and known(upper)
+    if value is not None and ci is not None:
+        if math.isinf(float(value)):
+            return "no upper bound", f"at least {number(lower)}"
+        if float(value) == 0 and bounded and float(lower) == 0:
+            return "0", f"at most {number(upper)}"
+    if known(value) and bounded:
+        estimate, bounds = with_interval(value, ci)
+        return estimate, bounds.removeprefix("95% CI ")
+    return number(value), ""
+
+
+def prevalence_text(prevalence: float) -> str:
+    """A prevalence typed, as a percentage with the figures it has: 1 in 2,500 read "0.0%"."""
+    return f"{100 * float(prevalence):.3g}%"
+
+
 def p_text(p: Any) -> str:
     """
     A p-value as a sentence writes it after "p": "< 0.001", "= 0.017"; "n/a" when it was not computed. Next to 0.05
@@ -188,7 +252,10 @@ __all__ = [
     "number",
     "p_text",
     "percent",
+    "prevalence_text",
+    "ratio_parts",
     "share_decimals",
+    "share_parts",
     "span",
     "together",
     "with_interval",
