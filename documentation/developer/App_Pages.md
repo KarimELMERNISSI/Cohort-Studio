@@ -75,7 +75,7 @@ says what Run will do, one click runs it, and the result reads the estimate firs
 function of its own here (``accuracy_of``, ``kappa_of``), so that the numbers are checked without the page._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.KOOPMAN`, `biostats.diagnostic.SAMPLING_NOT_STATED`, `biostats.diagnostic.SAMPLINGS`, `biostats.diagnostic.SCORE_CARRIED`, `biostats.diagnostic.SERIES`, `biostats.diagnostic.TWO_GATE`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.verification`, `biostats.diagnostic.yes_no_table`, `biostats.diagnostic.youden_cutoff`, `biostats.plan.run`, `biostats.plan.specify`, `biostats.references.cite`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `manage.report_tables.dossier_min_n`, `manage.report_tables.measure_rows`, `manage.report_tables.table_cautions`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.share_decimals`, `ui.guidance.numbers.share_parts`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
+`__future__.annotations`, `collections.abc.Sequence`, `typing.Any`, `numpy`, `pandas`, `plotly.graph_objects`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.CI`, `biostats._types.YOUDEN_BOOTSTRAP`, `biostats.agreement.SLOPE_READING`, `biostats.agreement.SLOPE_WARNING`, `biostats.agreement.bland_altman`, `biostats.diagnostic.KOOPMAN`, `biostats.diagnostic.SAMPLING_NOT_STATED`, `biostats.diagnostic.SAMPLINGS`, `biostats.diagnostic.SCORE_CARRIED`, `biostats.diagnostic.SERIES`, `biostats.diagnostic.TWO_GATE`, `biostats.diagnostic.YOUDEN_MIN_CLASS`, `biostats.diagnostic.confusion_at`, `biostats.diagnostic.delong_auc`, `biostats.diagnostic.diagnostic_accuracy`, `biostats.diagnostic.verification`, `biostats.diagnostic.yes_no_table`, `biostats.diagnostic.youden_cutoff`, `biostats.plan.run`, `biostats.plan.specify`, `biostats.references.cite`, `biostats.reliability.NEAR_MISSES`, `biostats.reliability.cohens_kappa`, `biostats.reliability.icc`, `biostats.reliability.koo_li`, `biostats.reliability.landis_koch`, `biostats.reliability.rater_table`, `core.registry.as_code`, `manage.report_tables.auc_no_width`, `manage.report_tables.auc_row`, `manage.report_tables.dossier_min_n`, `manage.report_tables.measure_rows`, `manage.report_tables.table_cautions`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.area_parts`, `ui.guidance.numbers.share_decimals`, `ui.guidance.numbers.share_parts`, `ui.progress.mark_step`, `ui.results.CURRENT`, `ui.results.provenance`, `ui.results.remember`, `ui.results.status`, `ui.theme.OKABE_ITO`
 
 ### def `_rgba` (analysis_diagnostic.py)
 
@@ -293,6 +293,16 @@ own warnings, as the dossier writes them.
 - **Returns**: `None`
 
 No description available.
+
+### def `_no_width` (analysis_diagnostic.py)
+
+- **Arguments**: `auc: dict[ComplexType], lower: bool`
+
+- **Returns**: `str`
+
+Why the area is written without an interval: DeLong's variance is 0, and "1.000 (95% CI 1.000 to 1.000)" read
+as an area known exactly. ``lower``: lower values point to the condition (the area is that of the reversed
+marker).
 
 ### def `_counts_table` (analysis_diagnostic.py)
 

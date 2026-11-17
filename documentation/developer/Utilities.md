@@ -1596,7 +1596,19 @@ upper bound is 99.998%. Past six decimals, a share below 100% is still never wri
 A ratio and the bounds of its interval, as a row of measures writes them: the same decimals for the three
 (:func:`with_interval`: "0.164", "0.100 to 0.266"; the dossier's block read "0.1 to 0.266"), the ratio alone
 without an interval, "n/a" without a value. At a zero cell, the one bound the data leave ("0" stood alone, and
-"n/a" for a ratio without an upper bound).
+"n/a" for a ratio without an upper bound). An interval whose upper bound is more than ``WIDE`` times its lower
+one: three significant figures for each of the three.
+
+### def `area_parts` (numbers.py)
+
+- **Arguments**: `value: Any, ci: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+An area under the ROC curve and the bounds of its interval, with the same decimals: three ("0.921", "0.897 to
+0.946"; "0.073, 95% CI 0.0473 to 0.0981" stood for an area below 0.1), and those that tell each of the three
+from 0 and from 1, six at most: an area of 0.9996 read "1.000". "" for an interval without bounds, "n/a" for an
+area without a value.
 
 ### def `prevalence_text` (numbers.py)
 

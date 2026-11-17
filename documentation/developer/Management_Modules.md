@@ -3915,7 +3915,7 @@ pages store (biostats results, pooled results over imputed datasets, the diction
 returns plain data that the Word builder (:mod:`manage.dossier`) lays out._
 
 **Imports**:
-`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Collection`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.prevalence_text`, `utils.numbers.ratio_parts`, `utils.numbers.share_decimals`, `utils.numbers.share_parts`, `utils.numbers.with_interval`
+`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Collection`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.area_parts`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.known`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.prevalence_text`, `utils.numbers.ratio_parts`, `utils.numbers.share_decimals`, `utils.numbers.share_parts`, `utils.numbers.with_interval`
 
 ### class `ResultBlocks` (report_tables.py)
 
@@ -4150,6 +4150,26 @@ The side of the reference standard that holds fewer than ``least`` participants 
 without the condition"; "" when both hold enough). Read on the 2x2 table whenever there is one, whatever the
 index test: a yes/no test has no AUC, and a result without the AUC's counts was read as "enough". Without a
 table, on the AUC's counts (:func:`_thin_side`).
+
+### def `auc_no_width` (report_tables.py)
+
+- **Arguments**: `auc: Mapping[ComplexType]`
+
+- **Returns**: `bool`
+
+Whether the DeLong interval of an area has no width: its variance is 0 when the two groups do not overlap
+(an area of 1, or of 0), when every value is the same, or with one participant in a group.
+
+### def `auc_row` (report_tables.py)
+
+- **Arguments**: `auc: Mapping[ComplexType]`
+
+- **Returns**: `tuple[ComplexType]`
+
+The area under the ROC curve, as the page's headline and the dossier's block write it: its name, the area, and
+the bounds of its interval with the method ("0.897 to 0.946 (DeLong)"), the three with the same decimals
+(``utils.numbers.area_parts``). No interval where DeLong's has no width: "1.000 (95% CI 1.000 to 1.000)" stood
+for two groups that do not overlap, as if the area were known exactly; the result's caution says why.
 
 ### def `measure_rows` (report_tables.py)
 
