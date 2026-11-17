@@ -480,7 +480,7 @@ what it was computed on. The calculators read the numbers typed: their fields st
 their result says where its numbers came from._
 
 **Imports**:
-`__future__.annotations`, `types.SimpleNamespace`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.rates.incidence_rate`, `biostats.rates.mantel_haenszel`, `biostats.rates.rate_ratio`, `biostats.rates.reference_risks`, `biostats.rates.standardised_ratio`, `biostats.rates.stratum_differences`, `biostats.reliability.category`, `biostats.reliability.category_order`, `biostats.study_designs.DESIGNS`, `biostats.study_designs.DIFFERENCE`, `biostats.study_designs.NOT_STATED`, `biostats.study_designs.OFFERED`, `biostats.study_designs.design_named`, `core.registry.as_code`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.progress.mark_step`, `ui.results.provenance`, `ui.results.remember`, `ui.state.get_state`
+`__future__.annotations`, `types.SimpleNamespace`, `typing.Any`, `numpy`, `pandas`, `streamlit`, `app_pages.analysis_layout`, `app_pages.analysis_guidance_ui.guidance_on`, `app_pages.analysis_layout.Metric`, `biostats._types.TestResult`, `biostats.paired.mcnemar_test`, `biostats.paired.one_sample_proportion`, `biostats.paired.one_sample_t`, `biostats.paired.one_sample_wilcoxon`, `biostats.paired.paired_t`, `biostats.paired.paired_table`, `biostats.paired.wilcoxon_signed_rank`, `biostats.plan.KINDS`, `biostats.plan.specify`, `biostats.plan.run`, `biostats.rates.mantel_haenszel`, `biostats.rates.reference_risks`, `biostats.rates.stratum_differences`, `biostats.reliability.category`, `biostats.reliability.category_order`, `biostats.study_designs.DESIGNS`, `biostats.study_designs.DIFFERENCE`, `biostats.study_designs.NOT_STATED`, `biostats.study_designs.OFFERED`, `biostats.study_designs.design_named`, `core.registry.as_code`, `manage.report_tables.typed_numbers`, `ui.components.empty_state`, `ui.components.error_card`, `ui.components.help_popover`, `ui.components.mi_mode.mi_token`, `ui.components.mi_mode.show_mi_notes`, `ui.components.text.plain`, `ui.guidance.measures`, `ui.guidance.measures.HELP`, `ui.guidance.numbers.decimals`, `ui.guidance.numbers.share_decimals`, `ui.progress.mark_step`, `ui.results.NOTE_MAX`, `ui.results.clean_note`, `ui.results.provenance`, `ui.results.remember`, `ui.results.typed_provenance`, `ui.state.get_state`
 
 ### def `_not_pooled` (analysis_extras.py)
 
@@ -582,6 +582,25 @@ No description available.
 - **Returns**: `None`
 
 No description available.
+
+### def `_numbers_source` (analysis_extras.py)
+
+- **Arguments**: `key: str`
+
+- **Returns**: `str`
+
+Where the numbers of a calculator come from (optional), in the user's words: the last field of a calculator,
+kept with the calculation in the study dossier.
+
+### def `_typed_close` (analysis_extras.py)
+
+- **Arguments**: `spec: Any, source: str, key: str`
+
+- **Returns**: `None`
+
+Under a calculator's result, where "Computed on" stands under an analysis: the numbers typed in words, where
+they come from when it was said, that they are not the dataset's, and the button that adds the calculation to
+the study dossier (:func:`ui.results.typed_provenance`; ``key``: the source field's, read when it is clicked).
 
 ### def `_share_metrics` (analysis_extras.py)
 
@@ -907,7 +926,7 @@ another is open. A link can open an entry: the page declares its tabs and entrie
 selectors read the link's labels as their default._
 
 **Imports**:
-`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `streamlit`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats._types.TestResult`, `biostats.assumptions.read_assumptions`, `ui.nav`, `ui.components.glossary_popover`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.text.plain`, `ui.guidance.interpretation.how_to_read`, `ui.guidance.measures.HELP`, `ui.guidance.measures.Entry`, `ui.guidance.numbers.alike`, `ui.guidance.numbers.fixed`, `ui.guidance.numbers.interval`, `ui.guidance.numbers.known`, `ui.guidance.numbers.number`, `ui.guidance.numbers.p_text`, `ui.guidance.numbers.percent`, `ui.guidance.numbers.span`, `ui.guidance.numbers.with_interval`, `ui.guidance.outcomes.ModelPlan`, `ui.results.MISSING`, `ui.results.STALE_CONFIG`, `ui.results.recall`, `ui.results.status`, `ui.results.stored_settings`, `ui.state.get_state`
+`__future__.annotations`, `collections.abc.Callable`, `collections.abc.Mapping`, `collections.abc.Sequence`, `dataclasses.dataclass`, `typing.Any`, `streamlit`, `app_pages.clean_categories.take_done`, `app_pages.clean_dialog.clean_actions`, `biostats._types.TestResult`, `biostats.assumptions.read_assumptions`, `manage.report_tables.TYPED_SOURCE`, `ui.nav`, `ui.components.glossary_popover`, `ui.components.help_popover`, `ui.components.status_chip`, `ui.components.text.plain`, `ui.guidance.interpretation.how_to_read`, `ui.guidance.measures.HELP`, `ui.guidance.measures.Entry`, `ui.guidance.numbers.alike`, `ui.guidance.numbers.fixed`, `ui.guidance.numbers.interval`, `ui.guidance.numbers.known`, `ui.guidance.numbers.number`, `ui.guidance.numbers.p_text`, `ui.guidance.numbers.percent`, `ui.guidance.numbers.span`, `ui.guidance.numbers.with_interval`, `ui.guidance.outcomes.ModelPlan`, `ui.results.MISSING`, `ui.results.STALE_CONFIG`, `ui.results.recall`, `ui.results.status`, `ui.results.stored_settings`, `ui.state.get_state`
 
 ### class `Metric` (analysis_layout.py)
 
@@ -4879,7 +4898,7 @@ analyses added to the report, the list of those results (current, or computed on
 population), and the Word study dossier that documents them._
 
 **Imports**:
-`__future__.annotations`, `logging`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `enrich.transformation_logic.added_columns`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.components.study.status_text`, `ui.components.study.study_status`, `ui.components.study.study_strip`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.report_items`, `ui.results.report_status`, `ui.state.get_state`, `utils.environment.environment_text`
+`__future__.annotations`, `logging`, `typing.Any`, `pandas`, `streamlit`, `core.attrition.AnalysisCount`, `core.criteria.describe_definition`, `core.lineage.verify_trace`, `core.population.family_words`, `core.state.checksum_text`, `core.steps.DOCUMENT`, `core.steps.LOAD`, `core.steps.POPULATION`, `core.steps.step_title`, `core.steps.ids`, `enrich.transformation_logic.added_columns`, `manage.report_tables.SOURCE_NOT_GIVEN`, `ui.components.no_dataset`, `ui.components.section`, `ui.components.status_chip`, `ui.components.flow.current_flow`, `ui.components.flow.render_flow`, `ui.components.study.status_text`, `ui.components.study.study_status`, `ui.components.study.study_strip`, `ui.components.text.plain`, `ui.results.CURRENT`, `ui.results.STALE_CODE`, `ui.results.STALE_DATA`, `ui.results.ReportItem`, `ui.results.remove_from_report`, `ui.results.remove_typed`, `ui.results.report_items`, `ui.results.report_status`, `ui.results.typed_stored`, `ui.state.get_state`, `utils.environment.environment_text`
 
 ### def `imputations_of` (study_dossier.py)
 
@@ -4961,6 +4980,26 @@ No description available.
 
 What the dossier needs from the session, read during the page run: the download builds the document later,
 outside the run, where the session is not available (finish_input and build_dossier are pure).
+
+### def `_calculation` (study_dossier.py)
+
+- **Arguments**: `stored: dict[ComplexType]`
+
+- **Returns**: `None`
+
+A calculation from numbers typed for the Word dossier and for the page's list, from what the session keeps of
+it (JSON): computed again from its numbers, its words and its blocks written afresh from its spec and its
+record. One that this version cannot read or compute any more keeps its place with a fixed line, and its
+numbers in words: those of its spec when it reads, else as they were when it was added.
+
+### def `_result_blocks` (study_dossier.py)
+
+- **Arguments**: `item: Any`
+
+- **Returns**: `None`
+
+A result's blocks: from its record for the kinds that have a record block, so that a share counted in the
+dataset reads as a share of numbers typed does in the same document; by the type of the result otherwise.
 
 ### def `finish_input` (study_dossier.py)
 

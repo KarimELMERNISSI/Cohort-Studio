@@ -1469,6 +1469,145 @@ MD5 of the upload's content.
 
 ---
 
+## numbers.py
+
+_How a number is written in a plan, in a sentence and in a result of the analysis pages, and in the blocks the Word
+dossier writes from a result's record: one rule, so that a number is not written two ways on one screen, nor one way
+on the screen and another in the document. No Streamlit and no first-party import: the plans
+(ui.guidance.measures), the readings (ui.guidance.interpretation) and the screens (app_pages.analysis_layout) write
+through it by ``ui.guidance.numbers``, the dossier's blocks (manage.report_tables) from here.
+
+- A number alone: three significant figures for its decimals, thousands grouped, the whole part kept, no exponent.
+
+- An estimate with its interval: the same decimals for the three, those the bounds need, never more than one
+  beyond what the estimate needs.
+
+- A half is rounded away from zero, as a reader of the unrounded number expects._
+
+**Imports**:
+`__future__.annotations`, `math`, `collections.abc.Sequence`, `decimal.ROUND_HALF_UP`, `decimal.Decimal`, `typing.Any`
+
+### def `known` (numbers.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `bool`
+
+Whether ``value`` is a number with a value: not None, not missing, not infinite.
+
+### def `decimals` (numbers.py)
+
+- **Arguments**: `value: float, digits: int`
+
+- **Returns**: `int`
+
+The decimals that give ``value`` ``digits`` significant figures.
+
+### def `fixed` (numbers.py)
+
+- **Arguments**: `value: Any, places: int`
+
+- **Returns**: `str`
+
+``value`` with ``places`` decimals: thousands grouped, a half rounded away from zero (the built-in rounding goes
+to the even digit: 60,962.5 read "60,962" and 1,235.5 "1,236"), and no sign on a zero ("-0.00"). "n/a" without
+a value.
+
+### def `number` (numbers.py)
+
+- **Arguments**: `value: Any, digits: int`
+
+- **Returns**: `str`
+
+A number as a plan, a sentence or a result writes it: ``digits`` significant figures for its decimals, "n/a"
+when it has no value. Thousands are grouped at any size, the whole part is never rounded (60,962.5 read
+"61,000", and two means 1,200 apart read "243,700 to 244,900" beside "a change of 1,230"), and no exponent is
+written (0.00001 read "0", 93,656 "+9.37e+04", and a plan said that a score "runs from 174 to 2.802e+04").
+
+### def `together` (numbers.py)
+
+- **Arguments**: `estimates: Sequence[Any], bounds: Sequence[Any], digits: int`
+
+- **Returns**: `int`
+
+The decimals of numbers written together, an estimate and the bounds of its interval: those the bounds need for
+``digits`` significant figures, never more than one beyond what the estimate needs. An estimate of 0, or none,
+leaves the bounds to decide; without bounds the estimate decides.
+
+With the decimals of the number nearest 0 for all, a result got more digits the nearer it was to "no difference"
+or to p = 0.05, which the data do not carry: "-0.0711, 95% CI -0.6941 to 0.5518" (now "-0.071, -0.694 to
+0.552"), "0.50000, 95% CI 0.00847 to 9.60453" (now "0.5000, 0.0085 to 9.6045"). Each rounded on its own, a
+rate ratio read "3.12, 95% CI 0.996 to 12.935", which stays "3.125".
+
+### def `span` (numbers.py)
+
+- **Arguments**: `lower: Any, upper: Any, digits: int`
+
+- **Returns**: `str`
+
+"0.902 to 0.953": two numbers written with the same decimals, those the one nearer 0 needs for ``digits``
+significant figures (each rounded on its own, an interval read "-9 to -7.38"); a percentage with one decimal.
+
+### def `interval` (numbers.py)
+
+- **Arguments**: `ci: Any, digits: int`
+
+- **Returns**: `str`
+
+"95% CI 0.902 to 0.953" from an interval object; "" without one, or without bounds ("95% CI n/a% to n/a%"
+stood beside a predictive value that has no value).
+
+### def `with_interval` (numbers.py)
+
+- **Arguments**: `estimate: Any, ci: Any, digits: int`
+
+- **Returns**: `tuple[ComplexType]`
+
+An estimate and its interval written with the same decimals: ("3.125", "95% CI 0.996 to 12.935"). The decimals
+are those of :func:`together`, or ``places`` when the three are of a kind that has its own (three for an AUC, a
+kappa, an ICC). An estimate or an interval without a value is said for itself.
+
+### def `alike` (numbers.py)
+
+- **Arguments**: ``
+
+- **Returns**: `list[str]`
+
+Numbers that are read together, written with the same decimals (:func:`together`): the first ``estimates`` of
+them are estimates, the others the bounds of their intervals. Two limits of agreement read "-8.19 to 20.17" over
+"95% CI 19.4 to 21.0", and "20.2" in the figure's legend. A number without a value reads "n/a".
+
+### def `percent` (numbers.py)
+
+- **Arguments**: `value: Any, digits: int`
+
+- **Returns**: `str`
+
+A share as a percentage: "86.1%"; "n/a" without a value.
+
+### def `share_decimals` (numbers.py)
+
+- **Arguments**: `share: Any`
+
+- **Returns**: `int`
+
+The decimals of a share written as a percentage, with its bounds and its reference: those that give two
+significant figures to whichever is smaller, the share or its distance to 100%, and one at least. At one decimal,
+24 of 50,000 read "0.0%" against a reference of "0.0%" beside p < 0.001, and 9,999 of 10,000 "100.0%". A share
+of exactly 0 or 1 leaves ``others`` (its bounds, its reference) to decide.
+
+### def `p_text` (numbers.py)
+
+- **Arguments**: `p: Any`
+
+- **Returns**: `str`
+
+A p-value as a sentence writes it after "p": "< 0.001", "= 0.017"; "n/a" when it was not computed. Next to 0.05
+it takes the decimals that tell it from 0.05: 0.0499 and 0.0501 both read "= 0.050", and 0.04996 "= 0.0500".
+A half is rounded away from zero, as every number here: McNemar's exact p of 0.0625 read "= 0.062".
+
+---
+
 ## optional.py
 
 _Optional dependency groups (the extras of pyproject.toml, follow-up programme M4): which are installed, and what to

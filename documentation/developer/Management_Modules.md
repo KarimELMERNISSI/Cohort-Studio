@@ -1189,17 +1189,25 @@ Sections:
 4. Missing data: missing values per variable, values filled by single imputation, and the multiple imputation
    with its methods paragraph (reporting items of Sterne et al. 2009);
 5. Results: each result added to the dossier with what it was computed on;
-6. References.
+6. Calculations from numbers typed by hand: each with its numbers and where they come from, apart from the results
+   of the dataset (they have no analysis population, and the participant flow does not count them);
+7. References.
 
 The input is plain data (:class:`DossierInput`); the app gathers it (app_pages/study_dossier.py). The dossier
 supports these reporting guidelines; it does not certify compliance, and it is not an electronically signed record._
 
 **Imports**:
-`__future__.annotations`, `dataclasses`, `logging`, `re`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `io.BytesIO`, `typing.Any`, `pandas`, `docx.Document`, `docx.shared.Cm`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.attrition.MISSING_VALUES_NOTE`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `manage.report_tables.ResultBlocks`
+`__future__.annotations`, `dataclasses`, `logging`, `re`, `dataclasses.dataclass`, `dataclasses.field`, `datetime.datetime`, `io.BytesIO`, `typing.Any`, `pandas`, `docx.Document`, `docx.shared.Cm`, `docx.shared.Pt`, `docx.shared.RGBColor`, `core.attrition.MISSING_VALUES_NOTE`, `core.attrition.FlowExit`, `core.attrition.ParticipantFlow`, `manage.report_tables.ResultBlocks`, `manage.report_tables.source_line`
 
 ### class `DossierResult` (dossier.py)
 
 No description available.
+
+### class `DossierCalculation` (dossier.py)
+
+A calculation from numbers typed (a calculator's result added to the dossier): its numbers in words, written
+afresh from its spec, where they come from (the user's words; "" when not given), its blocks and when it was
+added.
 
 ### class `DossierInput` (dossier.py)
 
@@ -1248,6 +1256,15 @@ No description available.
 
 One result of section 5: its title, what it was computed on, its tables, lines, figure and notes. Gives back
 the number of the last figure written.
+
+### def `_write_calculation` (dossier.py)
+
+- **Arguments**: `doc: Any, calculation: DossierCalculation`
+
+- **Returns**: `None`
+
+One calculation of section 6: its title, the numbers typed, where they come from and when it was added, then
+its tables, lines and notes. Never "Computed on", a population or a number analysed: it read no data.
 
 ### def `_pairs` (dossier.py)
 
@@ -3898,7 +3915,7 @@ pages store (biostats results, pooled results over imputed datasets, the diction
 returns plain data that the Word builder (:mod:`manage.dossier`) lays out._
 
 **Imports**:
-`__future__.annotations`, `math`, `dataclasses.dataclass`, `dataclasses.field`, `io.BytesIO`, `typing.Any`, `pandas`
+`__future__.annotations`, `math`, `collections.abc.Callable`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.share_decimals`, `utils.numbers.with_interval`
 
 ### class `ResultBlocks` (report_tables.py)
 
@@ -3919,7 +3936,7 @@ No description available.
 - **Returns**: `str`
 
 A difference of two shares in percentage points, one decimal, a half rounded away from zero, as the page
-writes it (ui.guidance.numbers.fixed): "-10.6", never "-0.0".
+writes it: "-10.6", never "-0.0".
 
 ### def `_p` (report_tables.py)
 
@@ -4175,6 +4192,104 @@ says so. A yes/no test is read as a cut-off typed beforehand: the side it calls 
 value being a code of the data, not a score found on them. The table goes with the measures: sensitivity,
 specificity and the predictive values give its cells back, so writing it adds nothing, and holding it back
 alone would protect nothing.
+
+### def `source_line` (report_tables.py)
+
+- **Arguments**: `note: str`
+
+- **Returns**: `str`
+
+Where the numbers of a calculation come from, as a sentence: the user's words, closed with a full stop only
+when they have none (a reference ends with one more often than not: "1-10.." was written).
+
+### def `_as_typed` (report_tables.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `str`
+
+A number as it was typed: its whole part grouped, every decimal kept, no exponent (18.4; 1,200;
+1,234,567.891234).
+
+### def `_counted` (report_tables.py)
+
+- **Arguments**: `count: int, one: str, many: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `typed_title` (report_tables.py)
+
+- **Arguments**: `spec: Any`
+
+- **Returns**: `str`
+
+The title of a calculation from numbers typed, by what its numbers give: one rate or a ratio of two, a
+mortality or an incidence ratio.
+
+### def `typed_numbers` (report_tables.py)
+
+- **Arguments**: `spec: Any`
+
+- **Returns**: `str`
+
+The numbers of a calculation in words, each with its name, written afresh from its spec: what the page writes
+under the result after "From the numbers typed", and the dossier after "Numbers typed" (never bare values, and
+never a string the page made). Every kind computed from numbers typed has its words here (a test).
+
+### def `_named` (report_tables.py)
+
+- **Arguments**: `part: Any`
+
+- **Returns**: `dict[ComplexType]`
+
+No description available.
+
+### def `_level` (report_tables.py)
+
+- **Arguments**: `numbers: dict[ComplexType]`
+
+- **Returns**: `str`
+
+"95% CI", from the level the interval's record holds: no writer assumes it.
+
+### def `_share_block` (report_tables.py)
+
+- **Arguments**: `record: Any`
+
+- **Returns**: `ResultBlocks`
+
+A share against a reference, from its record: one sentence for a share counted in the dataset and for one of
+numbers typed, so that the two read alike. The share, its bounds and its reference take the decimals that tell
+a share from 0% and from 100% (``utils.numbers.share_decimals``).
+
+### def `_rates_block` (report_tables.py)
+
+- **Arguments**: `record: Any`
+
+- **Returns**: `ResultBlocks`
+
+One rate, or two and their ratio, from their record: the rates per the multiplier and the unit the record
+holds, the ratio with the one bound it has when the reference group has no event, and the intervals' methods.
+
+### def `_standardised_block` (report_tables.py)
+
+- **Arguments**: `record: Any`
+
+- **Returns**: `ResultBlocks`
+
+Observed against expected, from its record: a mortality or an incidence ratio by what the record says the
+events are, the test named by its rule (R's ``poisson.test`` computes its p-value another way).
+
+### def `record_blocks` (report_tables.py)
+
+- **Arguments**: `record: Any`
+
+- **Returns**: `ResultBlocks`
+
+The report blocks of a result from its record (``biostats.plan.ResultRecord``), for the kinds of
+``RECORD_BLOCKS``.
 
 ### def `result_blocks` (report_tables.py)
 
