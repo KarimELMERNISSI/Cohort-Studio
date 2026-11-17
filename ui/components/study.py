@@ -78,6 +78,25 @@ def _holds_nothing(body: Mapping[str, Any]) -> bool:
     return not any(body.get(key) for key in ("mask_families", "follow_up", DERIVED_KEY))
 
 
+LOAD_HELP = (
+    "Makes the revision's criteria, which of them are ticked, the follow-up, the derived variables and the study's "
+    "privacy choices this session's. Criteria are filters: no row changes."
+)
+
+
+def _drops_choices(status: StudyStatus) -> bool:
+    """Whether the session holds no privacy choice where the study's latest revision holds some: a revision saved
+    now would not hold them. A session starts without them, and drops them with another study's dataset; the
+    strip read "Save them as the next revision", the save that removes the k the study asked for."""
+    latest = status.latest
+    return (
+        latest is not None
+        and PRIVACY in status.changed
+        and not status.body.get(PRIVACY_KEY)
+        and bool(latest.body.get(PRIVACY_KEY))
+    )
+
+
 def _listed(parts: Sequence[str]) -> str:
     """The parts of a sentence in a row: "a", "a and b", "a, b and c" ("the criteria and the follow-up and the
     privacy choices" stood for three)."""
@@ -321,6 +340,7 @@ def study_strip(key: str) -> StudyStatus | None:
             )
         else:
             st.caption(definition_summary(status.body))
+        dropping = _drops_choices(status)
         if status.state == "changed" and status.changed:
             st.caption(f"Changed since revision {number}: {_listed(status.changed)}.")
         elif status.state == "labels":
@@ -333,10 +353,22 @@ def study_strip(key: str) -> StudyStatus | None:
                 f"Changed since revision {number}: {what} (the definition selects the same rows). Save them as "
                 "the next revision, and delete the earlier one if it named a person."
             )
+        elif status.state == "privacy" and dropping:
+            st.caption(
+                f"Changed since revision {number}: this session holds no privacy choices, and revision {number} "
+                "holds some (the definition selects the same rows). A revision saved now would not hold them: "
+                f"load revision {number} to take them back."
+            )
         elif status.state == "privacy":
             st.caption(
                 f"Changed since revision {number}: the privacy choices (the definition selects the same rows). "
                 "Save them as the next revision."
+            )
+        if dropping and status.state != "privacy":
+            # no Load here: it would undo what else changed in the session's definition
+            st.caption(
+                f":material/warning: This session holds no privacy choices, and revision {number} holds some: a "
+                "revision saved now would not hold them."
             )
         if status.unreadable:
             shown = ", ".join(str(n) for n in status.unreadable)
@@ -363,10 +395,20 @@ def study_strip(key: str) -> StudyStatus | None:
                     icon=":material/download:",
                     on_click=_load,
                     args=(key, latest),
-                    help="Makes the revision's criteria, which of them are ticked, the follow-up, the derived "
-                    "variables and the study's privacy choices this session's. Criteria are filters: no row changes.",
+                    help=LOAD_HELP,
                 )
             elif status.state in ("none", "changed", "labels", "privacy"):
+                if dropping and status.state == "privacy":
+                    # only the choices differ: loading the revision brings them back and changes nothing else
+                    st.button(
+                        f"Load revision {number}",
+                        key=f"{key}_load",
+                        type="primary",
+                        icon=":material/download:",
+                        on_click=_load,
+                        args=(key, latest),
+                        help=LOAD_HELP,
+                    )
                 st.button(
                     f"Save revision {status.next_number}",
                     key=f"{key}_save",

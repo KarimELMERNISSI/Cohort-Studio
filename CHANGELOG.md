@@ -20,7 +20,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **They never travel, and they are one study's.** A study definition prepared for sharing and the configuration
   files leave the section out, and a configuration file that holds one is loaded without it, with a notice. In a
   session, the choices are kept with their study, apart from the configuration: a dataset of another study loaded
-  afterwards starts without them, where the criteria stay.
+  afterwards starts without them, where the criteria stay. When a session does not hold the choices that its
+  study's latest revision holds, the study's strip says that a revision saved now would not hold them, and offers
+  to load the revision.
 - **A section this version cannot read refuses the whole file,** in words that quote nothing of it: a key or a
   value written by a later version, a k below 5, a value of the wrong kind, the same choices written in another
   order. Nothing is skipped: a k of 20 written as text and ignored would apply 10.

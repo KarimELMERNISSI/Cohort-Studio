@@ -371,6 +371,57 @@ def test_the_dossier_names_a_change_of_the_privacy_choices() -> None:
     )
 
 
+def test_a_session_without_the_revision_s_privacy_choices_says_what_a_save_would_drop(
+    app: AppTest,
+) -> None:
+    """Back on a study whose revision holds privacy choices, in a session that holds none (a new session, or one
+    that dropped them with another study's dataset), the strip read "Save them as the next revision": the save that
+    removes the k the study asked for."""
+    from core.privacy import StudyPrivacy
+
+    _choose(app, StudyPrivacy(k=20))
+    _dossier(app)
+    app.button(key=f"{KEY}_save").click().run()
+    _ok(app)
+    del app.session_state["_study_privacy"]
+    _dossier(app)
+    shown = _texts(app)
+    assert "privacy choices changed since revision 1" in shown
+    assert (
+        "Changed since revision 1: this session holds no privacy choices, and revision 1 holds some (the "
+        "definition selects the same rows). A revision saved now would not hold them: load revision 1 to take "
+        "them back."
+    ) in shown
+    assert "Save them as the next revision" not in shown
+    assert _buttons(app) == {
+        f"{KEY}_load": "Load revision 1",
+        f"{KEY}_save": "Save revision 2",
+        f"{KEY}_delete": "Delete revision 1",
+    }
+    app.button(key=f"{KEY}_load").click().run()
+    _ok(app)
+    assert app.session_state["_study_privacy"]["section"] == {"k": 20}
+    assert "revision 1, saved" in _texts(app)
+    # with another change of the definition, the warning stands without Load, which would undo that change
+    del app.session_state["_study_privacy"]
+    app.switch_page(nav.page_path("start")).run()
+    app.checkbox(key=_family_key("clinical_anomalies")).check().run()
+    _dossier(app)
+    shown = _texts(app)
+    assert (
+        "This session holds no privacy choices, and revision 1 holds some: a revision saved now would not hold "
+        "them."
+    ) in shown
+    assert f"{KEY}_load" not in _buttons(app)
+    # choices changed in the session, not dropped: the ordinary words
+    app.switch_page(nav.page_path("start")).run()
+    app.checkbox(key=_family_key("clinical_anomalies")).uncheck().run()
+    _choose(app, StudyPrivacy(k=30))
+    _dossier(app)
+    shown = _texts(app)
+    assert "Save them as the next revision." in shown and "holds no privacy choices" not in shown
+
+
 def test_three_parts_that_changed_are_listed_with_commas() -> None:
     """ "the criteria and the follow-up and the privacy choices" stood for three parts."""
     from ui.components.study import _listed
