@@ -151,6 +151,13 @@ FORMAT_SCHEMAS = {
     "cohortstudio.trace": 1,
     "cohortstudio.column-profiles": 1,
 }
+# The zip that holds the members (manage/package_zip.py) is the container, frozen across the schemas: its layout (the
+# members one after the other from the file's first byte, each local header saying what the directory says, the
+# directory right after them and its end record last, without a comment and without ZIP64), at most 1,024 entries
+# named in ASCII by at most 64 characters, no folder, no name twice, and the member that says whether a later version
+# made the package (NOTICE.txt with the data, package.json without) stored and clear under its name, within this
+# version's cap of it, and package.json JSON that this version's strict reader reads. A reader reads these before
+# any schema: a later schema changes the members and what they hold, never these.
 # The members that hold the study's own texts, written with escapes and read without the rule for a text
 _CARRIED = {SHAREABLE: (), RULES_OFF: (), REPRODUCTION: (PROTOCOL, RESULTS, TRACE, PROFILES)}
 _ORDERED = {SHAREABLE: ORDERED, RULES_OFF: ORDERED, REPRODUCTION: {PROTOCOL: ("revision",)}}

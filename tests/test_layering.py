@@ -97,6 +97,7 @@ ENTRY_POINTS = ("main", "manage_users")  # above every layer
 # ``__main__``, which no import of the package reaches, so every module under a headless package is checked by name
 HEADLESS = (
     "manage_users",
+    "manage.package_zip",
     "manage.replay",
     "manage.replay.engine",
     "manage.services",
@@ -471,6 +472,23 @@ def test_r4_ai_sdks_only_in_the_providers() -> None:
         KNOWN_SDK,
         rule="R4: the AI providers' SDKs are imported only in manage/rag/providers",
     )
+
+
+# The encryption of a package that holds the data: one module imports it, inside the functions that encrypt or
+# decrypt, so that start-up and a package read without its password never load it
+ENCRYPTION = ("pyzipper", "Cryptodome")
+ENCRYPTING = "manage.package_zip"
+
+
+def test_the_encryption_is_imported_by_the_package_zip_only_and_lazily() -> None:
+    _, other, _ = graph()
+    found = {
+        (module, lazy)
+        for module, names in other.items()
+        for name, lazy in names
+        if _matches(name, ENCRYPTION)
+    }
+    assert found == {(ENCRYPTING, True)}, found
 
 
 def _headless() -> list[str]:

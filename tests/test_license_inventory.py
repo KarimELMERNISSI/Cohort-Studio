@@ -34,6 +34,16 @@ def test_the_licence_inventory_lists_every_locked_package() -> None:
     assert {name for name, _ in groups["graph-yfiles"]} == {"yfiles-graphs-for-streamlit"}
 
 
+def test_each_licence_stated_by_hand_is_of_a_locked_package() -> None:
+    """A licence written over the metadata's goes with its package: a package left out of the lock leaves it."""
+    inventory = _inventory()
+    locked = {name for packages in inventory.package_groups().values() for name, _ in packages}
+    assert set(inventory.STATED) <= locked
+    text = DOCUMENT.read_text(encoding="utf-8")
+    for name, stated in inventory.STATED.items():
+        assert f"| {name} | " in text and f"| {stated} |" in text, name
+
+
 def test_the_inventory_names_the_project_licence_and_the_proprietary_engine() -> None:
     text = DOCUMENT.read_text(encoding="utf-8")
     assert "released under the Apache License 2.0" in text

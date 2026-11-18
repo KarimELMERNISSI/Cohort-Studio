@@ -39,6 +39,14 @@ SHORT = {
     "Historical Permission Notice and Disclaimer (HPND)": "HPND",
 }
 
+# Licences a package's metadata understates, as the licence files it ships state them (a test keeps each in the lock)
+STATED = {
+    # LICENSE.rst: partly in the public domain, partly under the BSD 2-clause licence; both apply
+    "pycryptodomex": "BSD-2-Clause AND public domain",
+    # LICENSE, and LICENSE.python for its copy of the standard library's zipfile
+    "pyzipper": "MIT AND PSF-2.0",
+}
+
 YFILES = """\
 ## Proprietary and network-dependent component
 
@@ -144,6 +152,8 @@ def package_groups() -> dict[str, list[tuple[str, str]]]:
 
 
 def licence(name: str) -> str:
+    if name in STATED:
+        return STATED[name]
     try:
         meta = metadata.metadata(name)
     except metadata.PackageNotFoundError:

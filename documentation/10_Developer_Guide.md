@@ -779,9 +779,10 @@ the Data privacy settings to come change no study file.
 
 #### The study package's formats
 
-`core/package.py` holds what a study package (`.cstudio.zip`) is made of, before any writer or reader: nothing
-builds a package yet. It imports the standard library and `core.privacy` only, so that a package can be read
-without the engine, numpy or pandas (a test loads it in a fresh interpreter).
+`core/package.py` holds what a study package (`.cstudio.zip`) is made of, and `manage/package_zip.py` puts its
+members in a zip and takes them out of a received one (below): nothing builds a package from a study yet.
+`core/package.py` imports the standard library and `core.privacy` only, so that a package can be read without the
+engine, numpy or pandas (a test loads it in a fresh interpreter).
 
 - **The members**, in the zip's order (`MEMBERS`): `package.json`, `protocol.json`, `results.json`, `README.md`,
   `uv.lock` when the installation has one, `MANIFEST.sha256`. Each tier has its own file name (`package_name`).
@@ -860,6 +861,58 @@ Six of them read `shareable` when no tier is given: pass it for every member of 
 A key or a closed value that a reader does not know reads as written by a later version, and every id here (the
 tiers, the members, the values of `rules`, the levels of `*_set_by`, the roles of a file, the rules of a cut, the
 bases, the notices) is a stored id: never renamed.
+
+**The zip** (`manage/package_zip.py`, a headless module: rule R5) has one writer and one reader for both tiers.
+
+- **`write(out, members, tier, password=None, expected=None)`** takes every member but the manifest, each as its
+  bytes or as a file it streams, and returns the package's hash. It makes the manifest from the checksums it takes
+  while it streams, puts the members in `in_zip_order`, one after the other, with fixed fields (the date
+  1980-01-01, the system, version 20, the mode of the tier; no comment), and reads the finished zip back with the
+  reader's own clear part: a zip its reader would refuse is a `RuntimeError`, never a package. A package without
+  the data is stored and clear, so one study gives the same bytes twice (a test pins their SHA-256). One that holds
+  the data is encrypted member by member with pyzipper (WinZip AES-256, AE-2, deflate inside; a test decrypts a
+  member by the specification, without pyzipper), its notice and its manifest clear and stored, its members of
+  mode 0600: a zip program that restores a Unix mode (Info-ZIP's unzip, the usual tools of Linux and macOS) writes
+  them readable by their owner only, while on Windows, or through Python's `zipfile`, they take the rights of the
+  folder they go into. Two exports are other bytes (a salt per member) and one package hash. Before writing a byte
+  it refuses a name of another tier, a member over its cap, a password missing or not needed, an `out` it could not
+  read back, an index its reader would refuse or that says another tier, and, with the data, a notice that is not
+  one of the fixed texts or does not say what the index's policy says, or an index that does not name the data
+  members given (no other bytes ever go in clear). While writing, it checks the anchor against the member the trace
+  starts from, and each member against the checksum `expected` gives (the pre-flight's). After an exception, `out`
+  holds a zip to discard.
+- **The password** is made by `new_password()` (`secrets`, 20 symbols of Crockford's base32: 100 bits, shown in
+  five groups of four), and the string shown, hyphens included, is the password. `password_of(typed)` reads any
+  spelling a person types (case, spaces, O for 0, I or L for 1). It is never stored, logged or put in a reason (a
+  test plants one).
+- **`open_package(file, max_size=MOST_FILE_BYTES)`** reads the clear part of a received file and returns `Opened`
+  (the tier, the members, the checksums the manifest lists, the package's hash, the notice) or `Refused`, a closed
+  id that the caller puts in its words. Nothing is decrypted, pyzipper is not imported (a test checks it in a fresh
+  interpreter), and no zip library reads the file: the module reads the end record itself, bounds the directory
+  before a byte of it is read (a crafted directory would otherwise take about nine times its size in memory), and
+  walks each record. The zip must be laid out as the writer lays one out: the members one after the other from the
+  first byte, each local header saying what the directory says, the records filling the directory exactly, the end
+  record last. No byte lies outside the members (no ZIP64 record, no comment), and a tool that reads the local
+  headers in turn sees the members the reader checked.
+- **The container is frozen** across the format's schemas (`core/package.py` says so beside `FORMAT_SCHEMAS`):
+  that layout, at most `MOST_ENTRIES` (1,024) entries named in ASCII by at most `NAME_MOST` (64) characters, no
+  folder, no name twice, and the member that tells a later version (`NOTICE.txt` with the data, `package.json`
+  without) stored and clear, within this version's cap of it, `package.json` as JSON its strict reader reads. The
+  reader checks these before any schema; a later schema changes the members and what they hold, never these.
+- **`read_package(file, opened, password, into=None)`** returns a copy of `opened` with the JSON members read by
+  `read_member`, the index checked against the zip (its data members, its notice, its anchor), and the data
+  written into `into`. `opened` is left as it was, so a password can be typed again. The file must still be the
+  one opened, and pyzipper's reading of its directory the one checked. A wrong password is two members failing the
+  password's check before any member decrypted; no password, or one of another shape, is `not_a_password`, and
+  nothing is tried. A member whose bytes are not those its manifest lists does not stop the reading: it is named in
+  `not_matching`, and only what altered bytes raise counts so: an `OSError` (a full disk, a file that cannot be
+  read) reaches the caller. `into` is an empty folder the caller made, on a system with modes its user's only
+  (`tempfile.mkdtemp`); on Windows the files take the folder's access list. The data are written there once the
+  index is read, each file only if it does not exist, under the format's own name, and every one is deleted when
+  its bytes are not the sender's, when the reading is refused or when anything stops it. A file the system will not
+  delete is said, by its count and never its path: an `OSError` in place of the refusal, or a note on the error
+  that stopped the reading. Exit codes: 0 read as sent, 1 read but not what the sender made
+  (`not_matching`), 2 not read (`Refused`); a caller that parses arguments gives a usage error a code of its own.
 
 ### Settings, preferences and API keys
 

@@ -265,6 +265,8 @@ pyasn1-modules==0.4.2
     # via google-auth
 pycparser==3.11 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
+pycryptodomex==3.24.2
+    # via pyzipper
 pydantic==2.14.3
     # via
     #   anthropic
@@ -308,6 +310,8 @@ pyyaml==6.0.3
     # via
     #   cohortstudio
     #   langchain-core
+pyzipper==0.4.0
+    # via cohortstudio
 qdrant-client==1.20.0
     # via cohortstudio
 rapidfuzz==3.14.6

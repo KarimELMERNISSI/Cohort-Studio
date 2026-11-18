@@ -9,7 +9,7 @@ CohortStudio is released under the Apache License 2.0.
 
 ## Summary
 
-- The core application installs 72 packages. The optional groups add 43 (`ai`), 6 (`ml`), 3 (`survival`), 1 (`graph-yfiles`). The development tools add 18; they are not shipped.
+- The core application installs 74 packages. The optional groups add 43 (`ai`), 6 (`ml`), 3 (`survival`), 1 (`graph-yfiles`). The development tools add 18; they are not shipped.
 - Copyleft licences among the shipped packages: `certifi` (MPL-2.0), `orjson` (MPL-2.0 AND (Apache-2.0 OR MIT)), `tqdm` (MPL-2.0 AND MIT). They are weak, file-level licences: they apply to the library's own files, which CohortStudio uses unmodified, and require keeping their notices.
 - One optional component is proprietary and needs an internet connection: the yFiles graph engine (group `graph-yfiles`, not installed by default). See below.
 
@@ -74,6 +74,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | plotly | 7.1.0 | MIT |
 | protobuf | 7.36.2 | 3-Clause BSD License |
 | pyarrow | 26.0.1 | Apache-2.0 |
+| pycryptodomex | 3.24.2 | BSD-2-Clause AND public domain |
 | pydantic | 2.14.3 | MIT |
 | pydantic-core | 2.50.4 | MIT |
 | pydantic-settings | 2.16.2 | MIT |
@@ -84,6 +85,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | python-dotenv | 1.2.4 | BSD-3-Clause |
 | python-multipart | 0.0.32 | Apache-2.0 |
 | pyyaml | 6.0.3 | MIT |
+| pyzipper | 0.4.0 | MIT AND PSF-2.0 |
 | rapidfuzz | 3.14.6 | MIT |
 | referencing | 0.37.0 | MIT |
 | requests | 2.34.2 | Apache |
@@ -112,14 +114,14 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 
 | Package | Version | Licence |
 | :--- | :--- | :--- |
-| anthropic | 2.6.0 | Apache |
+| anthropic | 2.8.0 | Apache |
 | cffi | 2.1.1 | MIT-0 |
 | cryptography | 50.0.2 | Apache-2.0 OR BSD-3-Clause |
 | deprecation | 2.1.0 | Apache |
 | distro | 1.9.0 | Apache |
 | docstring-parser | 0.18.0 | MIT |
 | google-auth | 2.62.0 | Apache |
-| google-genai | 3.0.0 | Apache-2.0 |
+| google-genai | 3.2.0 | Apache-2.0 |
 | grpcio | 1.84.0 | Apache-2.0 |
 | h2 | 4.4.1 | MIT |
 | hpack | 4.2.0 | MIT |
@@ -134,18 +136,18 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | lance-namespace | 0.13.0 | Apache-2.0 |
 | lance-namespace-urllib3-client | 0.13.0 | Apache-2.0 |
 | lancedb | 0.41.0 | Apache |
-| langchain-core | 1.7.6 | MIT |
+| langchain-core | 1.8.0 | MIT |
 | langchain-protocol | 0.0.20 | MIT |
 | langchain-text-splitters | 1.1.3 | MIT |
 | langsmith | 0.14.12 | MIT |
-| openai | 3.46.0 | Apache-2.0 |
+| openai | 3.49.0 | Apache-2.0 |
 | opentelemetry-api | 1.45.2 | Apache-2.0 |
 | orjson | 3.13.0 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | portalocker | 3.2.0 | BSD-3-Clause |
 | pyasn1 | 0.6.5 | BSD-2-Clause |
 | pyasn1-modules | 0.4.2 | BSD |
 | pycparser | 3.11 | BSD-3-Clause |
-| pypdf | 7.0.0 | BSD-3-Clause |
+| pypdf | 7.0.1 | BSD-3-Clause |
 | pywin32 | 312 | PSF |
 | qdrant-client | 1.20.0 | Apache |
 | requests-toolbelt | 1.0.0 | Apache |
