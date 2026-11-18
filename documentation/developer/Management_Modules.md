@@ -2492,6 +2492,407 @@ Embedding connector for OpenAI embeddings (text-embedding-3-small, text-embeddin
 
 ---
 
+## package_zip.py
+
+_The zip of a study package (M8): one writer, and the safe reader of a received file. The formats are
+``core.package``'s: this module puts them in a zip, and takes them out of one.
+
+**The writer** (:func:`write`) puts a package's members in the format's order, one after the other, with fixed
+fields only (the date 1980-01-01, the system, the version, the mode of its tier; no comment, no extra field but
+AES's), and makes the manifest itself from the members' checksums, taken as it streams them: the package's hash is
+the SHA-256 of that manifest. A package without the data is stored, clear. One that holds the data is encrypted
+member by member (WinZip AES-256, AE-2, deflate inside), except its notice and its manifest, which stay clear and
+stored, so that its hash is read before any password; its notice must be one of the fixed texts and say what its
+index's policy says, and its index's anchor must be that of the member the trace starts from. The finished zip is
+read back by the reader's own clear part before :func:`write` returns. The password is made here
+(:func:`new_password`): 20 symbols of Crockford's base32, 100 bits, in 5 groups of 4 joined by hyphens; the string
+shown, hyphens included, is the password, and :func:`password_of` reads any spelling of it a person types.
+
+**The reader** (:func:`open_package`, then :func:`read_package`) never gives a received file to a zip library before
+it has read the file's directory itself, and stops at the first refusal (:class:`Refused`, a closed id whose words
+are the caller's):
+
+1. its size, against the caller's limit (``MOST_FILE_BYTES`` by default);
+2. its end record, the file's last 22 bytes (no comment), and its directory, bounded before a byte of it is read (at
+   most ``MOST_ENTRIES`` entries of names in ASCII of at most ``NAME_MOST`` characters), each record walked in turn
+   until they fill the directory exactly: no folder, no name twice (case folded);
+3. its layout, which must be the writer's: the members one after the other from the file's first byte, in the
+   directory's order, each local header saying what the directory says of its entry, the directory right after the
+   last member. No byte lies before, between or after the members (no ZIP64 record, no comment), and a tool that
+   reads the local headers in turn finds what the directory lists;
+4. whether a later version made it: the notice of a package that holds the data, the envelope of the clear
+   ``package.json`` of one that does not, read first, whatever else the file holds;
+5. the names: exactly the format's, in their case; the encryption, the compression, the extra field, the version
+   and the fixed fields each member's tier says; the declared sizes within their caps, and their ratio;
+6. the clear members: the manifest, strictly, listing exactly the zip's members, which are in the format's order
+   (``layout`` otherwise); **the package's hash is known here, before any password**; each clear member's checksum
+   against its line.
+
+Steps 1 to 4 are the container, frozen across the format's schemas (``core.package`` says so): a later version may
+change the members and what they hold, never these, nor the member that tells a later version beyond this version's
+cap of it (and, for ``package.json``, beyond JSON this version's strict reader reads).
+
+Then every member is read (:func:`read_package`, which leaves what :func:`open_package` gave as it was, so that a
+password can be typed again). The file must still be the one opened (its size and its directory), and pyzipper's
+reading of the directory the one checked. Each member is streamed in the zip's order through a counter and a
+SHA-256 compared with its line of the manifest, ``package.json`` first. The password is wrong when two members fail
+its check before any member decrypted: a wrong password passes a member's two-byte check once in 65,536 tries (that
+member then fails as altered bytes do), and one member's altered check is not taken for a wrong password. A member
+whose bytes are not those the manifest lists does not stop the reading: it is named (``Opened.not_matching``, exit
+1, "read, but not what the sender made"). Only what altered bytes raise counts so: an error of the computer (a
+full disk, a file that cannot be read) is raised to the caller. The JSON members are read by
+``core.package.read_member`` and the index by its closed reader; a data member is hashed and dropped, or, once the
+index is read, written into a folder the caller made (``into``: ``verify`` only), each file created there
+exclusively under the format's own name. Each is deleted again when its bytes are not the sender's, when the
+reading is refused or when anything stops it; a file the system will not delete is said (an ``OSError``, or a note
+on the error that stopped the reading), never left in silence.
+
+pyzipper is imported inside the functions that encrypt or decrypt: start-up, and a package read without its
+password, never load it._
+
+**Imports**:
+`__future__.annotations`, `hashlib`, `io`, `os`, `secrets`, `shutil`, `struct`, `zipfile`, `zlib`, `collections.abc.Callable`, `collections.abc.Iterator`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `dataclasses.replace`, `pathlib.Path`, `typing.Any`, `typing.BinaryIO`, `core.package`
+
+### class `Refused` (package_zip.py)
+
+A received file refused: why (a closed id), the member concerned (its name, the format's own, once the names
+passed the list; "" before), and ``core.package``'s reason when it gave one (words that quote nothing).
+
+### class `Entry` (package_zip.py)
+
+No description available.
+
+### class `_Record` (package_zip.py)
+
+A record of a received file's directory, as its bytes say.
+
+**Methods:**
+
+- **data_at**(`self`) -> `int`
+  > Where its bytes start: after its local header, which holds its name and its extra field again.
+
+### class `Opened` (package_zip.py)
+
+What a received package holds, as far as it was read: its tier (``shareable`` for a package without the
+data until :func:`read_package` reads in its index whether it was made with the rules or without them), its
+file's size, its members in the zip's order, the checksums its manifest lists and the package's hash; after
+:func:`read_package`, the JSON members and the README by name, the index of a package that holds the data, and
+the data members written into ``into``. A member whose bytes are not those its manifest lists is in
+``not_matching``. Its representation holds nothing a member holds, nor where the data were written.
+
+**Methods:**
+
+- **exit_code**(`self`) -> `int`
+  > No description available.
+
+### class `_TooLong` (package_zip.py)
+
+A member's stream longer than its entry declares.
+
+### def `_grouped` (package_zip.py)
+
+- **Arguments**: `bare: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `new_password` (package_zip.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+A package's password: 20 symbols drawn with ``secrets`` from Crockford's base32 (100 bits), in 5 groups of 4
+joined by hyphens. The string, hyphens included, is the password: what is shown opens the package.
+
+### def `password_of` (package_zip.py)
+
+- **Arguments**: `typed: str`
+
+- **Returns**: `ComplexType`
+
+The password a person typed or pasted, in the one form it was made in: spaces and hyphens dropped, upper case,
+O read as 0, I and L as 1, then the hyphens put back. None when what is left is not 20 symbols of the alphabet:
+the caller says what a password looks like (the format is public, so that hints nothing), and nothing is tried.
+
+### def `_size` (package_zip.py)
+
+- **Arguments**: `source: Member`
+
+- **Returns**: `int`
+
+No description available.
+
+### def `_chunks` (package_zip.py)
+
+- **Arguments**: `source: Member`
+
+- **Returns**: `Iterator[bytes]`
+
+No description available.
+
+### def `_info` (package_zip.py)
+
+- **Arguments**: `cls: Callable[ComplexType], name: str, compress: int, size: int, mode: int`
+
+- **Returns**: `zipfile.ZipInfo`
+
+No description available.
+
+### def `_manifest_size` (package_zip.py)
+
+- **Arguments**: `names: tuple[ComplexType]`
+
+- **Returns**: `int`
+
+The manifest's bytes: a line of 64 hexadecimal characters, two spaces, the name and a line feed per member.
+
+### def `_tier_said` (package_zip.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `ComplexType`
+
+The tier a package without the data says in its index: its ``tier`` when it is one of the two, ``shareable``
+when it says none (the index's closed reader comes with the package without the data); None for another.
+
+### def `_index_given` (package_zip.py)
+
+- **Arguments**: `members: Mapping[ComplexType], tier: str`
+
+- **Returns**: `ComplexType`
+
+The index read from the members given, as its reader will read it: of a package that holds the data, with its
+notice; None for a package without the data, whose index must say the tier it is written in. ValueError for an
+index its reader refuses, or that says another tier; with the data, for a notice that is not one of the fixed
+texts (no other bytes go in clear), data members that are not those the index names, or a notice that does not
+say what its policy says.
+
+### def `write` (package_zip.py)
+
+- **Arguments**: `out: BinaryIO, members: Mapping[ComplexType], tier: str`
+
+- **Returns**: `str`
+
+Write a package of ``tier`` into ``out``, an empty binary file that can be read and sought (an in-memory buffer,
+or a file opened for writing and reading): ``members`` (every member but the manifest, which the writer makes),
+each given as its bytes or as a file whose bytes are streamed. A package that holds the data is encrypted with
+``password`` (one :func:`new_password` made), and only it. ``expected`` gives the SHA-256 a member was found to
+have when it was checked (the pre-flight's): a member streamed with other bytes stops the writing. Returns the
+package's hash.
+
+ValueError, before a byte is written, for a name that is no member of the tier, a member given otherwise or
+over its cap, a whole over the package's, a password that is missing, not needed or not one this module makes,
+an ``out`` that is not empty or cannot be read and sought, an index its reader would refuse or that says another
+tier, or (with the data) a notice that is not the format's; and while writing, for a file that grew past a cap,
+a member that is not what ``expected`` says,
+or an anchor that is not that of the member the trace starts from. RuntimeError when the finished zip is not one
+its reader opens: a defect of this writer, never of the data. After any of these while writing, ``out`` holds a
+zip to discard.
+
+### def `_aes` (package_zip.py)
+
+- **Arguments**: ``
+
+- **Returns**: `Any`
+
+pyzipper, imported where a package that holds the data is written or read: nowhere else.
+
+### def `_check_written` (package_zip.py)
+
+- **Arguments**: `out: BinaryIO, names: tuple[ComplexType], manifest: bytes`
+
+- **Returns**: `None`
+
+The finished zip, read back by the reader's own clear part (steps 1 to 6): opened, with its members in their
+order, each as its manifest lists it, and the package's hash the manifest's.
+
+### def `_later` (package_zip.py)
+
+- **Arguments**: `reasons: list[str]`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `_dos` (package_zip.py)
+
+- **Arguments**: `date_time: tuple[ComplexType]`
+
+- **Returns**: `tuple[ComplexType]`
+
+A date as a header writes it: its time, then its date (MS-DOS).
+
+### def `_directory` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO, size: int`
+
+- **Returns**: `ComplexType`
+
+The directory of a file of ``size`` bytes, read by this module, and where it starts; or why the file is
+refused (an id). Its end record must end the file without a comment, on one disk, for at most ``MOST_ENTRIES``
+entries and a directory of the size so many records can have, ending where the end record starts; then each
+record is walked in turn (no comment, on the first disk, a name in ASCII of at most ``NAME_MOST`` characters, an
+extra field no longer than AES's), and the records fill the directory exactly. Nothing else of the file is read
+before these bounds hold.
+
+### def `_layout_problem` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO, records: tuple[ComplexType], start: int`
+
+- **Returns**: `bool`
+
+Whether the members are not laid out as the writer lays them out: one after the other from the file's first
+byte, in the directory's order, each local header saying what the directory's record says (its version, flags,
+method, date, CRC, sizes, name and extra field), the last one ending where the directory starts.
+
+### def `_member_problem` (package_zip.py)
+
+- **Arguments**: `record: _Record, tier: str, clear: set[str]`
+
+- **Returns**: `str`
+
+Why a member's entry is not the format's ("" when it is): its encryption, its fixed fields, its compression
+and its extra field, its declared size, its ratio.
+
+### def `_clear` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO, record: ComplexType, tier: str`
+
+- **Returns**: `bytes`
+
+A clear member's bytes, read where its record says; b"" when it has no record, is not stored clear, is over
+its cap, or its bytes do not have the CRC-32 its record gives (its checksum then names it).
+
+### def `_stream` (package_zip.py)
+
+- **Arguments**: `source: BinaryIO, declared: int, keep: bool, sink: ComplexType, anchor: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+A member's stream read through a counter that stops one byte past what its entry declares: its SHA-256, and
+its bytes when ``keep`` (written to ``sink`` instead when one is given); ``anchor``, a digest begun with
+``core.package.ANCHOR_PREFIX``, is fed the same bytes (one pass over the member the trace starts from).
+
+### def `open_package` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO`
+
+- **Returns**: `ComplexType`
+
+The clear part of a received file (a binary file that can be sought; see the module's words, steps 1 to 6): the
+package's tier, its members, the checksums its manifest lists and its hash, or why it is refused. Nothing is
+decrypted, no zip library reads the file, and pyzipper is not loaded. A clear member whose bytes are not those
+the manifest lists is named in ``not_matching``; a notice so named gives no kind.
+
+### def `_opened` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO, size: int`
+
+- **Returns**: `ComplexType`
+
+No description available.
+
+### def `read_package` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO, opened: Opened, password: ComplexType`
+
+- **Returns**: `ComplexType`
+
+Every member of a package :func:`open_package` opened from ``file``, streamed in the zip's order (see the
+module's words): a copy of ``opened`` completed with the members' values, the index of a package that holds the
+data and the data written into ``into``, or why it is refused. ``opened`` is left as it was.
+
+A package that holds the data needs its ``password``, in any spelling :func:`password_of` reads (none, or one of
+another shape, is ``not_a_password``: nothing is tried). ``into`` is a folder the caller made for the data
+(``verify`` only): it must exist and be empty, and on a system with modes belong to this user and give the group
+and others nothing (``tempfile.mkdtemp`` makes such a folder; on Windows the files take the folder's access
+list, and ``mkdtemp`` makes it the user's only from Python 3.13). The data are written there once the index is
+read, each file only if it does not exist, with the mode 0600 where modes apply. An error of the computer
+(``OSError``: a full disk, a file that cannot be read) is raised, after every file written was deleted. A file
+the system will not delete is said: on a refusal, an ``OSError`` that counts the files left (it names no path)
+instead of the refusal; on an error, a note added to it.
+
+### def `_folder_problem` (package_zip.py)
+
+- **Arguments**: `into: Path`
+
+- **Returns**: `bool`
+
+Whether ``into`` is not a folder the data may be written into: an existing, empty folder, which on a system
+with modes belongs to this process's user and gives the group and others nothing.
+
+### def `_same_file` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO, opened: Opened`
+
+- **Returns**: `bool`
+
+Whether ``file`` is still the one :func:`open_package` opened: its size, and its directory record by record.
+
+### def `_decrypted` (package_zip.py)
+
+- **Arguments**: `file: BinaryIO, read: Opened, password: str, into: ComplexType, created: list[Path]`
+
+- **Returns**: `ComplexType`
+
+The encrypted members streamed into ``read``, ``package.json`` first, then in the zip's order; each file
+created in ``into`` is added to ``created``, which the caller deletes on a refusal or an exception.
+
+### def `_created` (package_zip.py)
+
+- **Arguments**: `path: Path`
+
+- **Returns**: `BinaryIO`
+
+A data member's file, created only if it does not exist, readable by its owner only where modes apply.
+
+### def `_drop` (package_zip.py)
+
+- **Arguments**: `path: ComplexType`
+
+- **Returns**: `None`
+
+A data member's file whose bytes are not the sender's: deleted at once.
+
+### def `_drop_all` (package_zip.py)
+
+- **Arguments**: `paths: list[Path]`
+
+- **Returns**: `int`
+
+Every file a reading wrote, deleted, each tried whatever another one does: how many the system would not
+delete (a file another program holds open).
+
+### def `_left_behind` (package_zip.py)
+
+- **Arguments**: `left: int`
+
+- **Returns**: `str`
+
+What a reader says of decrypted files it could not delete: their count, never their path.
+
+### def `_value_of` (package_zip.py)
+
+- **Arguments**: `read: Opened, name: str, data: bytes`
+
+- **Returns**: `ComplexType`
+
+A member's value read by its one reader (``core.package.read_member``); for ``package.json``, the index's
+checks of a package that holds the data, or the tier a package without the data says it is.
+
+### def `_index_of` (package_zip.py)
+
+- **Arguments**: `read: Opened, value: Any`
+
+- **Returns**: `ComplexType`
+
+The index of a package that holds the data, read and checked against what the zip holds: its data members,
+and the notice against its policy (a notice whose bytes are not the sender's is named, not compared).
+
+---
+
 ## paths.py
 
 _The files a replay may read (M5b step 5): where the paths a trace records are looked for.
