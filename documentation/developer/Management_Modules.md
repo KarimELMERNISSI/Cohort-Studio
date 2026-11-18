@@ -3915,7 +3915,7 @@ pages store (biostats results, pooled results over imputed datasets, the diction
 returns plain data that the Word builder (:mod:`manage.dossier`) lays out._
 
 **Imports**:
-`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Collection`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.area_parts`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.known`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.prevalence_text`, `utils.numbers.ratio_parts`, `utils.numbers.share_decimals`, `utils.numbers.share_parts`, `utils.numbers.with_interval`
+`__future__.annotations`, `math`, `collections.abc.Callable`, `collections.abc.Collection`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `decimal.Decimal`, `io.BytesIO`, `types.SimpleNamespace`, `typing.Any`, `pandas`, `utils.numbers.area_parts`, `utils.numbers.decimals`, `utils.numbers.fixed`, `utils.numbers.number`, `utils.numbers.p_text`, `utils.numbers.percent`, `utils.numbers.prevalence_text`, `utils.numbers.ratio_parts`, `utils.numbers.share_decimals`, `utils.numbers.share_parts`, `utils.numbers.with_interval`
 
 ### class `ResultBlocks` (report_tables.py)
 
@@ -4151,21 +4151,6 @@ without the condition"; "" when both hold enough). Read on the 2x2 table wheneve
 index test: a yes/no test has no AUC, and a result without the AUC's counts was read as "enough". Without a
 table, on the AUC's counts (:func:`_thin_side`).
 
-### def `auc_interval_missing` (report_tables.py)
-
-- **Arguments**: `auc: Mapping[ComplexType]`
-
-- **Returns**: `str`
-
-Why the DeLong interval of an area is not written; "" when it is.
-
-- ``ONE_IN_A_GROUP``: a group holds fewer than two participants. Its share of the variance cannot be estimated
-  and is taken as 0, so the interval reads far too narrow: "0.400 (95% CI 0.222 to 0.578)" stood for one
-  participant with the condition placed among 30 without it.
-
-- ``NO_WIDTH``: the interval has no width, its variance being 0: the two groups do not overlap (an area of 1, or
-  of 0), or every value is the same.
-
 ### def `auc_row` (report_tables.py)
 
 - **Arguments**: `auc: Mapping[ComplexType]`
@@ -4174,9 +4159,10 @@ Why the DeLong interval of an area is not written; "" when it is.
 
 The area under the ROC curve, as the page's headline and the dossier's block write it: its name, the area, and
 the bounds of its interval with the method ("0.897 to 0.946 (DeLong)"), the three with the same decimals
-(``utils.numbers.area_parts``). No interval where DeLong's cannot be read (:func:`auc_interval_missing`):
-"1.000 (95% CI 1.000 to 1.000)" stood for two groups that do not overlap, as if the area were known exactly; the
-result's caution says why.
+(``utils.numbers.area_parts``). No interval where DeLong's is not one to write
+(``biostats.diagnostic.auc_interval_missing``, the rule the plan of the analysis reads too): "1.000 (95% CI 1.000
+to 1.000)" stood for two groups that do not overlap, as if the area were known exactly; the result's caution
+says why.
 
 ### def `measure_rows` (report_tables.py)
 
