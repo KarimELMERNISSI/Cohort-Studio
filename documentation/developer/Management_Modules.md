@@ -1328,16 +1328,53 @@ table when there is one (``from_snapshot``), else listed as not replayable. A re
 when every step was recomputed (or only documents) and matched.
 
 :func:`files_needed` lists every file a replay may read and :func:`locate` finds one, in the order the
-replay itself looks: the Reproduce page asks for the missing ones, and the study package carries them._
+replay itself looks: the Reproduce page asks for the missing ones, and the study package carries them. The
+resolver is asked for each file with the step that reads it (numbered from 1, as the package numbers them), so
+that a study package's members, one per step, are told apart; a member that holds the table as its step read it
+is read as that table (:meth:`manage.paths.PathResolver.reads_as_table`).
+
+:class:`ReplayOptions` says how a replay redoes what the trace does not hold: the seed a MissForest step recorded
+without its own is replayed with, and which multiple imputations to draw again (each by default; a step not drawn
+is checked against the counts it recorded), with a draw's progress. :func:`package_paths` builds the resolver of a
+study package's members from its index's files._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `typing.Any`, `typing.Literal`, `numpy`, `pandas`, `enrich.external_data`, `core.criteria.RULES_VERSION`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.package.ROLE_WORDS`, `core.package.FileRole`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.state.file_checksum`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.logging_config.single_line`, `utils.logging_config.without_values`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Iterable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `typing.Any`, `typing.Literal`, `numpy`, `pandas`, `enrich.external_data`, `core.criteria.RULES_VERSION`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ids_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.package.ROLE_WORDS`, `core.package.DataFile`, `core.package.FileRole`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.state.file_checksum`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.logging_config.single_line`, `utils.logging_config.without_values`
 
 ### class `StepSeen` (engine.py)
 
 What a replay saw of one step it passed, given to ``on_step``: the step, the tables before and after it (the
 replay's own: read them, keep only what is computed from them), how it was passed, the fingerprint of the table
 after it as computed here, and the one the trace recorded. An exception raised by the hook ends the replay.
+
+### class `ReplayOptions` (engine.py)
+
+How a replay redoes what a trace does not hold.
+
+``process_seed``: the seed a MissForest step recorded without its own is replayed with: a study package's
+``software.random_seed``, the exporter's, which its pre-flight replayed with (both from the seed
+``biostats._types.RANDOM_STATE`` holds). None: this process's, as before. It matters only for a column fitted on
+more than 200,000 rows, and a step recorded before 9 November 2026 may still differ (its learners have changed
+since): its recorded fingerprint decides.
+
+``draw``: the steps whose multiple imputation is drawn again, by the hash each step records (no numbering to
+convert); None draws every one. A step not drawn is checked without its draw: its population is evaluated (its
+rows in ``ReplayResult.mi_rows``) and compared with the counts the step recorded (its rows, the cells it imputed
+in each column, its m); a difference lists it in ``mi_divergence``, with the counts. It is listed in
+``not_drawn`` and passed in the mode ``not_drawn``: the caller holds the imputation already (the pre-flight of a
+study package, from its session). ``progress``: a draw's progress, from 0 to 1.
+
+A draw runs in this process: the chains drawn in worker processes can give other last digits for a variable
+observed on more than 10,000 rows (one BLAS thread against several; ``norm`` does, ``pmm`` did not at 15,000
+rows), so a replay never draws there until every chain is drawn on one thread.
+
+**Methods:**
+
+- **__post_init__**(`self`) -> `None`
+  > No description available.
+
+- **draws**(`self, step: Mapping[ComplexType]`) -> `bool`
+  > Whether the multiple imputation of ``step`` is drawn again.
 
 ### class `StepRecord` (engine.py)
 
@@ -1354,24 +1391,64 @@ No description available.
   > Every step recomputed (or only documenting), and every recorded fingerprint matched: a step taken from
   > its recorded table was not reproduced.
 
+- **matches**(`self`) -> `bool`
+  > Everything the replay checked holds: no error, no missing file, every recorded fingerprint, and every
+  > multiple imputation (its cells when drawn, the inputs it recorded when not), and no step skipped or redone
+  > in part. A step taken from its recorded table or not drawn is not reproduced here (``reproducible``) but does
+  > not fail this: a study package's pre-flight reads it, holding the imputations it did not draw.
+
 ### class `_NotReplayable` (engine.py)
 
 A step the engine cannot recompute; carries the frame to continue from and how it was passed.
 
 ### class `NeededFile` (engine.py)
 
-A file a replay of a trace may read: what it is to the replay, the step that reads it (None: the source, read
-before the first step), the paths the trace records for it in the order the replay tries them, then the names of
+A file a replay of a trace may read: what it is to the replay, the step that reads it (numbered from 1, as a
+study package's index numbers it; None: the source, read before the first step), the paths the trace records
+for it in the order the replay tries them, then the names of
 the saved versions it looks up (the source only; :meth:`manage.paths.PathResolver.dataset`), and the checksum the
 step recorded for the file, when it did. A snapshot is optional: without it, its step is skipped with a warning.
 
 ### def `_resolve` (engine.py)
 
-- **Arguments**: `path: ComplexType, paths: ComplexType`
+- **Arguments**: `path: ComplexType, paths: ComplexType, step: ComplexType`
 
 - **Returns**: `ComplexType`
 
-The file a recorded path stands for; None without a resolver (a replay given none reads no file).
+The file a recorded path stands for at ``step`` (from 1; None for what the trace starts from); None without a
+resolver (a replay given none reads no file).
+
+### def `_as_table` (engine.py)
+
+- **Arguments**: `path: ComplexType, paths: ComplexType, step: ComplexType`
+
+- **Returns**: `bool`
+
+Whether the file found for ``path`` at ``step`` holds the table as the step read it (a package's member).
+
+### def `_table` (engine.py)
+
+- **Arguments**: `found: str`
+
+- **Returns**: `pd.DataFrame`
+
+A member that holds a table as its step read it: by pandas alone, as it was written.
+
+### def `_package` (engine.py)
+
+- **Arguments**: `paths: ComplexType`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `_read_version` (engine.py)
+
+- **Arguments**: `found: str, paths: ComplexType`
+
+- **Returns**: `ComplexType`
+
+A saved version's table; a package's member by pandas alone, never by DuckDB.
 
 ### def `_version` (engine.py)
 
@@ -1387,7 +1464,8 @@ A saved version a trace names, from the datasets folder only (PathResolver.datas
 
 - **Returns**: `ComplexType`
 
-Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions.
+Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions, but in a study
+package: a member is never looked up by a name.
 
 ### def `load_source` (engine.py)
 
@@ -1483,6 +1561,19 @@ saved version); None when none is found.
 
 The file of this machine that stands for ``needed``, found as the replay finds it; None when none is.
 
+### def `package_paths` (engine.py)
+
+- **Arguments**: `trace: Mapping[ComplexType], files: Iterable[DataFile], folder: ComplexType`
+
+- **Returns**: `PathResolver`
+
+The resolver of a study package's members for ``trace``: each file :func:`files_needed` lists, matched by its
+role and its step with the package's file of that role and step (``files``: its index's ``DataFile``s), found in
+``folder`` under the member's name, the format's own. A member that holds the table as its step read it
+(``as_read``) is read as that table; a saved version the trace starts from is found by the names its load
+recorded, and read as a saved version (its row ids). A file of the trace that the package does not hold is left
+out: the replay says it is missing.
+
 ### def `_population_rows` (engine.py)
 
 - **Arguments**: `df: pd.DataFrame, block: dict[ComplexType], index: int, warnings: list[str], frames: ComplexType`
@@ -1519,7 +1610,7 @@ version was recorded), 0 when it names one that is no number.
 
 ### def `_snapshot` (engine.py)
 
-- **Arguments**: `step: dict[ComplexType], paths: ComplexType`
+- **Arguments**: `step: dict[ComplexType], index: int, paths: ComplexType`
 
 - **Returns**: `ComplexType`
 
@@ -1554,7 +1645,7 @@ None (every row) when none was recorded, as by earlier versions, or when no crit
 
 ### def `_imputation` (engine.py)
 
-- **Arguments**: `df, step, index, paths, warnings, result`
+- **Arguments**: `df, step, index, paths, warnings, result, options`
 
 - **Returns**: `None`
 
@@ -1562,7 +1653,7 @@ No description available.
 
 ### def `_targeted_imputation` (engine.py)
 
-- **Arguments**: `df, step, index, paths, warnings, result`
+- **Arguments**: `df, step, index, paths, warnings, result, options`
 
 - **Returns**: `None`
 
@@ -1636,15 +1727,36 @@ No description available.
 
 ### def `_mi_impute` (engine.py)
 
-- **Arguments**: `df, step, index, paths, warnings, result`
+- **Arguments**: `df, step, index, paths, warnings, result, options`
 
 - **Returns**: `None`
 
-Re-run a multiple imputation on its population and check the imputed cells against the recorded hash.
+Re-run a multiple imputation on its population and check the imputed cells against the recorded hash; a step
+the options do not draw is checked without its draw: its population against the counts it recorded (the table
+it leaves is checked by its fingerprint, as every step's).
+
+### def `_inputs_differ` (engine.py)
+
+- **Arguments**: `frame: pd.DataFrame, rows: pd.Index, spec: Any, params: Mapping[ComplexType], block: Mapping[ComplexType]`
+
+- **Returns**: `list[str]`
+
+What a multiple imputation recorded of its inputs that the replayed population does not give, in counts: its
+rows (their number, and which they are: the population's fingerprint), the cells it imputed in each column it
+imputed (a derived variable, computed in each dataset, aside), and its m against its specification's. Empty when
+it gives them all, or when the step recorded none (an early one).
+
+### def `_mi_draw` (engine.py)
+
+- **Arguments**: `df, rows, spec, params, index, warnings, result, progress`
+
+- **Returns**: `None`
+
+The draw of a multiple imputation step, in this process, its cells checked against the recorded hash.
 
 ### def `_freeze_population` (engine.py)
 
-- **Arguments**: `df, step, index, paths, warnings, result`
+- **Arguments**: `df, step, index, paths, warnings, result, options`
 
 - **Returns**: `None`
 
@@ -1660,7 +1772,7 @@ No description available.
 
 ### def `_apply_step` (engine.py)
 
-- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, paths: ComplexType, warnings: list[str], result: ComplexType`
+- **Arguments**: `df: pd.DataFrame, step: dict[ComplexType], index: int, paths: ComplexType, warnings: list[str], result: ComplexType, options: ComplexType`
 
 - **Returns**: `tuple[ComplexType]`
 
@@ -1678,7 +1790,7 @@ the files the steps name (none read without it). ``frames``:
 tables a step's population may name by fingerprint although the replay does not pass through them (a draft
 redone one change at a time names the dataset it was built on). ``on_step(StepSeen)`` is called after each step
 the replay passes (not on the one it stops at), so that a caller takes each step's shape, profile or fingerprint
-in the same pass (the study package's checks).
+in the same pass (the study package's checks). ``options``: :class:`ReplayOptions`.
 
 ### def `run_trace` (engine.py)
 
@@ -1687,8 +1799,8 @@ in the same pass (the study package's checks).
 - **Returns**: `ReplayResult`
 
 Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame; ``on_step``
-as for :func:`apply_steps`. A file that is not a trace this version replays (``trace_problems``) is refused, with
-the first reason as the error.
+and ``options`` as for :func:`apply_steps`. A file that is not a trace this version replays (``trace_problems``)
+is refused, with the first reason as the error.
 
 ### def `execute_trace_pipeline` (engine.py)
 
@@ -2906,8 +3018,11 @@ finds each file in the places the session may read:
 
 - for a command line (M8), only the files named on it, found by their names (:meth:`PathResolver.for_files`);
 
-- for a study package (M8), only its members, each found by the very string the trace records for it, never by a
-  name: a received trace must not reach the recipient's own files (:meth:`PathResolver.for_package`);
+- for a study package (M8), only its members, each found by the step that reads it and the very string the trace
+  records for it, never by a name: a received trace must not reach the recipient's own files, and two steps that
+  record one string (two sheets of one workbook) read their own members (:meth:`PathResolver.for_package`). A member
+  that holds the table as its step read it (a merged file cut to the rows its merge took, a workbook's table) is read
+  as that table, and every member by pandas alone, never by DuckDB;
 
 - for tests and scripts (:meth:`PathResolver.unconfined`): the recorded path when it exists, else the file's name in
   the shared folders of the data root.
@@ -2931,11 +3046,15 @@ Where the files a trace names are looked for (see the module docstring). ``PathR
   > Only these files, found by their names (a command line's): nothing else is read.
 
 - **for_package**(`cls, files: Mapping[ComplexType], versions: ComplexType`) -> `PathResolver`
-  > A study package's files: each string the trace records (``manage.replay.engine.files_needed``) to the member
-  > extracted for it, and each saved version's name to its member (only a trace that names a version without
-  > recording its path needs one). Nothing else is read, and nothing is found by a
-  > name, so that a received trace never reaches the recipient's own files. A member keeps its file's extension,
-  > by which the replay reads it (a snapshot or a saved version: ``.parquet``).
+  > A study package's files: each (step, string the trace records) to the member extracted for it, the step as
+  > ``manage.replay.engine.files_needed`` numbers it (from 1; None for what the trace starts from), and each saved
+  > version's name to its member (only a trace that names a version without recording its path needs one).
+  > ``tables``: the (step, string) whose member holds the table as its step read it (``as_read`` in the package's
+  > index: a merged file cut to the rows its merge took, a workbook's table), read as that table. Nothing else is
+  > read, and nothing is found by a name, so that a received trace never reaches the recipient's own files. A
+  > member keeps its file's extension, by which the replay reads it (a snapshot or a saved version:
+  > ``.parquet``). ValueError for a table that is no member. :func:`manage.replay.engine.package_paths` builds
+  > these from a package's index.
 
 - **unconfined**(`cls`) -> `PathResolver`
   > Tests and scripts, without a user: the recorded path when it exists, else its name in the shared folders of
@@ -2944,8 +3063,17 @@ Where the files a trace names are looked for (see the module docstring). ``PathR
 - **with_named**(`self, named: Mapping[ComplexType]`) -> `PathResolver`
   > The same places, and the files the user chose for recorded paths (Reproduce).
 
-- **resolve**(`self, recorded: object`) -> `ComplexType`
-  > The file to read for a path a trace records, or None when the session may read none.
+- **package**(`self`) -> `bool`
+  > Whether this resolver reads a study package's members (each by pandas alone, never by DuckDB).
+
+- **reads_as_table**(`self, recorded: object, step: ComplexType`) -> `bool`
+  > Whether the file found for ``recorded`` at ``step`` holds the table as that step read it (a package's
+  > member so marked), to be read as that table: not with the step's reading options, and not compared with the
+  > checksum the step recorded of the original file.
+
+- **resolve**(`self, recorded: object, step: ComplexType`) -> `ComplexType`
+  > The file to read for a path a trace records at ``step`` (from 1; None for what the trace starts from), or
+  > None when the session may read none. Only a study package's resolver tells the steps apart.
 
 - **dataset**(`self, name: object`) -> `ComplexType`
   > The saved version ``name`` (``<datasets>/<name>.parquet``), never a file outside that folder: the name comes
@@ -2974,7 +3102,9 @@ A path with forward slashes: one recorded on Windows keeps its backslashes, whic
 
 - **Returns**: `ComplexType`
 
-A saved version's table: read by pandas, or by DuckDB for a file pandas cannot read. None when it is missing.
+A saved version's table: read by pandas, or (``duckdb_fallback``) by DuckDB for a file pandas cannot read.
+None when it is missing. Each caller says which: a study package's member is never given to DuckDB (a received
+file is read by one reader only), a version of the user's own workspace may be.
 
 ### def `_member` (paths.py)
 
