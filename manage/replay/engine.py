@@ -32,6 +32,7 @@ import pandas as pd
 import enrich.external_data as eed
 from core.criteria import RULES_VERSION
 from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
+from core.package import ROLE_WORDS, FileRole
 from core.population import criteria_from_trace, evaluate_population
 from core.registry import UnknownIdError
 from core.session import restrict_cells, sort_filled
@@ -205,15 +206,8 @@ def load_source(
 
 # ---------------------------------------------------------------------------------------------- the files of a trace
 
-# Stored ids (the study package's list of files): never renamed. ROLE_WORDS says them in a sentence.
-FileRole = Literal["source", "saved_version", "replayed_state", "enrichment", "snapshot"]
-ROLE_WORDS: dict[str, str] = {
-    "source": "the source file",
-    "saved_version": "a saved version",
-    "replayed_state": "a state replayed from another trace",
-    "enrichment": "a merged file",
-    "snapshot": "a step's recorded table",
-}
+# The roles of a file (FileRole, ROLE_WORDS) are stored ids of the study package's list of files: core.package holds
+# them, so that a package is read without this engine; they are named here as before.
 
 
 @dataclass(frozen=True)

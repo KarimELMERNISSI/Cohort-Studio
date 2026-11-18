@@ -795,10 +795,12 @@ without the engine, numpy or pandas (a test loads it in a fresh interpreter).
 - **The text rule.** `core.privacy.hidden(text)` counts the characters that no name of a study and no text of a
   package may hold: control characters other than a line feed, format characters (the marks that change the
   direction of a text), line and paragraph separators, a lone surrogate, and the characters that show nothing
-  (`INVISIBLE`). One rule for the study's section and for the package: a study never declares a name that its
-  package would refuse. The writer refuses to write such a character and the reader refuses a member that holds
-  one. `shown(text)` is for what does not come from a member. A source file never holds such a character itself:
-  a test that needs one builds it with `chr()`.
+  (`INVISIBLE`). One rule for the study's section and for the written members of a package: a study never
+  declares a name that its package would refuse. The writer refuses to write such a character in a written member
+  and the reader refuses one that holds it (the carried members of a package that holds the data are the
+  exception, below). `shown(text)` is for what does not come from a member, and for every key and text of a
+  carried member. A source file never holds such a character itself: a test that needs one builds it with
+  `chr()`.
 - **The manifest and the hash.** `manifest_of` lists the SHA-256 of every other member; **the package's hash is
   the SHA-256 of the manifest's bytes** (`package_hash`).
 - **The policy block.** `Policy` is what `package.json` records of the privacy rules a package was made under:
@@ -808,8 +810,56 @@ without the engine, numpy or pandas (a test loads it in a fresh interpreter).
   raised). `DisclosurePolicy.block()` writes it, from what the policy itself holds; nothing else does. An override
   names its place by the format's own names and by positions (`is_place`), never by a text.
 
+**The package that holds the data** (the tier `reproduction`, `<study>_r<rev>_with_data.cstudio.zip`) has its own
+members, and the functions above take the tier: `members_of(tier)`, `clear_members`, `formats_of`, `cap_of`,
+`dumps(member, payload, tier)`, `read_envelope(value, member, tier)`, `manifest_of(members, tier)` (and
+`manifest_from_checksums` for a writer that streams), `read_manifest(data, tier)`, `in_zip_order(names, tier)`.
+Six of them read `shareable` when no tier is given: pass it for every member of this tier. Read a member with
+`read_member(member, data, tier)`, which knows its writing, rather than with `loads` and `read_envelope` by hand.
+
+- **Its members**, in the zip's order: `NOTICE.txt` (clear), then, encrypted, `package.json`, `protocol.json` (the
+  saved revision whole, its notes and privacy section included, so that its checksum can be checked; nothing
+  applies that section), `results.json`, `trace.json`, `profiles.json`, `README.md`, `uv.lock`, the data, and
+  `MANIFEST.sha256` (clear, last). The data members are named by the format, never by a file: `source.<ext>` or
+  `version.parquet`, then `merge_NN.parquet` (one per merge step, the table as its merge read it, cut to the rows
+  it took) and `snapshot_NN.parquet` (`data_role`, `data_members_problem`). A workbook that can hold code (`.xls`,
+  `.xlsm`) never travels as its bytes: its table does, as `source.parquet`. A recorded table stands only for a step
+  of `SNAPSHOT_STEPS`; a trace that holds a `multiple_imputation` step (an imputed dataset adopted as the data)
+  does not travel. The package's hash is still the SHA-256 of the manifest, which lists the checksums of the
+  members before encryption. A member and the whole package stay below the bound at which a zip writer adds a
+  ZIP64 field (`zipfile.ZIP64_LIMIT`, for a member's size and for where its header starts).
+- **Two writings.** `package.json` and `README.md` are *written*, under the text rule. The members that hold the
+  study's own texts are *carried* (`is_carried`): the same writer in ASCII, every character outside ASCII as an
+  escape, and no text rule (a sealed trace can hold a tab or a direction mark in a recoded value; under the rule
+  such a study could never travel). `loads(data, cap, carried=True)` reads one: it refuses a byte that is not ASCII,
+  a lone surrogate (which no sealed trace can hold), and all that the strict reader refuses but the text rule, so
+  a carried key or text may hold any other character. Show one only through `shown()`, on a terminal with
+  `terminal=True` (ASCII within the limit: `?` for a hidden character, the stream's escape for another character
+  outside ASCII, a backslash doubled, `...` for a cut): as it is, a direction mark or a terminal's escape sequence
+  would reach the screen.
+- **The notice** is one of two fixed texts (`NOTICES`: personal data; rows declared not people, which M8b writes),
+  read by its exact bytes (`read_notice`): a clear member is never a place for anyone's words. Its first line
+  names the schema, so that a later one reads as a later version's, not as a changed file. After the password,
+  `notice_problem` checks it against the policy block. **Its words belong to its schema**: a reader takes any other
+  bytes for a changed file, so never edit a notice in place; a new wording comes with a new schema, and the readers
+  keep the earlier notices' bytes. A test pins each notice's SHA-256.
+- **The index** (`DataPackageIndex`, `package.json` in this tier) holds no text the user or the data gave but the
+  study's id and the declaration's two (the recipient and the reference, typed for the export, one line each,
+  composed): the study's id, revision, checksum and fingerprint; the software (ASCII versions, the platform's
+  words for the system and the machine, never a host's name; with the process's seed); the trace's schema, what it starts from and every step's kind and hash; the data members by role, step,
+  rows and columns, a merged file with its cut (`rows_taken` or `every_row`, the rows of the original and its
+  recorded checksum); the policy (`rules` `none`); the declaration (`BASES`); the anchor. **The anchor**
+  (`anchor_of`) is the SHA-256 of a fixed prefix and of the bytes of the member the trace starts from: the clear
+  manifest gives each member's SHA-256, and a member whose every value could be guessed would be given away by
+  trying them; nobody computes the anchor without the data. The roles of a file (`FileRole`, `ROLE_WORDS`) live
+  here too: the replay engine reads them from this module.
+- **One format name per shape**, and one table of schemas (`FORMAT_SCHEMAS`): the index, the revision and the
+  results are not the same in the two tiers and have a name in each, so that one tier's schema moves alone and a
+  member taken out of a package of one tier never reads as the other's.
+
 A key or a closed value that a reader does not know reads as written by a later version, and every id here (the
-tiers, the members, the values of `rules`, the levels of `*_set_by`) is a stored id: never renamed.
+tiers, the members, the values of `rules`, the levels of `*_set_by`, the roles of a file, the rules of a cut, the
+bases, the notices) is a stored id: never renamed.
 
 ### Settings, preferences and API keys
 

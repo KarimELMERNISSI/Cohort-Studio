@@ -30,8 +30,10 @@ here.
 A key or a closed value this version does not know refuses the whole file as written by a later version; a value it
 cannot read refuses it too, never ignored (a ``k`` of 20 written "20" and ignored would apply 10).
 
-The section never travels: a shared study definition and the configuration files leave it out, so that whoever opens
-a study inherits nothing of another person's declarations; the package's policy records what applied.
+The section never travels to be applied: a shared study definition and the configuration files leave it out, so that
+whoever opens a study inherits nothing of another person's declarations; the package's policy records what applied.
+A package that holds the data carries the revision whole, the section included, as a record whose checksum can be
+checked: nothing applies it there, and a study opened from such a package starts without it.
 """
 
 from __future__ import annotations

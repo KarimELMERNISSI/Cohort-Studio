@@ -44,6 +44,7 @@ from biostats.plan import (
     Number,
     ResultRecord,
 )
+from core.package import REPRODUCTION, RULES_OFF, SHAREABLE, TIERS
 from core.profiles import NUMBER, PROFILE_VERSION
 from core.registry import Catalogue
 
@@ -87,15 +88,16 @@ def worst(outcomes: Iterable[str]) -> str:
 
 # ----------------------------------------------------------------------------- the checks
 
-SHAREABLE, REPRODUCTION = "shareable", "reproduction"  # the tiers of a package (stored ids)
-TIERS = (SHAREABLE, REPRODUCTION)
+# The tiers of a package (stored ids) are core.package's. A package made with the rules off holds no data: the checks
+# of a package without the data run on it.
 
 
 @dataclass(frozen=True)
 class CheckKind:
     """
     A check of a package. ``tiers`` are the tiers whose packages it runs on (elsewhere it reads not_run);
-    ``shareable_part`` says what it checks of a shareable package when that is less than of a reproduction one.
+    ``shareable_part`` says what it checks of a package without the data (``not core.package.holds_data(tier)``:
+    shareable, or made with the rules off) when that is less than of one that holds them.
     """
 
     id: str
@@ -767,6 +769,7 @@ __all__ = [
     "REPORT_SCHEMA",
     "REPRODUCTION",
     "ROUNDING",
+    "RULES_OFF",
     "SHAREABLE",
     "TIERS",
     "TOLERANCES",
