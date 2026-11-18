@@ -68,7 +68,7 @@ def _missing_files(trace_data: dict) -> dict[str, dict]:
             missing[path] = {"type": "source", "path": path, "description": _SOURCE_WORDS[needed.role], "steps": []}
             continue
         item = missing.setdefault(path, {"type": "enrichment", "path": path, "steps": []})
-        item["steps"].append(needed.step + 1)
+        item["steps"].append(needed.step)
         numbers = ", ".join(str(n) for n in item["steps"])
         merged = f"Enrichment File (Step{'s' if len(item['steps']) > 1 else ''} {numbers})"
         # the source file merged again: one entry, which names both uses

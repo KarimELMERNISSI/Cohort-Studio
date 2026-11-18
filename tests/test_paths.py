@@ -112,7 +112,7 @@ def test_a_saved_version_is_read_from_the_datasets_folder_only(root: Path) -> No
     found = paths.dataset("v1")
     assert _same(found, alice.datasets_dir() / "v1.parquet")
     assert found is not None
-    pd.testing.assert_frame_equal(read_version(found), frame)
+    pd.testing.assert_frame_equal(read_version(found, duckdb_fallback=True), frame)
     # "../datasets/v1" stays in the folder: only a name is taken, whatever the path would reach
     escapes = (
         "../../bob/datasets/secret",
@@ -122,7 +122,7 @@ def test_a_saved_version_is_read_from_the_datasets_folder_only(root: Path) -> No
     )
     for name in ("secret", *escapes, "..", ".", "", None, ["v1"]):
         assert paths.dataset(name) is None, name
-    assert read_version(str(alice.datasets_dir() / "missing.parquet")) is None
+    assert read_version(str(alice.datasets_dir() / "missing.parquet"), duckdb_fallback=True) is None
 
 
 def test_a_command_line_reads_only_the_files_named_on_it(root: Path) -> None:

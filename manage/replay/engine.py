@@ -14,14 +14,22 @@ table when there is one (``from_snapshot``), else listed as not replayable. A re
 when every step was recomputed (or only documents) and matched.
 
 :func:`files_needed` lists every file a replay may read and :func:`locate` finds one, in the order the
-replay itself looks: the Reproduce page asks for the missing ones, and the study package carries them.
+replay itself looks: the Reproduce page asks for the missing ones, and the study package carries them. The
+resolver is asked for each file with the step that reads it (numbered from 1, as the package numbers them), so
+that a study package's members, one per step, are told apart; a member that holds the table as its step read it
+is read as that table (:meth:`manage.paths.PathResolver.reads_as_table`).
+
+:class:`ReplayOptions` says how a replay redoes what the trace does not hold: the seed a MissForest step recorded
+without its own is replayed with, and which multiple imputations to draw again (each by default; a step not drawn
+is checked against the counts it recorded), with a draw's progress. :func:`package_paths` builds the resolver of a
+study package's members from its index's files.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -31,8 +39,8 @@ import pandas as pd
 
 import enrich.external_data as eed
 from core.criteria import RULES_VERSION
-from core.fingerprint import ensure_row_ids, frame_fingerprint, ranges_to_ids
-from core.package import ROLE_WORDS, FileRole
+from core.fingerprint import ensure_row_ids, frame_fingerprint, ids_fingerprint, ranges_to_ids
+from core.package import ROLE_WORDS, DataFile, FileRole
 from core.population import criteria_from_trace, evaluate_population
 from core.registry import UnknownIdError
 from core.session import restrict_cells, sort_filled
@@ -63,8 +71,9 @@ SKIPPED_STEPS = step_ids(replay=DOCUMENT)
 # Steps the engine cannot recompute: their snapshot is used when one was recorded
 NOT_REPLAYABLE = step_ids(replay=SNAPSHOT)
 # How a replay passed a step: recomputed from its settings; it only documents (the table goes on unchanged); taken
-# from the table recorded with it; recomputed in part only (not fully recorded); skipped (no way to redo it)
-StepMode = Literal["recomputed", "documented", "snapshot", "in_part", "skipped"]
+# from the table recorded with it; recomputed in part only (not fully recorded); skipped (no way to redo it); a
+# multiple imputation checked without its draw (ReplayOptions.draw)
+StepMode = Literal["recomputed", "documented", "snapshot", "in_part", "skipped", "not_drawn"]
 
 
 @dataclass(frozen=True)
@@ -85,6 +94,42 @@ class StepSeen:
 
 
 StepHook = Callable[[StepSeen], None]
+
+
+@dataclass(frozen=True)
+class ReplayOptions:
+    """
+    How a replay redoes what a trace does not hold.
+
+    ``process_seed``: the seed a MissForest step recorded without its own is replayed with: a study package's
+    ``software.random_seed``, the exporter's, which its pre-flight replayed with (both from the seed
+    ``biostats._types.RANDOM_STATE`` holds). None: this process's, as before. It matters only for a column fitted on
+    more than 200,000 rows, and a step recorded before 9 November 2026 may still differ (its learners have changed
+    since): its recorded fingerprint decides.
+
+    ``draw``: the steps whose multiple imputation is drawn again, by the hash each step records (no numbering to
+    convert); None draws every one. A step not drawn is checked without its draw: its population is evaluated (its
+    rows in ``ReplayResult.mi_rows``) and compared with the counts the step recorded (its rows, the cells it imputed
+    in each column, its m); a difference lists it in ``mi_divergence``, with the counts. It is listed in
+    ``not_drawn`` and passed in the mode ``not_drawn``: the caller holds the imputation already (the pre-flight of a
+    study package, from its session). ``progress``: a draw's progress, from 0 to 1.
+
+    A draw runs in this process: the chains drawn in worker processes can give other last digits for a variable
+    observed on more than 10,000 rows (one BLAS thread against several; ``norm`` does, ``pmm`` did not at 15,000
+    rows), so a replay never draws there until every chain is drawn on one thread.
+    """
+
+    process_seed: int | None = None
+    draw: frozenset[str] | None = None
+    progress: Callable[[float], None] | None = None
+
+    def __post_init__(self) -> None:
+        if self.draw is not None and not all(isinstance(h, str) for h in self.draw):
+            raise TypeError("the steps to draw are named by the hashes they record")
+
+    def draws(self, step: Mapping[str, Any]) -> bool:
+        """Whether the multiple imputation of ``step`` is drawn again."""
+        return self.draw is None or str(step.get("hash") or "") in self.draw
 
 
 @dataclass(frozen=True)
@@ -116,7 +161,14 @@ class ReplayResult:
     )  # steps taken from the table recorded with them
     verified_steps: int = 0  # steps whose result was checked against the recorded fingerprint
     imputations: dict[int, Any] = field(default_factory=dict)  # step index -> MIData re-computed
-    mi_divergence: list[int] = field(default_factory=list)  # mi_impute steps whose cells differ
+    # mi_impute steps whose cells differ when drawn, or whose recorded inputs differ when not drawn
+    mi_divergence: list[int] = field(default_factory=list)
+    # mi_impute steps, drawn or not, drawn on other inputs than the replay gives (their counts, their rows)
+    mi_inputs_differ: list[int] = field(default_factory=list)
+    # mi_impute steps checked without their draw (ReplayOptions.draw): not reproduced here
+    not_drawn: list[int] = field(default_factory=list)
+    # step index -> the rows each mi_impute step's population gives here (drawn or not)
+    mi_rows: dict[int, pd.Index] = field(default_factory=dict, repr=False)
     single_imputed: dict[str, Any] = field(
         default_factory=dict
     )  # column -> row ids filled by single imputation
@@ -142,6 +194,21 @@ class ReplayResult:
             and not self.not_replayable
             and not self.from_snapshot
             and not self.mi_divergence
+            and not self.not_drawn
+        )
+
+    @property
+    def matches(self) -> bool:
+        """Everything the replay checked holds: no error, no missing file, every recorded fingerprint, and every
+        multiple imputation (its cells when drawn, the inputs it recorded when not), and no step skipped or redone
+        in part. A step taken from its recorded table or not drawn is not reproduced here (``reproducible``) but does
+        not fail this: a study package's pre-flight reads it, holding the imputations it did not draw."""
+        return (
+            self.error is None
+            and self.missing_file is None
+            and self.divergence is None
+            and not self.mi_divergence
+            and not self.not_replayable
         )
 
 
@@ -149,26 +216,49 @@ class _NotReplayable(Exception):
     """A step the engine cannot recompute; carries the frame to continue from and how it was passed."""
 
 
-def _resolve(path: str | None, paths: PathResolver | None) -> str | None:
-    """The file a recorded path stands for; None without a resolver (a replay given none reads no file)."""
-    return paths.resolve(path) if paths is not None and path else None
+def _resolve(path: str | None, paths: PathResolver | None, step: int | None = None) -> str | None:
+    """The file a recorded path stands for at ``step`` (from 1; None for what the trace starts from); None without a
+    resolver (a replay given none reads no file)."""
+    return paths.resolve(path, step) if paths is not None and path else None
+
+
+def _as_table(path: str | None, paths: PathResolver | None, step: int | None = None) -> bool:
+    """Whether the file found for ``path`` at ``step`` holds the table as the step read it (a package's member)."""
+    return paths is not None and bool(path) and paths.reads_as_table(path, step)
+
+
+def _table(found: str) -> pd.DataFrame:
+    """A member that holds a table as its step read it: by pandas alone, as it was written."""
+    return pd.read_parquet(found)
+
+
+def _package(paths: PathResolver | None) -> bool:
+    return paths is not None and paths.package
+
+
+def _read_version(found: str, paths: PathResolver | None) -> pd.DataFrame | None:
+    """A saved version's table; a package's member by pandas alone, never by DuckDB."""
+    return read_version(found, duckdb_fallback=not _package(paths))
 
 
 def _version(name: str, paths: PathResolver | None) -> pd.DataFrame | None:
     """A saved version a trace names, from the datasets folder only (PathResolver.dataset)."""
     found = paths.dataset(name) if paths is not None else None
-    return read_version(found) if found else None
+    return _read_version(found, paths) if found else None
 
 
 def _read_any(
     path: str, parse_options: ParseOptions | None = None, paths: PathResolver | None = None
 ) -> pd.DataFrame | None:
-    """Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions."""
+    """Read csv/tsv/txt/xlsx/xls/parquet through the import engine; other names are saved versions, but in a study
+    package: a member is never looked up by a name."""
     from ingest.loaders import file_kind, read_path
 
     try:
         file_kind(path)
     except ValueError:
+        if _package(paths):
+            return None
         return _version(os.path.splitext(os.path.basename(path))[0], paths)
     return read_path(path, parse_options).df
 
@@ -187,10 +277,15 @@ def load_source(
         return None, f"Source file not found: {source.recorded[-1]}"
     recorded, resolved, version = found
     if version:
-        table = read_version(resolved)
+        table = _read_version(resolved, paths)
         if table is None:
             return None, f"Failed to load source dataset ({recorded})"
         return ensure_row_ids(table), None
+    if _as_table(recorded, paths):  # the table the load read (a workbook's): as it was written
+        try:
+            return ensure_row_ids(_table(resolved)), None
+        except Exception as exc:
+            return None, f"Failed to load source dataset ({recorded}): {without_values(exc)}"
     options = _loaded(trace_data).get("parse_options")
     parse_options = (
         ParseOptions.from_dict(options) if isinstance(options, Mapping) and options else None
@@ -213,8 +308,9 @@ def load_source(
 @dataclass(frozen=True)
 class NeededFile:
     """
-    A file a replay of a trace may read: what it is to the replay, the step that reads it (None: the source, read
-    before the first step), the paths the trace records for it in the order the replay tries them, then the names of
+    A file a replay of a trace may read: what it is to the replay, the step that reads it (numbered from 1, as a
+    study package's index numbers it; None: the source, read before the first step), the paths the trace records
+    for it in the order the replay tries them, then the names of
     the saved versions it looks up (the source only; :meth:`manage.paths.PathResolver.dataset`), and the checksum the
     step recorded for the file, when it did. A snapshot is optional: without it, its step is skipped with a warning.
     """
@@ -353,12 +449,11 @@ def files_needed(trace: Mapping[str, Any]) -> list[NeededFile]:
         params = _settings(step)
         merged = _given(params.get("enrichment_file_path"))
         if step.get("function") == "enrichment" and merged:
-            needed.append(
-                NeededFile("enrichment", index, (merged,), checksum=_given(params.get("file_hash")))
-            )
+            checksum = _given(params.get("file_hash"))
+            needed.append(NeededFile("enrichment", index + 1, (merged,), checksum=checksum))
         snapshot = _snapshot_path(step)
         if snapshot:
-            needed.append(NeededFile("snapshot", index, (snapshot,)))
+            needed.append(NeededFile("snapshot", index + 1, (snapshot,)))
     return needed
 
 
@@ -366,7 +461,7 @@ def _locate(needed: NeededFile, paths: PathResolver | None) -> tuple[str, str, b
     """The file that stands for ``needed``, in the replay's order: (what the trace names it, the file, whether it is a
     saved version); None when none is found."""
     for recorded in needed.recorded:
-        resolved = _resolve(recorded, paths)
+        resolved = _resolve(recorded, paths, needed.step)
         if resolved:
             return recorded, resolved, False
     for name in needed.versions:
@@ -380,6 +475,36 @@ def locate(needed: NeededFile, paths: PathResolver | None) -> str | None:
     """The file of this machine that stands for ``needed``, found as the replay finds it; None when none is."""
     found = _locate(needed, paths)
     return found[1] if found else None
+
+
+def package_paths(
+    trace: Mapping[str, Any], files: Iterable[DataFile], folder: str | Path
+) -> PathResolver:
+    """
+    The resolver of a study package's members for ``trace``: each file :func:`files_needed` lists, matched by its
+    role and its step with the package's file of that role and step (``files``: its index's ``DataFile``s), found in
+    ``folder`` under the member's name, the format's own. A member that holds the table as its step read it
+    (``as_read``) is read as that table; a saved version the trace starts from is found by the names its load
+    recorded, and read as a saved version (its row ids). A file of the trace that the package does not hold is left
+    out: the replay says it is missing.
+    """
+    held = {(entry.role, entry.step): entry for entry in files}
+    members: dict[tuple[int | None, str], str] = {}
+    versions: dict[str, str] = {}
+    tables: set[tuple[int | None, str]] = set()
+    for needed in files_needed(trace):
+        entry = held.get((needed.role, needed.step))
+        if entry is None:
+            continue
+        member = str(Path(folder) / entry.member)
+        if needed.role == "saved_version":
+            versions.update(dict.fromkeys(needed.versions, member))
+            continue
+        for recorded in needed.recorded:
+            members[(needed.step, recorded)] = member
+            if entry.as_read:
+                tables.add((needed.step, recorded))
+    return PathResolver.for_package(members, versions, tables=tables)
 
 
 def _population_rows(
@@ -483,8 +608,8 @@ def _rules_version(block: Mapping[str, Any]) -> int:
         return 0
 
 
-def _snapshot(step: dict[str, Any], paths: PathResolver | None) -> pd.DataFrame | None:
-    path = _resolve(_snapshot_path(step), paths)
+def _snapshot(step: dict[str, Any], index: int, paths: PathResolver | None) -> pd.DataFrame | None:
+    path = _resolve(_snapshot_path(step), paths, index + 1)
     if path and path.endswith(".parquet") and os.path.exists(path):
         return ensure_row_ids(pd.read_parquet(path))
     return None
@@ -493,11 +618,14 @@ def _snapshot(step: dict[str, Any], paths: PathResolver | None) -> pd.DataFrame 
 def _enrichment(df, step, index, paths, warnings):
     params = step.get("params", {}) or {}
     enrichment_file_path = params.get("enrichment_file_path")
-    resolved = _resolve(enrichment_file_path, paths)
+    resolved = _resolve(enrichment_file_path, paths, index + 1)
     if not resolved:
         return df, str(enrichment_file_path)
+    # a package's cut: the table the merge read, kept to the rows it took, whose own checksum the package's manifest
+    # gives (the original file's, which the step recorded, is not its)
+    cut = _as_table(enrichment_file_path, paths, index + 1)
     recorded_hash = params.get("file_hash")  # none in a step recorded before it was kept
-    if recorded_hash:
+    if recorded_hash and not cut:
         try:
             found = file_checksum(Path(str(resolved)).read_bytes())
         except OSError:
@@ -510,11 +638,14 @@ def _enrichment(df, step, index, paths, warnings):
     # read as the page read it (the sheet, merge key, separator and decimal recorded with the step), then the date
     # keys parsed as the page parsed them (with the formats it recorded; a step recorded before holds none)
     recorded = params.get("parse_options")
-    enrichment_df = _read_any(
-        resolved, ParseOptions.from_dict(recorded) if recorded else None, paths
-    )
+    if cut:
+        enrichment_df = _table(resolved)
+    else:
+        options = ParseOptions.from_dict(recorded) if recorded else None
+        enrichment_df = _read_any(resolved, options, paths)
     if enrichment_df is None:
-        raise ValueError(f"could not read enrichment file {resolved}")
+        # the file's name only: a member's folder can name the account it lies under
+        raise ValueError(f"could not read enrichment file {Path(str(resolved)).name}")
     main = df
     if params.get("retained_main_columns"):
         main = df[[c for c in df.columns if str(c) in set(params["retained_main_columns"])]]
@@ -581,9 +712,14 @@ def _scoped_rows(
     )
 
 
-def _imputation(df, step, index, paths, warnings, result=None):
+def _imputation(df, step, index, paths, warnings, result=None, options=None):
     params = step.get("params", {}) or {}
     rows = _scoped_rows(df, step, index, warnings, result)
+    seed = params.get("random_state")
+    if seed is None and options is not None:
+        seed = (
+            options.process_seed
+        )  # the exporter's, when the caller gives it (a study package records it)
     outcome = impute_rows(
         df,
         rows,
@@ -596,8 +732,9 @@ def _imputation(df, step, index, paths, warnings, result=None):
         remainder_threshold=params.get("remainder_threshold", 0.3),
         # derived variables kept out, computed afterwards by the targeted imputations that follow
         set_aside=params.get("set_aside") or (),
-        # MissForest's seed as recorded (none in a step recorded before it was kept: the process's, as before)
-        random_state=params.get("random_state"),
+        # MissForest's seed as recorded; for a step recorded before it was kept, the seed the caller gives (a study
+        # package's, its exporter's), else this process's, as before
+        random_state=seed,
     )
     if result is not None:
         methods = (
@@ -611,7 +748,7 @@ def _imputation(df, step, index, paths, warnings, result=None):
     return outcome.frame, None
 
 
-def _targeted_imputation(df, step, index, paths, warnings, result=None):
+def _targeted_imputation(df, step, index, paths, warnings, result=None, options=None):
     params = step.get("params", {}) or {}
     rows = _scoped_rows(df, step, index, warnings, result)
     target, formula = params["target_variable"], params["formula"]
@@ -780,10 +917,11 @@ def _population_definition(df, step, index, paths, warnings):
     return df, None
 
 
-def _mi_impute(df, step, index, paths, warnings, result=None):
-    """Re-run a multiple imputation on its population and check the imputed cells against the recorded hash."""
-    from biostats.mi import ImputationSpec, impute
-    from biostats.mi.engine import drawn_with_changes
+def _mi_impute(df, step, index, paths, warnings, result=None, options=None):
+    """Re-run a multiple imputation on its population and check the imputed cells against the recorded hash; a step
+    the options do not draw is checked without its draw: its population against the counts it recorded (the table
+    it leaves is checked by its fingerprint, as every step's)."""
+    from biostats.mi import ImputationSpec
 
     params = step.get("params", {}) or {}
     block = step.get("population") or {}
@@ -796,16 +934,84 @@ def _mi_impute(df, step, index, paths, warnings, result=None):
     )
     spec = ImputationSpec(**params["spec"])
     derived = params.get("derived") if isinstance(params.get("derived"), Mapping) else None
+    if derived is not None and derived.get("approach") not in APPROACHES:
+        raise UnknownIdError("derivation approach", str(derived.get("approach")), APPROACHES)
+    if result is not None:
+        result.mi_rows[index] = rows
+    # its inputs first, drawn or not: the rows, the cells to impute, m
+    differences = _inputs_differ(df.loc[rows], rows, spec, params, block)
+    if differences:
+        if result is not None:
+            result.mi_inputs_differ.append(index)
+        warnings.append(
+            f"step {index + 1} (mi_impute): the imputation was drawn on other inputs than the replay gives "
+            f"({'; '.join(differences)})"
+        )
+    options = options or ReplayOptions()
+    if not options.draws(step):
+        if differences and result is not None:
+            result.mi_divergence.append(index)  # not drawn: its inputs are all there is to check
+        if result is not None:
+            result.not_drawn.append(index)
+        return df, None
+    return _mi_draw(df, rows, spec, params, index, warnings, result, options.progress)
+
+
+def _inputs_differ(
+    frame: pd.DataFrame,
+    rows: pd.Index,
+    spec: Any,
+    params: Mapping[str, Any],
+    block: Mapping[str, Any],
+) -> list[str]:
+    """What a multiple imputation recorded of its inputs that the replayed population does not give, in counts: its
+    rows (their number, and which they are: the population's fingerprint), the cells it imputed in each column it
+    imputed (a derived variable, computed in each dataset, aside), and its m against its specification's. Empty when
+    it gives them all, or when the step recorded none (an early one)."""
+    from biostats.mi.spec import DERIVED
+
+    said: list[str] = []
+    n_rows = params.get("n_rows")
+    if isinstance(n_rows, int) and n_rows != len(frame):
+        said.append(f"drawn on {n_rows} rows, {len(frame)} now")
+    elif block.get("rows_fp") and ids_fingerprint(rows) != str(block["rows_fp"]):
+        said.append(f"drawn on {len(frame)} other rows")
+    methods = params.get("methods") if isinstance(params.get("methods"), Mapping) else {}
+    imputed = params.get("n_imputed") if isinstance(params.get("n_imputed"), Mapping) else None
+    if imputed is not None:
+        for column, method in methods.items():
+            if not method or method == DERIVED:
+                continue
+            if column not in frame.columns:
+                said.append(f"{column}: imputed then, not in the replayed table")
+                continue
+            then, now = int(imputed.get(column, 0)), int(frame[column].isna().sum())
+            if then != now:
+                said.append(f"{column}: {then} cells imputed then, {now} missing now")
+    m = params.get("m")
+    if isinstance(m, int) and m != spec.m:
+        said.append(f"m {m} recorded, {spec.m} in its specification")
+    return said
+
+
+def _mi_draw(df, rows, spec, params, index, warnings, result, progress):
+    """The draw of a multiple imputation step, in this process, its cells checked against the recorded hash."""
+    from biostats.mi import impute
+    from biostats.mi.engine import drawn_with_changes
+
+    derived = params.get("derived") if isinstance(params.get("derived"), Mapping) else None
     if derived is not None:
         # the declared derived variables, computed in each completed dataset as recorded (or declined)
-        if derived.get("approach") not in APPROACHES:
-            raise UnknownIdError("derivation approach", str(derived.get("approach")), APPROACHES)
         steps = list(derived.get("steps") or []) if derived.get("recompute") else []
         run = impute_and_derive(
-            df.loc[rows], spec, steps, declined=list(derived.get("declined") or [])
+            df.loc[rows],
+            spec,
+            steps,
+            declined=list(derived.get("declined") or []),
+            progress=progress,
         )
     else:
-        run = impute(df.loc[rows], spec)
+        run = impute(df.loc[rows], spec, progress=progress)
     if result is not None:
         result.imputations[index] = run.mi
     recorded = params.get("cells_fp")
@@ -821,7 +1027,7 @@ def _mi_impute(df, step, index, paths, warnings, result=None):
     return df, None
 
 
-def _freeze_population(df, step, index, paths, warnings, result=None):
+def _freeze_population(df, step, index, paths, warnings, result=None, options=None):
     block = step.get("population") or {}
     if block.get("criteria"):
         rows = _population_rows(
@@ -869,6 +1075,7 @@ def _apply_step(
     paths: PathResolver | None,
     warnings: list[str],
     result: ReplayResult | None = None,
+    options: ReplayOptions | None = None,
 ) -> tuple[pd.DataFrame, str | None, StepMode]:
     """Apply one recorded step; returns (df, missing_path, how it was passed). Raises _NotReplayable for a step it
     cannot redo, with the frame to go on from and its mode (in part, or skipped)."""
@@ -878,7 +1085,7 @@ def _apply_step(
         return df, None, "documented"
 
     if func_name in NOT_REPLAYABLE or step.get("replayable") is False:
-        snapshot = _snapshot(step, paths)
+        snapshot = _snapshot(step, index, paths)
         if snapshot is not None:
             warnings.append(
                 f"step {index + 1} ({func_name}) cannot be recomputed: its recorded table was used"
@@ -902,9 +1109,11 @@ def _apply_step(
         logger.warning("Skipping unknown pipeline step: %s", func_name)
         raise _NotReplayable(df, "skipped")
     if func_name in _REPORTING:
-        out, missing = handler(df, step, index, paths, warnings, result)
+        out, missing = handler(df, step, index, paths, warnings, result, options)
     else:
         out, missing = handler(df, step, index, paths, warnings)
+    if func_name == "mi_impute" and not (options or ReplayOptions()).draws(step):
+        return out, missing, "not_drawn"
     return out, missing, "recomputed"
 
 
@@ -917,13 +1126,14 @@ def apply_steps(
     progress_callback: Callable[[int, str], None] | None = None,
     frames: Mapping[str, pd.DataFrame] | None = None,
     on_step: StepHook | None = None,
+    options: ReplayOptions | None = None,
 ) -> ReplayResult:
     """Replay ``steps`` on ``df`` (step numbers in messages start at ``start``), checking fingerprints; ``paths`` finds
     the files the steps name (none read without it). ``frames``:
     tables a step's population may name by fingerprint although the replay does not pass through them (a draft
     redone one change at a time names the dataset it was built on). ``on_step(StepSeen)`` is called after each step
     the replay passes (not on the one it stops at), so that a caller takes each step's shape, profile or fingerprint
-    in the same pass (the study package's checks)."""
+    in the same pass (the study package's checks). ``options``: :class:`ReplayOptions`."""
     current = ensure_row_ids(df)
     result = ReplayResult(df=None)
     total = len(steps)
@@ -945,7 +1155,9 @@ def apply_steps(
             progress_callback(int(offset / max(total, 1) * 100), f"Step {i + 1}: {description}")
         before = current
         try:
-            current, missing, mode = _apply_step(current, step, i, paths, result.warnings, result)
+            current, missing, mode = _apply_step(
+                current, step, i, paths, result.warnings, result, options
+            )
         except _NotReplayable as skipped:
             current, missing, mode = skipped.args[0], None, skipped.args[1]
             result.not_replayable.append(i)
@@ -973,13 +1185,14 @@ def apply_steps(
             result.population_frames.clear()
             return result
         expected = (step.get("data") or {}).get("fp_out")
-        # a table taken from its recording is checked against it (a file swapped since), never counted as reproduced
-        checked = bool(expected) and mode in ("recomputed", "documented", "snapshot")
+        # a table taken from its recording is checked against it (a file swapped since), never counted as reproduced;
+        # so is the table an imputation not drawn leaves
+        checked = bool(expected) and mode in ("recomputed", "documented", "snapshot", "not_drawn")
         actual = frame_fingerprint(current) if checked or named or on_step is not None else None
         if mode == "snapshot":
             result.from_snapshot.append(i)
         if checked:
-            if mode != "snapshot":
+            if mode not in ("snapshot", "not_drawn"):
                 result.verified_steps += 1
             if actual != expected and result.divergence is None:
                 result.divergence = (i, str(expected), str(actual))
@@ -1014,10 +1227,11 @@ def run_trace(
     paths: PathResolver | None = None,
     progress_callback: Callable[[int, str], None] | None = None,
     on_step: StepHook | None = None,
+    options: ReplayOptions | None = None,
 ) -> ReplayResult:
     """Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame; ``on_step``
-    as for :func:`apply_steps`. A file that is not a trace this version replays (``trace_problems``) is refused, with
-    the first reason as the error."""
+    and ``options`` as for :func:`apply_steps`. A file that is not a trace this version replays (``trace_problems``)
+    is refused, with the first reason as the error."""
     problems = trace_problems(trace_data)
     if problems:
         return ReplayResult(df=None, error=f"Not a trace this version can replay: {problems[0]}")
@@ -1030,7 +1244,12 @@ def run_trace(
         if error:
             return ReplayResult(df=None, error=error)
     return apply_steps(
-        source_df, steps, paths=paths, progress_callback=progress_callback, on_step=on_step
+        source_df,
+        steps,
+        paths=paths,
+        progress_callback=progress_callback,
+        on_step=on_step,
+        options=options,
     )
 
 
@@ -1051,6 +1270,7 @@ __all__ = [
     "ROLE_WORDS",
     "FileRole",
     "NeededFile",
+    "ReplayOptions",
     "ReplayResult",
     "StepHook",
     "StepMode",
@@ -1061,6 +1281,7 @@ __all__ = [
     "files_needed",
     "load_source",
     "locate",
+    "package_paths",
     "run_trace",
     "trace_problems",
 ]

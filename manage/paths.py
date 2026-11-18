@@ -7,8 +7,11 @@ finds each file in the places the session may read:
 - the files the user chose for recorded paths on the Reproduce page (``named``), first, in the same places;
 - the user's workspace (``scope``): the recorded path when it lies inside it, else the file's name in its folders;
 - for a command line (M8), only the files named on it, found by their names (:meth:`PathResolver.for_files`);
-- for a study package (M8), only its members, each found by the very string the trace records for it, never by a
-  name: a received trace must not reach the recipient's own files (:meth:`PathResolver.for_package`);
+- for a study package (M8), only its members, each found by the step that reads it and the very string the trace
+  records for it, never by a name: a received trace must not reach the recipient's own files, and two steps that
+  record one string (two sheets of one workbook) read their own members (:meth:`PathResolver.for_package`). A member
+  that holds the table as its step read it (a merged file cut to the rows its merge took, a workbook's table) is read
+  as that table, and every member by pandas alone, never by DuckDB;
 - for tests and scripts (:meth:`PathResolver.unconfined`): the recorded path when it exists, else the file's name in
   the shared folders of the data root.
 
@@ -40,14 +43,16 @@ def normalize_path(path_str: str) -> str:
     return path_str.replace("\\", "/") if path_str else path_str
 
 
-def read_version(path: str) -> pd.DataFrame | None:
-    """A saved version's table: read by pandas, or by DuckDB for a file pandas cannot read. None when it is missing."""
+def read_version(path: str, *, duckdb_fallback: bool) -> pd.DataFrame | None:
+    """A saved version's table: read by pandas, or (``duckdb_fallback``) by DuckDB for a file pandas cannot read.
+    None when it is missing. Each caller says which: a study package's member is never given to DuckDB (a received
+    file is read by one reader only), a version of the user's own workspace may be."""
     try:
         return pd.read_parquet(path)  # the row ids come back as the index
     except FileNotFoundError:
         return None
     except Exception:
-        if any(c in path for c in "*?[]{}"):  # DuckDB would read the path as a pattern of files
+        if not duckdb_fallback or any(c in path for c in "*?[]{}"):  # DuckDB would read a pattern
             return None
         import duckdb
 
@@ -67,9 +72,11 @@ class PathResolver:
     named: Mapping[str, str] = field(default_factory=dict)
     files: tuple[str, ...] | None = None  # only these files, found by their names; () reads none
     shared: bool = False  # without a user: the shared folders of the data root (unconfined())
-    # a study package's members: each recorded path, and each saved version's name, to the member extracted for it
-    members: Mapping[str, str] | None = None
+    # a study package's members: each (step, recorded path), and each saved version's name, to the member extracted
+    # for it; the members that hold a table as its step read it
+    members: Mapping[tuple[int | None, str], str] | None = None
     versions: Mapping[str, str] | None = None
+    tables: frozenset[tuple[int | None, str]] = frozenset()
 
     @classmethod
     def for_files(cls, files: Iterable[str | Path]) -> PathResolver:
@@ -78,16 +85,28 @@ class PathResolver:
 
     @classmethod
     def for_package(
-        cls, files: Mapping[str, str], versions: Mapping[str, str] | None = None
+        cls,
+        files: Mapping[tuple[int | None, str], str],
+        versions: Mapping[str, str] | None = None,
+        *,
+        tables: Iterable[tuple[int | None, str]] = (),
     ) -> PathResolver:
-        """A study package's files: each string the trace records (``manage.replay.engine.files_needed``) to the member
-        extracted for it, and each saved version's name to its member (only a trace that names a version without
-        recording its path needs one). Nothing else is read, and nothing is found by a
-        name, so that a received trace never reaches the recipient's own files. A member keeps its file's extension,
-        by which the replay reads it (a snapshot or a saved version: ``.parquet``)."""
+        """A study package's files: each (step, string the trace records) to the member extracted for it, the step as
+        ``manage.replay.engine.files_needed`` numbers it (from 1; None for what the trace starts from), and each saved
+        version's name to its member (only a trace that names a version without recording its path needs one).
+        ``tables``: the (step, string) whose member holds the table as its step read it (``as_read`` in the package's
+        index: a merged file cut to the rows its merge took, a workbook's table), read as that table. Nothing else is
+        read, and nothing is found by a name, so that a received trace never reaches the recipient's own files. A
+        member keeps its file's extension, by which the replay reads it (a snapshot or a saved version:
+        ``.parquet``). ValueError for a table that is no member. :func:`manage.replay.engine.package_paths` builds
+        these from a package's index."""
+        tables = frozenset(tables)
+        if not tables <= set(files):
+            raise ValueError("a member read as a table is a member of the package")
         return cls(
-            members={recorded: str(Path(m).resolve()) for recorded, m in files.items()},
+            members={key: str(Path(m).resolve()) for key, m in files.items()},
             versions={name: str(Path(m).resolve()) for name, m in (versions or {}).items()},
+            tables=tables,
         )
 
     @classmethod
@@ -100,12 +119,24 @@ class PathResolver:
         """The same places, and the files the user chose for recorded paths (Reproduce)."""
         return replace(self, named=dict(named))
 
-    def resolve(self, recorded: object) -> str | None:
-        """The file to read for a path a trace records, or None when the session may read none."""
+    @property
+    def package(self) -> bool:
+        """Whether this resolver reads a study package's members (each by pandas alone, never by DuckDB)."""
+        return self.members is not None
+
+    def reads_as_table(self, recorded: object, step: int | None = None) -> bool:
+        """Whether the file found for ``recorded`` at ``step`` holds the table as that step read it (a package's
+        member so marked), to be read as that table: not with the step's reading options, and not compared with the
+        checksum the step recorded of the original file."""
+        return self.members is not None and (step, recorded) in self.tables
+
+    def resolve(self, recorded: object, step: int | None = None) -> str | None:
+        """The file to read for a path a trace records at ``step`` (from 1; None for what the trace starts from), or
+        None when the session may read none. Only a study package's resolver tells the steps apart."""
         if not isinstance(recorded, str) or not recorded:
             return None
         if self.members is not None:
-            return _member(self.members.get(recorded))
+            return _member(self.members.get((step, recorded)))
         chosen = self._chosen(recorded)
         if chosen is not None:
             return chosen

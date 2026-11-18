@@ -524,7 +524,15 @@ Generates `.docx` reports from trace JSON files using `python-docx`:
 `run_trace()` is the single replay engine: it replays a trace up to a step and checks each step against its
 recorded fingerprint. It reads the files a trace names through the resolver it is given (`manage/paths.PathResolver`):
 the user's workspace in the app, only the named files for a command line, only a study package's members
-(`PathResolver.for_package`, each by the string the trace records, never by a name); given none, it reads no file.
+(`PathResolver.for_package`, each by the step that reads it and the string the trace records, never by a name);
+given none, it reads no file. The engine asks for each file with its step (numbered from 1, as the package's index
+numbers it), so that two merges that record one string (two sheets of one workbook) read their own members. A member
+the resolver marks as a table (`reads_as_table`: a merged file cut to the rows its merge took, a workbook's table) is
+read as that table, by pandas, without the step's reading options and without comparing it with the checksum the
+step recorded of the original file; no member of a package is ever read by DuckDB (`read_version(...,
+duckdb_fallback=False)`, a keyword every caller gives), nor looked up by a name. `package_paths(trace, files,
+folder)` builds that resolver from the package's index (each `DataFile` matched with the file `files_needed`
+lists by its role and step); `for_package` refuses a table that is no member.
 The package `manage/replay/` imports nothing in its `__init__`, so that the study package's command line starts
 without loading the engine.
 
@@ -532,16 +540,29 @@ without loading the engine.
   kind, every record the replay reads an object), before anything reads it; `run_trace` refuses such a file with the
   first reason, and so does the Reproduce page.
 - `files_needed(trace)` lists every file a replay may read, as `NeededFile`s: the role (a stored id: `source`,
-  `saved_version`, `replayed_state`, `enrichment`, `snapshot`; `ROLE_WORDS` says them in a sentence), the step, the
+  `saved_version`, `replayed_state`, `enrichment`, `snapshot`; `ROLE_WORDS` says them in a sentence), the step
+  (from 1; None for the source), the
   paths the trace records in the order the replay tries them, the saved versions it then looks up (taken from what the
   load recorded: the version it was loaded from, or the dataset's name and version), and the checksum the step
   recorded. `locate(needed, paths)` finds one as the replay does. `load_source` reads the source through them, the
   Reproduce page asks for the missing files from them, and the study package carries those files; a test checks that
   a replay asks its resolver for nothing else (`tests/test_replay_files.py`).
 - `on_step`, given to `run_trace` or `apply_steps`, receives a `StepSeen` after each step the replay passes: the
-  tables before and after, how the step was passed (`recomputed`, `documented`, `snapshot`, `in_part`, `skipped`),
+  tables before and after, how the step was passed (`recomputed`, `documented`, `snapshot`, `in_part`, `skipped`,
+  `not_drawn`),
   the fingerprint computed here and the one recorded. A step taken from its recorded table is listed in
   `ReplayResult.from_snapshot` and leaves the replay not reproducible.
+- `options`, a `ReplayOptions`, says how a replay redoes what the trace does not hold. `process_seed`: the seed a
+  MissForest step recorded without its own is replayed with (a study package's, the exporter's, which its
+  pre-flight used); it matters only for a column fitted on more than 200,000 rows, and the step's recorded
+  fingerprint decides. `draw`: the hashes of the steps whose multiple imputation is drawn again (None: every one). A
+  step not drawn is checked against the counts it recorded (its rows, the cells it imputed per column, its m; a
+  difference is in `mi_divergence`), its rows are in `ReplayResult.mi_rows`, it is passed in the mode `not_drawn`
+  and listed in `not_drawn`, which leaves the replay not `reproducible`. Every imputation step's inputs are checked
+  so, drawn or not (`mi_inputs_differ`). `matches` says whether everything checked held: no error, no divergence of
+  a table or an imputation, no step skipped or redone in part. A draw runs in the replay's own process with its
+  `progress`: chains drawn in worker processes can give other last digits for a variable observed on more than
+  10,000 rows, so a replay does not draw there.
 
 ### Kinds of trace step (`core/steps.py`)
 
