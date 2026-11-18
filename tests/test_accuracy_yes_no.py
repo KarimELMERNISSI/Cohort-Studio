@@ -1336,13 +1336,8 @@ def test_an_area_has_no_interval_when_a_group_holds_one_participant() -> None:
     """One participant with the condition placed among 30 without it read "0.400 (95% CI 0.222 to 0.578)": the
     share of the variance of a group of one cannot be estimated, and was taken as 0, which made the interval far
     too narrow."""
-    from manage.report_tables import (
-        AUC_NAME,
-        NO_WIDTH,
-        ONE_IN_A_GROUP,
-        auc_interval_missing,
-        auc_row,
-    )
+    from biostats.diagnostic import NO_WIDTH, ONE_IN_A_GROUP, auc_interval_missing
+    from manage.report_tables import AUC_NAME, auc_row
 
     frame = pd.DataFrame({"ill": ["Yes"] + ["No"] * 30, "score": [11.5, *range(30)]}).astype(
         {"score": float}
@@ -1391,10 +1386,10 @@ def test_an_area_has_no_interval_when_a_group_holds_one_participant() -> None:
         "0.500",
         "",
     )
-    assert any(
-        "leave it nothing to measure (no overlap, or the same value for all)" in text
-        for text in flat["cautions"]
-    )
+    assert (
+        "The test holds one value here: the area is 0.5 by construction, and the DeLong interval has no width. "
+        "No interval is written."
+    ) in flat["cautions"]
     # two in each group: the interval is written
     two = {**auc, "n_positive": 2}
     assert auc_interval_missing(two) == "" and auc_row(two)[2].endswith(" (DeLong)")
@@ -1436,3 +1431,132 @@ def test_no_direction_is_read_from_one_participant() -> None:
     ).astype({"score": float})
     said = _text(m.plan_accuracy(two, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES))
     assert "Check the direction" in said and "Only one participant" not in said
+
+
+def test_the_plan_announces_no_interval_that_the_result_does_not_write() -> None:
+    """The plan of a score without a cut-off read "The area under the ROC curve with its 95% interval, and the
+    curve" over a result that wrote the area alone (one participant in a group, two groups that do not overlap, a
+    score of one value in the rows used), and quoted "95% CI 0.50 to 0.50" for the score of one value. The plan, the
+    result and the dossier read one rule."""
+    from biostats.diagnostic import NO_WIDTH, ONE_IN_A_GROUP, auc_interval_missing
+    from manage.report_tables import auc_row
+
+    usual = "The area under the ROC curve with its 95% interval, and the curve"
+    without = "The area under the ROC curve without an interval, and the curve"
+    not_overlapping = (
+        "The area under the ROC curve without an interval (the two groups do not overlap in these data), and the "
+        "curve"
+    )
+
+    def planned(frame: pd.DataFrame, direction: str = m.HIGHER) -> tuple[str, str, str, dict]:
+        found = m.plan_accuracy(
+            frame, "ill", "Yes", "score", direction, CUTOFF_MODES[0], None, None, SERIES
+        )
+        result = accuracy_of(
+            frame, "ill", "Yes", "score", direction, CUTOFF_MODES[0], None, None, SERIES
+        )
+        return (
+            found.steps[1].text,
+            " ".join(item.text for item in found.advice),
+            found.status,
+            result,
+        )
+
+    # an ordinary score: the interval is announced, and written
+    step, advice, status, result = planned(_cohort())
+    assert step == usual
+    assert auc_interval_missing(result["auc"]) == "" and auc_row(result["auc"])[2].endswith(
+        " (DeLong)"
+    )
+    # one participant in a group: the step says what is computed, the advice under it says why
+    alone = pd.DataFrame({"ill": ["Yes"] + ["No"] * 30, "score": [11.5, *range(30)]}).astype(
+        {"score": float}
+    )
+    step, advice, status, result = planned(alone)
+    assert step == without
+    assert (
+        "Only one participant with the condition: these data cannot show which way the test"
+        in advice
+    )
+    assert auc_interval_missing(result["auc"]) == ONE_IN_A_GROUP and auc_row(result["auc"])[2] == ""
+    step, advice, status, result = planned(alone.assign(ill=["No"] + ["Yes"] * 30))
+    assert step == without and "Only one participant without the condition:" in advice
+    # two groups that do not overlap: an area of 1; the step gives the cause, since no advice does
+    apart = pd.DataFrame(
+        {"ill": ["Yes"] * 40 + ["No"] * 40, "score": [*range(100, 140), *range(40)]}
+    ).astype({"score": float})
+    step, advice, status, result = planned(apart)
+    assert step == not_overlapping and advice == "" and status == "ok"
+    assert result["auc"]["auc"] == 1
+    assert auc_interval_missing(result["auc"]) == NO_WIDTH
+    assert auc_row(result["auc"])[1:] == ("1.000", "")
+    # the same groups read the other way: an area of 0, and the direction is to check (no interval quoted)
+    step, advice, status, result = planned(apart, m.LOWER)
+    assert step == not_overlapping and result["auc"]["auc"] == 0
+    assert "(median 119.5 against 19.5, AUC 0.00). Check the direction" in advice
+    assert "95% CI" not in advice
+    assert (
+        "The two groups do not overlap: the DeLong interval of the area has no width in these data. No interval is "
+        "written."
+    ) in result["cautions"]
+    assert any(
+        text.startswith("These data contradict the direction chosen") for text in result["cautions"]
+    )
+    # a score of one value in the rows used (the rows without the reference standard hold others, so the page
+    # offers the column): said from the data, as a caution, and never "95% CI 0.50 to 0.50"
+    flat = pd.DataFrame(
+        {
+            "ill": ["Yes"] * 15 + ["No"] * 16 + [None] * 3,
+            "score": [7.0] * 31 + [1.0, 2.0, 3.0],
+        }
+    )
+    one_value = (
+        "`score` holds one value (7) in the rows where the reference standard is recorded: it cannot tell "
+        "participants with the condition from those without. Check which participants had the reference standard."
+    )
+    for direction in (m.HIGHER, m.LOWER):
+        step, advice, status, result = planned(flat, direction)
+        assert step == without and status == "caution"
+        assert one_value in advice
+        assert "95% CI" not in advice and "hardly separates" not in advice
+        assert auc_interval_missing(result["auc"]) == NO_WIDTH
+        assert auc_row(result["auc"])[1:] == ("0.500", "")
+        assert any(text.startswith("The test holds one value here:") for text in result["cautions"])
+    # one value and one participant in a group: the one value is what is said, in the plan and in the result
+    lone = pd.DataFrame(
+        {"ill": ["Yes"] + ["No"] * 30 + [None] * 3, "score": [7.0] * 31 + [1.0, 2.0, 3.0]}
+    )
+    step, advice, status, result = planned(lone)
+    assert step == without and status == "caution"
+    assert one_value in advice and "Only one participant" not in advice
+    assert auc_interval_missing(result["auc"]) == ONE_IN_A_GROUP
+    (said,) = [text for text in result["cautions"] if "interval" in text]
+    assert said.startswith("The test holds one value here:")
+    # with a cut-off the step promises no interval for the area, whatever the data
+    for frame in (alone, apart, _cohort()):
+        fixed = m.plan_accuracy(frame, "ill", "Yes", "score", m.HIGHER, m.FIXED, 20.0, None, SERIES)
+        assert fixed.steps[1].text.endswith("the ROC curve and its AUC")
+        assert "95% interval" not in fixed.steps[1].text
+
+
+def test_an_interval_of_no_width_is_two_groups_apart_or_one_value() -> None:
+    """What the plan's words rest on: with two participants or more in each group, the DeLong variance is 0 only
+    when the two groups do not overlap (an area of 0 or of 1) or when every value is the same (an area of 0.5).
+    Every pair of groups of 2 or 3 participants with values 0, 1 and 2."""
+    from itertools import product
+
+    from biostats.diagnostic import NO_WIDTH, auc_interval_missing, delong_auc
+
+    groups = [values for size in (2, 3) for values in product(range(3), repeat=size)]
+    for with_it, without in product(groups, repeat=2):
+        auc = delong_auc(
+            [True] * len(with_it) + [False] * len(without), [*with_it, *without], pos_label=True
+        )
+        apart = min(with_it) > max(without) or max(with_it) < min(without)
+        one_value = len({*with_it, *without}) == 1
+        assert (auc_interval_missing(auc) == NO_WIDTH) == (apart or one_value), (with_it, without)
+        if apart:
+            assert auc["auc"] in (0.0, 1.0)
+        if one_value:
+            assert auc["auc"] == 0.5
+    assert len(groups) == 36

@@ -5,8 +5,9 @@ area; a cut-off found on the data."""
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -517,6 +518,37 @@ def delong_auc(y_true: Sequence, y_score: Sequence, *, pos_label=None, alpha: fl
     }
 
 
+# why the DeLong interval of an area is not one to write (:func:`auc_interval_missing`)
+ONE_IN_A_GROUP = "one_in_a_group"
+NO_WIDTH = "no_width"
+
+
+def _finite(value: Any) -> bool:
+    try:
+        return value is not None and math.isfinite(float(value))
+    except TypeError, ValueError:
+        return False
+
+
+def auc_interval_missing(auc: Mapping[str, Any]) -> str:
+    """
+    Why the DeLong interval of an area (:func:`delong_auc`) is not one to write; "" when it is. One rule for
+    whatever announces the area or writes it: the plan of the analysis, the page's result, the dossier's row.
+
+    - ``ONE_IN_A_GROUP``: a group holds fewer than two participants. Its share of the variance cannot be estimated
+      and is taken as 0, so the interval reads far too narrow: "0.400 (95% CI 0.222 to 0.578)" stood for one
+      participant with the condition placed among 30 without it.
+    - ``NO_WIDTH``: the interval has no width, its variance being 0: the two groups do not overlap (an area of 1, or
+      of 0), or every value is the same.
+    """
+    counts = [auc.get("n_positive"), auc.get("n_negative")]
+    if all(_finite(count) for count in counts) and min(int(count) for count in counts) < 2:
+        return ONE_IN_A_GROUP
+    ci = auc.get("ci")
+    lower, upper = getattr(ci, "lower", None), getattr(ci, "upper", None)
+    return NO_WIDTH if _finite(lower) and _finite(upper) and float(lower) == float(upper) else ""
+
+
 def confusion_at(
     y_true: Sequence, y_score: Sequence, cutoff: float, *, pos_label
 ) -> tuple[int, int, int, int]:
@@ -649,6 +681,8 @@ __all__ = [
     "LOWER",
     "MERCALDO",
     "NO_CUTOFF",
+    "NO_WIDTH",
+    "ONE_IN_A_GROUP",
     "SAMPLINGS",
     "SAMPLING_NOT_STATED",
     "SCORE_CARRIED",
@@ -663,6 +697,7 @@ __all__ = [
     "YOUDEN_MIN_CLASS",
     "DiagnosticAccuracy",
     "Verification",
+    "auc_interval_missing",
     "confusion_at",
     "delong_auc",
     "diagnostic_accuracy",

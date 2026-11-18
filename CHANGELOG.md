@@ -51,6 +51,14 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   30 without). A warning says so. Nor is the direction of the test read from that one participant: the plan said
   that the data contradicted the direction chosen, or quoted that interval; it now says that these data cannot
   show which way the test points.
+- **The plan says when the area will have no interval.** Without a cut-off, its step read "The area under the ROC
+  curve with its 95% interval, and the curve" where the result writes the area alone: one participant in a group,
+  two groups that do not overlap, a score that holds one value where the reference standard is recorded. It now
+  reads "without an interval", and the plan says why. For a score that holds one value, the plan quoted "AUC 0.50,
+  95% CI 0.50 to 0.50" and said that the test hardly separates the two groups; it now says that the score cannot
+  tell participants with the condition from those without, and to check which participants had the reference
+  standard. The result's warning says that the area is 0.5 by construction. The plan, the result and the Word
+  dossier read one rule.
 - **A ratio with a very wide interval keeps three figures for each number:** a diagnostic odds ratio read "441.0
   (8.0 to 24,372.7)", and now reads "441 (7.98 to 24,373)".
 

@@ -26,12 +26,14 @@ from biostats._types import CI, YOUDEN_BOOTSTRAP
 from biostats.agreement import SLOPE_READING, SLOPE_WARNING, bland_altman
 from biostats.diagnostic import (
     KOOPMAN,
+    ONE_IN_A_GROUP,
     SAMPLING_NOT_STATED,
     SAMPLINGS,
     SCORE_CARRIED,
     SERIES,
     TWO_GATE,
     YOUDEN_MIN_CLASS,
+    auc_interval_missing,
     confusion_at,
     delong_auc,
     diagnostic_accuracy,
@@ -52,8 +54,6 @@ from biostats.reliability import (
 )
 from core.registry import as_code
 from manage.report_tables import (
-    ONE_IN_A_GROUP,
-    auc_interval_missing,
     auc_row,
     dossier_min_n,
     measure_rows,
@@ -248,7 +248,9 @@ def accuracy_of(
             "the value that means the condition is present."
         )
     if missing:
-        cautions.append(_no_interval(auc, lower, missing))
+        cautions.append(
+            _no_interval(auc, lower, missing, one_value=bool(np.unique(values).size == 1))
+        )
     verified = None
     if at is not None:
         # the reference standard done unequally on the two sides of the cut-off, among the rows that hold the test
@@ -806,12 +808,17 @@ def _accuracy_yes_no(df: pd.DataFrame, *, mi: Any, guided: bool) -> None:
         provenance("diagnostic")
 
 
-def _no_interval(auc: dict[str, Any], lower: bool, why: str) -> str:
-    """Why the area is written without an interval (``manage.report_tables.auc_interval_missing``): a group of one
+def _no_interval(auc: dict[str, Any], lower: bool, why: str, *, one_value: bool = False) -> str:
+    """Why the area is written without an interval (``biostats.diagnostic.auc_interval_missing``): a group of one
     participant, for which the DeLong interval reads far too narrow, or a variance of 0, where "1.000 (95% CI 1.000
     to 1.000)" read as an area known exactly. ``lower``: lower values point to the condition (the area is that of
-    the reversed marker)."""
+    the reversed marker). ``one_value``: the test holds one value in the rows used, as the plan says it."""
     with_it, without = int(auc["n_positive"]), int(auc["n_negative"])
+    if one_value:  # said first, with one participant in a group too: the plan says it first as well
+        return (
+            "The test holds one value here: the area is 0.5 by construction, and the DeLong interval has no width. "
+            "No interval is written."
+        )
     if why == ONE_IN_A_GROUP:
         alone = "has the condition" if with_it < 2 else "is without the condition"
         return (
@@ -827,9 +834,11 @@ def _no_interval(auc: dict[str, Any], lower: bool, why: str) -> str:
             f"{with_it:,} with the condition and {without:,} without, an area of 1 does not show that the test "
             "never errs."
         )
+    # what is left is an area of 0: the two groups apart, the other way round (the caution on the direction stands
+    # above this one)
     return (
-        "The DeLong interval of the area has no width in these data: the values of the two groups leave it nothing "
-        "to measure (no overlap, or the same value for all). No interval is written."
+        "The two groups do not overlap: the DeLong interval of the area has no width in these data. No interval is "
+        "written."
     )
 
 

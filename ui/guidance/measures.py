@@ -26,11 +26,13 @@ from biostats.diagnostic import (
     HIGHER,
     LOWER,
     NO_CUTOFF,
+    ONE_IN_A_GROUP,
     SAMPLING_NOT_STATED,
     SERIES,
     TWO_GATE,
     YOUDEN_MIN_CLASS,
     Verification,
+    auc_interval_missing,
     delong_auc,
     reads_share,
     verification,
@@ -665,13 +667,28 @@ def plan_accuracy(
         )
     ]
     bound = "at most" if lower else "at least"
+    oriented = -frame["x"] if lower else frame["x"]
+    labels = [category(v) == category(present) for v in frame["y"]]
+    auc = delong_auc(labels, oriented.tolist(), pos_label=True)
+    # the rule the result and the dossier read: the plan announces no interval that will not be written ("with its
+    # 95% interval" stood over a result that wrote the area alone)
+    missing = auc_interval_missing(auc)
+    alone = "with the condition" if auc["n_positive"] < 2 else "without the condition"
+    one_value = bool(frame["x"].nunique() == 1)
     if mode == NO_CUTOFF:
-        steps.append(
-            PlanStep(
-                "The area under the ROC curve with its 95% interval, and the curve",
-                len(frame),
+        if not missing:
+            area = "The area under the ROC curve with its 95% interval, and the curve"
+        elif missing == ONE_IN_A_GROUP or one_value:
+            # the step says what is computed; the advice under it says why
+            area = "The area under the ROC curve without an interval, and the curve"
+        else:
+            # an interval of no width with two in each group and more than one value: an area of 1, or of 0 (no
+            # advice says it for an area of 1). "No width" alone read as "known exactly"
+            area = (
+                "The area under the ROC curve without an interval (the two groups do not overlap in these data), "
+                "and the curve"
             )
-        )
+        steps.append(PlanStep(area, len(frame)))
     elif mode == FIXED:
         steps.append(
             PlanStep(
@@ -690,18 +707,28 @@ def plan_accuracy(
             )
         )
     advice: list[Advice] = []
-    oriented = -frame["x"] if lower else frame["x"]
-    labels = [category(v) == category(present) for v in frame["y"]]
-    auc = delong_auc(labels, oriented.tolist(), pos_label=True)
-    if min(auc["n_positive"], auc["n_negative"]) < 2:
+    if one_value:
+        # said first, whatever the groups hold (with one participant in a group too), and read on the data, not on
+        # the interval: an area of 0.5 whose DeLong interval has no width (with two in each group, a variance of 0
+        # is an area of 0, of 1, or one value for all). "AUC 0.50, 95% CI 0.50 to 0.50 ...: it hardly separates the
+        # two groups" stood for it. The page offers a score of three values or more: one value among the rows used
+        # means that the others sit in rows without the reference standard, hence what to check
+        advice.append(
+            Advice(
+                "caution",
+                f"{as_code(score)} holds one value ({_num(with_it)}) in the rows where the reference standard is "
+                "recorded: it cannot tell participants with the condition from those without. Check which "
+                "participants had the reference standard.",
+            )
+        )
+    elif missing == ONE_IN_A_GROUP:
         # the DeLong interval needs two participants in each group: with one it reads far too narrow, and neither
         # "they contradict the direction" nor "they do not show it" can be read on it ("95% CI 0.22 to 0.58" stood
         # for one participant with the condition among 30)
-        side = "with the condition" if auc["n_positive"] < 2 else "without the condition"
         advice.append(
             Advice(
                 "info",
-                f"Only one participant {side}: these data cannot show which way the test points.",
+                f"Only one participant {alone}: these data cannot show which way the test points.",
             )
         )
     elif auc["ci"].upper < 0.5:
