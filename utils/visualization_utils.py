@@ -897,10 +897,16 @@ def create_roc_curve(df, true_col, score_col, pos_label=None):
     fpr, tpr, thresholds = roc_curve(y_true, y_score, pos_label=pos_label)
     roc_auc = auc(fpr, tpr)
     try:  # DeLong interval (audit S10)
-        from biostats.diagnostic import delong_auc
+        from biostats.diagnostic import auc_interval_missing, delong_auc
 
         d = delong_auc(y_true.tolist(), y_score.tolist(), pos_label=pos_label)
-        auc_label = f"ROC curve (AUC = {roc_auc:.3f}, 95% CI {d['ci'].lower:.3f} to {d['ci'].upper:.3f}, DeLong)"
+        if auc_interval_missing(d):
+            # the rule of the accuracy page: no interval for a group of one participant ("95% CI 0.222 to 0.578"
+            # read far too narrow), nor one of no width ("1.000 to 1.000" for two groups that do not overlap). Said
+            # in the legend: the area alone is also what an interval that could not be computed leaves
+            auc_label = f"ROC curve (AUC = {roc_auc:.3f}, no DeLong interval for these data)"
+        else:
+            auc_label = f"ROC curve (AUC = {roc_auc:.3f}, 95% CI {d['ci'].lower:.3f} to {d['ci'].upper:.3f}, DeLong)"
     except Exception:
         auc_label = f"ROC curve (AUC = {roc_auc:.3f})"
 

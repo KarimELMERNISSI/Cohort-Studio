@@ -186,7 +186,7 @@ def logistic_regression(
         )
     auc = auc_ci = None
     try:
-        from biostats.diagnostic import delong_auc
+        from biostats.diagnostic import auc_interval_missing, delong_auc
 
         d = delong_auc(
             ["1" if v == 1 else "0" for v in y],
@@ -194,7 +194,10 @@ def logistic_regression(
             pos_label="1",
             alpha=alpha,
         )
-        auc, auc_ci = d["auc"], (d["ci"].lower, d["ci"].upper)
+        # no interval where DeLong's is not one to write: with one event (or one non-event) it reads far too
+        # narrow, and it has no width when the fitted probabilities separate the two groups
+        auc = d["auc"]
+        auc_ci = None if auc_interval_missing(d) else (d["ci"].lower, d["ci"].upper)
     except Exception as exc:  # the AUC is reported as missing, the model itself stands
         logger.warning("logistic regression: AUC of the fitted probabilities unavailable: %s", exc)
     events = int(y.sum())

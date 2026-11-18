@@ -59,6 +59,12 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   tell participants with the condition from those without, and to check which participants had the reference
   standard. The result's warning says that the area is 0.5 by construction. The plan, the result and the Word
   dossier read one rule.
+- **The same rule on Visualize's ROC curve and for a logistic model.** The legend of Visualize's ROC curve read
+  "AUC = 1.000, 95% CI 1.000 to 1.000, DeLong" for two groups that do not overlap, and "AUC = 0.400, 95% CI 0.222
+  to 0.578, DeLong" for one participant with the condition among 30: it now reads "AUC = 1.000, no DeLong interval
+  for these data". A logistic model with a single event (or a single participant without the event), or whose
+  fitted probabilities separate the two groups, wrote its apparent AUC with such an interval: it now writes the
+  area alone.
 - **A ratio with a very wide interval keeps three figures for each number:** a diagnostic odds ratio read "441.0
   (8.0 to 24,372.7)", and now reads "441 (7.98 to 24,373)".
 

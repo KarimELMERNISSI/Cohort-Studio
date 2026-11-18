@@ -138,6 +138,24 @@ def test_logistic_regression_spector() -> None:
     assert any("events per parameter" in w for w in res.warnings)
 
 
+def test_the_apparent_auc_of_a_logistic_model_has_no_interval_with_one_event() -> None:
+    """One event among 40 gave the apparent AUC a DeLong interval that reads far too narrow (the share of the
+    variance of a group of one is taken as 0): the rule of the accuracy of a test, read here too."""
+    from biostats.diagnostic import ONE_IN_A_GROUP, auc_interval_missing, delong_auc
+
+    df = pd.DataFrame({"event": [0] * 40, "x": np.arange(40.0)})
+    df.loc[20, "event"] = 1  # inside the range of the others: the model is estimable
+    res = logistic_regression(df, "event", ["x"], event_level="1")
+    assert res.events == 1 and res.auc is not None and res.auc_ci is None
+    # the interval the function computes for such a group, which is not one to write
+    alone = delong_auc(["1"] + ["0"] * 39, [0.5, *np.linspace(0.0, 1.0, 39)], pos_label="1")
+    assert alone["ci"].lower < alone["ci"].upper and auc_interval_missing(alone) == ONE_IN_A_GROUP
+    # two events: the interval is kept
+    df.loc[5, "event"] = 1
+    two = logistic_regression(df, "event", ["x"], event_level="1")
+    assert two.events == 2 and two.auc_ci is not None
+
+
 def test_count_regression_recovers_rate_ratio() -> None:
     rng = np.random.default_rng(3)
     n = 400

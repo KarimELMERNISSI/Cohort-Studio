@@ -49,6 +49,7 @@ from pathlib import Path
 # clustermap's hidden labels, the density curves and the record of the AI confirmations (2026-11-14).
 # manage to 81 at 83.0 with the tests of the calculations from numbers typed: their blocks, their words and the
 # dossier's section (2026-11-17).
+# utils to 74 at 76.0 with the test of the legend of Visualize's ROC curve (2026-11-18).
 FLOORS: dict[str, float] = {
     "app_pages": 70.0,
     "biostats": 93.0,
@@ -61,7 +62,7 @@ FLOORS: dict[str, float] = {
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 87.0,
-    "utils": 72.0,
+    "utils": 74.0,
 }
 MARGIN = 4.0  # a package more than this above its floor fails until the floor is raised
 
