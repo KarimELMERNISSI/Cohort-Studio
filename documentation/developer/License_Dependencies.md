@@ -166,8 +166,8 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | llvmlite | 0.50.0 | BSD-2-Clause AND Apache-2.0 WITH LLVM-exception |
 | numba | 0.68.0 | BSD |
 | prince | 0.23.1 | MIT |
-| pynndescent | 0.6.0 | BSD-2-Clause |
-| umap-learn | 0.5.12 | BSD |
+| pynndescent | 0.7.0 | BSD-2-Clause |
+| umap-learn | 0.6.0 | BSD |
 
 ## Optional group `survival` (packages it adds)
 

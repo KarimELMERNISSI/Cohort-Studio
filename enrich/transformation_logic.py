@@ -148,9 +148,10 @@ def apply_variable_transformation(dataframe, params):
             )
             transformed_data = model.fit_transform(StandardScaler().fit_transform(dataframe[columns]))
         elif transformation == "UMAP":
-            import umap
+            # from the module that defines it: umap-learn 0.6 marks its package typed and does not re-export it
+            from umap.umap_ import UMAP
 
-            model = umap.UMAP(
+            model = UMAP(
                 n_components=n_components, n_neighbors=n_neighbors, min_dist=min_dist, random_state=RANDOM_STATE
             )
             transformed_data = model.fit_transform(StandardScaler().fit_transform(dataframe[columns]))

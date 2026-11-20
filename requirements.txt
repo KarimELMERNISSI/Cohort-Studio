@@ -285,7 +285,7 @@ pydantic-settings==2.16.2
     # via cohortstudio
 pydeck==0.9.3
     # via streamlit
-pynndescent==0.6.0
+pynndescent==0.7.0
     # via umap-learn
 pyparsing==3.3.3
     # via matplotlib
@@ -411,7 +411,7 @@ typing-inspection==0.4.4
     #   pydantic-settings
 tzdata==2026.5 ; sys_platform == 'emscripten' or sys_platform == 'win32'
     # via pandas
-umap-learn==0.5.12
+umap-learn==0.6.0
     # via cohortstudio
 urllib3==2.8.0
     # via

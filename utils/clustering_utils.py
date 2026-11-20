@@ -145,7 +145,8 @@ def run_umap(
         (embeddings, info_dict)
     """
     try:
-        import umap
+        # from the module that defines it: umap-learn 0.6 marks its package typed and does not re-export it
+        from umap.umap_ import UMAP
     except ImportError:
         raise ImportError("UMAP not installed. Run: pip install umap-learn")
     
@@ -157,7 +158,7 @@ def run_umap(
         numeric_data = numeric_data.sample(max_samples, random_state=42)
         sampled = True
     
-    reducer = umap.UMAP(
+    reducer = UMAP(
         n_components=n_components,
         n_neighbors=min(n_neighbors, len(numeric_data) - 1),
         min_dist=min_dist,
