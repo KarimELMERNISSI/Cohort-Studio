@@ -50,6 +50,7 @@ from pathlib import Path
 # manage to 81 at 83.0 with the tests of the calculations from numbers typed: their blocks, their words and the
 # dossier's section (2026-11-17).
 # utils to 74 at 76.0 with the test of the legend of Visualize's ROC curve (2026-11-18).
+# manage to 82 at 84.9, which was at the margin, with the tests of the package's command line (2026-11-23).
 FLOORS: dict[str, float] = {
     "app_pages": 70.0,
     "biostats": 93.0,
@@ -58,7 +59,7 @@ FLOORS: dict[str, float] = {
     "explore": 82.0,
     "graph": 92.0,
     "ingest": 89.0,
-    "manage": 81.0,
+    "manage": 82.0,
     "monitor": 6.0,
     "prompts": 85.0,
     "ui": 87.0,

@@ -954,6 +954,46 @@ bases, the notices) is a stored id: never renamed.
   that stopped the reading. Exit codes: 0 read as sent, 1 read but not what the sender made
   (`not_matching`), 2 not read (`Refused`); a caller that parses arguments gives a usage error a code of its own.
 
+**The command line** (`python -m manage.replay`, `manage/replay/__main__.py`) has one command so far, `inspect
+PACKAGE`. `__main__` names each command's arguments and its module in `_COMMANDS`, and imports the module only when
+the command runs: reading a package's hash never loads what a replay needs. What every command shares is
+`manage/replay/commandline.py` (the exit codes, the parser, the password, the lines of 78 columns); `inspect` itself
+is `manage/replay/inspection.py` (not named `inspect`, which a file run from that folder would import in place of
+the standard library's). It says what a received package holds without replaying it:
+
+- **The clear part first:** the file, the kind of package, its hash, its files with their sizes, from
+  `open_package`. `--package-hash` (16 to 64 hexadecimal characters) is compared here: a hash that differs is
+  written under the package's own with the first character at which they part, and ends the run (exit 1) before
+  any password is read, asked for or tried.
+- **Nothing typed on the command line is written back.** The password is never an argument: `--password-file FILE`
+  (its first line, read as the file's byte order mark says, after the clear part) or `--ask-password` (each key
+  shown as `*`, three tries; exit 64 where nobody can type one unseen: on Windows the null device says it is a
+  terminal, so the console itself is asked). Without either it stops after the clear part and says how to go on:
+  it never waits for an input. The parsers take no abbreviation (`--password X` would read as `--password-file`),
+  and of argparse's messages only the forms that name options, never values, are written (`usage_words`): "invalid
+  choice: '...'" would repeat a password typed in the command's place. A file that is not found is not named.
+  A misspelt command or option is not repeated either, so each such error shows the way back: what a command does
+  not take is refused by that command's own parser (`Parser.parse_known_args`), so that the usage above the error
+  is the command's, and the error ends with the command that lists the options, on a line of its own (`way_back`).
+- **With the password:** `read_package`, then what the index says (the software, the study, the declaration, the
+  data by role, the trace, the policy). Nothing of a carried member, of the README or of the data is written out.
+  Every text that is not the module's own goes through `core.package.shown(..., terminal=True)`: the file's name
+  and the two texts the exporter typed, as themselves where the stream writes UTF-8 (`utf8=True`), as escapes
+  elsewhere, cut between two characters when wider than a line (`wrapped(..., breakable=True)`).
+- **Its output** is lines of 78 columns at most (ASCII, the UTF-8 case aside), the report on stdout, the refusals
+  and the prompts on stderr; `--json` gives the same facts as one object. `refusal_words` holds the words of each
+  refusal id (they quote nothing of the file), and a test keeps the word tables equal to the format's closed
+  values.
+- **Exit codes:** 0, 1 and 2 as the reader's; 64 for a command that was not understood or cannot run here
+  (argparse's own 2 would read "not read"); 70 for an error of the program, named by its kind, with an object on
+  that path too under `--json`.
+- **What it loads:** the standard library, `core.package`, `manage.package_zip`, `manage.replay.commandline` and
+  `utils.environment`; pyzipper once a password is given; never the engine, numpy, pandas, pydantic or Streamlit,
+  no `.env` and no setting (a test compares the application's modules a run has loaded with a list). It therefore
+  does not call `configure_logging()`, which reads the settings: it writes no log, and `__main__` turns the
+  process's logging off when it runs as that command (a command that logs, as `verify` will, configures its log
+  instead).
+
 ### Settings, preferences and API keys
 
 **One settings object.** `utils/settings.py` holds every setting the application reads, one field per environment
@@ -1062,5 +1102,6 @@ configuration (`from_config`), and is loaded when used. A custom provider is ins
      exception of a traceback (`exc_info`, `logger.exception`), is written by its kind alone, the traceback's frames
      kept, whichever logger makes the record (Streamlit's own included). It cannot undo a text already put into a
      message. Each entry point calls `configure_logging()` first, which installs it: `main.py`, every command of
-     `manage_users.py`, and a new command line or script of yours.
+     `manage_users.py`, and a new command line or script of yours. The one exception is `python -m manage.replay
+     inspect`, which loads no setting and so configures no log: it writes none.
 7. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).

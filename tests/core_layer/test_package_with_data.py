@@ -969,3 +969,25 @@ def test_a_text_is_shown_on_a_terminal_with_marks_it_can_print() -> None:
         == BACKSLASH * 2 + "xe8"
         != pk.shown(chr(0xE8), terminal=True)
     )
+
+
+def test_a_terminal_that_writes_utf8_shows_a_printable_character_as_itself() -> None:
+    """An escaped accent reads as a broken encoding: where the stream writes UTF-8, the character is shown. The
+    marks stay those any console prints, and what shows nothing or is not printable stays hidden or escaped."""
+    accented = "Fi" + chr(0xE8) + "vre " + chr(0x416)
+    assert pk.shown(accented, terminal=True, utf8=True) == accented
+    assert pk.shown("a" + RLO + "b\nc", terminal=True, utf8=True) == "a?b?c"
+    # a no-break space and a character of a private area are not printable: their escapes
+    assert pk.shown("a" + chr(0xA0) + "b" + chr(0xE000), terminal=True, utf8=True) == (
+        "a" + BACKSLASH + "xa0b" + BACKSLASH + "ue000"
+    )
+    assert pk.shown(BACKSLASH + "xe8", terminal=True, utf8=True) == BACKSLASH * 2 + "xe8"
+    # the limit is in columns: a wide character takes two, and none is cut in two
+    wide = chr(0x4E2D) * 30
+    for limit in (3, 4, 9, 20):
+        text = pk.shown(wide, limit, terminal=True, utf8=True)
+        assert text.endswith("...") and 2 * text.count(chr(0x4E2D)) + 3 <= limit
+    assert pk.shown(chr(0xE8) * 30, 20, terminal=True, utf8=True) == chr(0xE8) * 17 + "..."
+    assert pk.shown(wide[:5], 10, terminal=True, utf8=True) == wide[:5]
+    # without a terminal, the page's form whatever is asked
+    assert pk.shown("a" + RLO + "b", utf8=True) == "a" + pk.REPLACED + "b"

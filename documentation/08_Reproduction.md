@@ -173,6 +173,51 @@ not certify compliance with a guideline, and it is not an electronically signed 
 
 ---
 
+## Checking a package you received
+
+A study package is a `.cstudio.zip` file that someone sent you: a study's definition and its results and, in a
+package *with the data*, the data themselves, encrypted. Check it before you type its password. The check runs on
+a computer where CohortStudio is installed, in a terminal, not in the browser.
+
+1. **Install CohortStudio** on your computer, as its README says (section
+   [Installation & Quick Start](https://github.com/KarimELMERNISSI/Cohort-Studio#installation--quick-start)):
+   install `uv`, take a copy of CohortStudio's code, and run `uv sync --frozen` in its folder. The latest version
+   reads the packages of the earlier ones.
+2. **Open a terminal in that folder** (Windows 11: right-click inside the folder, then *Open in Terminal*). Each
+   command below runs there, with `uv run` in front (the package's own notice writes the command without it: that
+   form works once CohortStudio's environment is activated). Give the package's whole path, in quotes: dragging
+   the file onto the terminal's window writes it.
+3. **Compare the package hash** with the one the sender gave you apart from the file (by another way than the one
+   the file came by; read aloud, its first 16 characters are enough):
+
+   ```
+   uv run python -m manage.replay inspect "C:\Users\you\Downloads\study_r3_with_data.cstudio.zip" --package-hash 3f2a-9c1e-4b7d-0a6c
+   ```
+
+   It prints the kind of package, its hash and its files, and says whether the hash is the one you gave. If it is
+   not, it stops there and shows where the two part: check first what you typed against what the sender sent you
+   (the package hash, not a checksum of the zip file). If the hash you gave is the sender's, this is not the
+   package they made, or it was changed on the way: do not open it, and ask the sender for it again. Nothing is
+   decrypted at this step.
+4. **Read it with the password**, which the sender gave you apart from the file too. Add `--ask-password` to type
+   it unseen (each key shows as `*`; three tries), or `--password-file FILE` to read it from the first line of a
+   file that only you can read, kept away from the package (delete that file afterwards). Never type the password
+   as part of the command: a terminal keeps its command lines. Each file is then checked against the package's list
+   of checksums, and the command says what the package is: the version that made it, the study and its revision,
+   to whom and under what it was sent, the rows and columns of each file of data, and the number of steps of its
+   trace. If you are not the recipient it names, do not use the data: delete the package and tell its sender.
+5. **When your work with it ends**, delete the package, the password's file and every file you took out of the
+   package: a package with the data holds personal data.
+
+`inspect` shows nothing of the study's own texts or of the data, replays nothing and writes nothing to disk.
+`-h` lists its options, and `--json` gives the same facts to a program. Its exit code is 0 when the package was
+read and nothing failed, 1 when it was read but is not the package its sender made (a file does not match its
+checksum, or the hash is not the one given), 2 when it was not read (not a package, one made by a later version,
+the wrong password), 64 when the command was not understood or cannot run where it is (a password asked for in a
+window that cannot hide it), and 70 for an error of the program itself.
+
+---
+
 ## Practical Guidance
 
 - **Save traces regularly** — they are your audit trail for data provenance.

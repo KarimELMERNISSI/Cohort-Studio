@@ -391,10 +391,11 @@ REPLACED_ON_A_TERMINAL, CUT_ON_A_TERMINAL = "?", "..."
 _BACKSLASH = chr(92)
 
 
-def _on_a_terminal(char: str) -> str:
+def _on_a_terminal(char: str, utf8: bool = False) -> str:
     """A character as a terminal shows it: itself when it is printable ASCII, ``?`` when no package may hold it
     (``?`` means only that), a backslash doubled (so that an escape is never a text's own characters), else the
-    escape an ASCII stream writes for it (``backslashreplace``)."""
+    escape an ASCII stream writes for it (``backslashreplace``); on a terminal that writes UTF-8 (``utf8``), a
+    printable character outside ASCII is itself."""
     if unseen(char):
         return REPLACED_ON_A_TERMINAL
     if char == _BACKSLASH:
@@ -402,34 +403,48 @@ def _on_a_terminal(char: str) -> str:
     code = ord(char)
     if code < 0x7F:  # printable ASCII: the controls and DEL are hidden, above
         return char
+    if utf8 and char.isprintable():
+        return char
     letter, width = ("x", 2) if code < 0x100 else ("u", 4) if code < 0x10000 else ("U", 8)
     return f"{_BACKSLASH}{letter}{code:0{width}x}"
 
 
-def shown(text: object, limit: int = 120, *, terminal: bool = False) -> str:
+def _columns(piece: str) -> int:
+    """The columns a piece takes on a terminal: its characters, and two for a wide one (an ideograph, a kana)."""
+    if len(piece) == 1 and unicodedata.east_asian_width(piece) in ("W", "F"):
+        return 2
+    return len(piece)
+
+
+def shown(text: object, limit: int = 120, *, terminal: bool = False, utf8: bool = False) -> str:
     """
     A text that does not come from a member (a file's name, an argument of a command), or a key or a text of a
     carried member, as a page may show it: on one line, each character no package may hold (a line feed too)
     replaced by U+FFFD, cut at ``limit`` characters with U+2026.
 
-    On a terminal (``terminal``): ASCII only, at most ``limit`` characters whatever the text holds, so that a line
+    On a terminal (``terminal``): ASCII only, at most ``limit`` columns whatever the text holds, so that a line
     keeps its width on any console. A character no package may hold is ``?``; another character outside ASCII is
     the escape an ASCII stream would write for it ("é" is ``\\xe9``), and a backslash is doubled, each counted in
     the limit and never cut in two; the mark of a cut is ``...``. A literal ``?`` still reads as the mark: never
-    show two texts side by side through it to compare them.
+    show two texts side by side through it to compare them. Where the terminal writes UTF-8 (``utf8``, with
+    ``terminal``), a printable character outside ASCII is shown as itself (an escaped accent reads as a broken
+    encoding), a wide one counted for two columns; the marks and the doubled backslash stay.
     """
     if not terminal:
         cleaned = "".join(REPLACED if unseen(char) else char for char in str(text))
         return cleaned if len(cleaned) <= limit else cleaned[: max(0, limit - len(CUT))] + CUT
-    pieces = [_on_a_terminal(char) for char in str(text)]
-    if sum(len(piece) for piece in pieces) <= limit:
+    pieces = [_on_a_terminal(char, utf8) for char in str(text)]
+    if sum(_columns(piece) for piece in pieces) <= limit:
         return "".join(pieces)
-    room, kept = max(0, limit - len(CUT_ON_A_TERMINAL)), ""
+    room, kept, used = max(0, limit - len(CUT_ON_A_TERMINAL)), "", 0
     for piece in pieces:
-        if len(kept) + len(piece) > room:
+        if used + _columns(piece) > room:
             break
         kept += piece
-    return (kept + CUT_ON_A_TERMINAL)[: max(0, limit)]
+        used += _columns(piece)
+    return (
+        kept + CUT_ON_A_TERMINAL if limit >= len(CUT_ON_A_TERMINAL) else CUT_ON_A_TERMINAL[:limit]
+    )
 
 
 # ----------------------------------------------------------------------------- the one writer of a JSON member
