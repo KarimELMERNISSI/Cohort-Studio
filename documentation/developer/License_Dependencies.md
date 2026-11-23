@@ -77,7 +77,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | pycryptodomex | 3.24.2 | BSD-2-Clause AND public domain |
 | pydantic | 2.14.3 | MIT |
 | pydantic-core | 2.50.4 | MIT |
-| pydantic-settings | 2.16.2 | MIT |
+| pydantic-settings | 2.16.3 | MIT |
 | pydeck | 0.9.3 | Apache License 2.0 |
 | pyparsing | 3.3.3 | MIT |
 | python-dateutil | 2.9.0.post0 | Apache / BSD |
@@ -121,7 +121,7 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | distro | 1.9.0 | Apache |
 | docstring-parser | 0.18.0 | MIT |
 | google-auth | 2.62.0 | Apache |
-| google-genai | 3.2.0 | Apache-2.0 |
+| google-genai | 3.3.0 | Apache-2.0 |
 | grpcio | 1.84.0 | Apache-2.0 |
 | h2 | 4.4.1 | MIT |
 | hpack | 4.2.0 | MIT |
@@ -140,14 +140,14 @@ The graph connector (`graph/`) keeps the engine swappable; see `documentation/de
 | langchain-protocol | 0.0.20 | MIT |
 | langchain-text-splitters | 1.1.3 | MIT |
 | langsmith | 0.14.12 | MIT |
-| openai | 3.49.0 | Apache-2.0 |
+| openai | 3.51.0 | Apache-2.0 |
 | opentelemetry-api | 1.45.2 | Apache-2.0 |
 | orjson | 3.13.0 | MPL-2.0 AND (Apache-2.0 OR MIT) |
 | portalocker | 3.2.0 | BSD-3-Clause |
 | pyasn1 | 0.6.5 | BSD-2-Clause |
 | pyasn1-modules | 0.4.2 | BSD |
 | pycparser | 3.11 | BSD-3-Clause |
-| pypdf | 7.0.1 | BSD-3-Clause |
+| pypdf | 7.1.0 | BSD-3-Clause |
 | pywin32 | 312 | PSF |
 | qdrant-client | 1.20.0 | Apache |
 | requests-toolbelt | 1.0.0 | Apache |
