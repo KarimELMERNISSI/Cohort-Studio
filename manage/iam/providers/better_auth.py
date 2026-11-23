@@ -12,6 +12,8 @@ import time
 
 import requests
 
+from utils.logging_config import exception_said
+
 from ..base import BaseIAMProvider
 from ..schemas import AuthResult, IAMConfig, UserCredentials, UserProfile, UserRole
 
@@ -183,13 +185,13 @@ class BetterAuthIAMProvider(BaseIAMProvider):
                 )
 
         except requests.RequestException as e:
-            logger.warning(f"Better Auth network error: {e}")
+            logger.warning("Better Auth network error: %s", exception_said(e))
             return AuthResult(
                 success=False,
                 message=f"Better Auth service unreachable: {e}",
             )
         except Exception as e:
-            logger.error(f"Better Auth unexpected error: {e}")
+            logger.error("Better Auth unexpected error: %s", exception_said(e))
             return AuthResult(success=False, message=f"Authentication error: {e}")
 
     def create_user(
@@ -285,7 +287,7 @@ class BetterAuthIAMProvider(BaseIAMProvider):
                 )
             return None
         except Exception as e:
-            logger.error(f"Error fetching user from Better Auth: {e}")
+            logger.error("Error fetching user from Better Auth: %s", exception_said(e))
             return None
 
     def list_users(self) -> list[UserProfile]:
@@ -313,7 +315,7 @@ class BetterAuthIAMProvider(BaseIAMProvider):
                 return profiles
             return []
         except Exception as e:
-            logger.error(f"Error listing users from Better Auth: {e}")
+            logger.error("Error listing users from Better Auth: %s", exception_said(e))
             return []
 
     def activate_user(self, username: str) -> tuple[bool, str]:

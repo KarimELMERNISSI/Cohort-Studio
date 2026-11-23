@@ -11,7 +11,7 @@ from manage.iam import UserCredentials, UserRole, get_iam_manager
 from manage.iam.authz import MIN_PASSWORD_LENGTH, validate_new_credentials
 from manage.iam.schemas import IAMProviderType
 from ui.theme import APP_NAME, APP_TAGLINE, brand_asset
-from utils.logging_config import single_line
+from utils.logging_config import exception_said, single_line
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +100,7 @@ def _move_earlier_workspace(iam, username: str) -> None:
             )
             moved, outcome = False, f"{outcome}; {note}" if outcome else note
     except Exception as exc:  # never in the way of a sign-in
-        logger.warning(
-            "An earlier workspace folder was not moved (%s: %s)",
-            type(exc).__name__,
-            single_line(str(exc)),
-        )
+        logger.warning("An earlier workspace folder was not moved (%s)", exception_said(exc))
         return
     if outcome:
         level = logging.INFO if moved else logging.WARNING

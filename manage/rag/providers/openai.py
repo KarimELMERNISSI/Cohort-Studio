@@ -12,7 +12,7 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
@@ -57,7 +57,7 @@ class OpenAIChatConnector(BaseLLMConnector):
             ]
             return sorted(chat_models) or ["gpt-4o-mini", "gpt-4o"]
         except Exception as e:
-            logger.warning(f"Could not list OpenAI models: {e}")
+            logger.warning("Could not list OpenAI models: %s", exception_said(e))
             return ["gpt-4o-mini", "gpt-4o", "o3-mini"]
 
     def _generate(
@@ -97,8 +97,8 @@ class OpenAIChatConnector(BaseLLMConnector):
             content = response.choices[0].message.content or ""
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
         except Exception as e:
-            err = f"OpenAI API Error: {e!s}"
-            logger.error(err)
+            err = f"OpenAI API Error: {e!s}"  # for the page's own message
+            logger.error("OpenAI API Error: %s", exception_said(e))
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(err)}"))])
 
 
@@ -130,7 +130,7 @@ class OpenAIEmbeddingConnector(BaseEmbeddingConnector):
             )
             return [data.embedding for data in response.data]
         except Exception as e:
-            logger.error(f"OpenAI embedding error: {e}")
+            logger.error("OpenAI embedding error: %s", exception_said(e))
             raise
 
     def embed_query(self, text: str) -> list[float]:

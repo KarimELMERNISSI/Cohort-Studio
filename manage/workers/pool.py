@@ -357,7 +357,7 @@ class ExpressionWorkers:
             if not isinstance(exc, Exception):
                 raise  # a rerun of the page while the worker started: ended by _start
             if isinstance(exc, _NotReady):  # its own words: fixed, with numbers only
-                logger.warning("A worker for formulas and criteria did not start: %s", exc)
+                logger.warning("A worker for formulas and criteria did not start: %s", str(exc))
             else:  # another error's type and code, never its message (a path names the server's account)
                 code = getattr(exc, "winerror", None)
                 logger.warning(

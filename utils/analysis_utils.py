@@ -114,7 +114,7 @@ def analyze_variable(df, group_col, target, numeric_cols, categorical_cols, bina
                 )
                 epi_2x2_data = analyze_twobytwo(table_2x2, design=design).legacy_dict()
             except Exception as e_epi:
-                logger.debug(f"2x2 epidemiology calculation notice: {e_epi}")
+                logger.debug("2x2 epidemiology calculation notice (%s)", type(e_epi).__name__)
 
         if use_test == "Fisher's Exact":
             test_name = "Fisher's Exact"
@@ -194,7 +194,7 @@ def perform_post_hoc(df, group_col, target_col, test_type, adjust_method="holm")
     try:
         return pairwise_comparisons(groups, method=default_method(str(test_type)), adjust_method=adjust_method)
     except Exception as exc:
-        logger.warning("Post-hoc comparison failed: %s", exc)
+        logger.warning("Post-hoc comparison failed (%s)", type(exc).__name__)
         return None
 
 

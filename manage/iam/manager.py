@@ -11,7 +11,7 @@ import os
 from typing import Any
 
 from core.workspace import workspace_exists
-from utils.logging_config import single_line
+from utils.logging_config import exception_said, single_line
 from utils.settings import Settings, get_settings
 
 from . import setup_token
@@ -238,8 +238,11 @@ class IAMManager:
         try:
             users = self._provider.list_users()
         except Exception as exc:  # provider unreachable: never block application start-up
-            logger.warning("Admin bootstrap skipped, could not list users: %s", exc)
-            return False, f"Could not list users: {exc}"
+            # the same words in the log and in the outcome, which manage_users.py prints into the container's log: an
+            # error's own text can hold the database's path, or the identity provider's address with its credentials
+            said = exception_said(exc)
+            logger.warning("Admin bootstrap skipped, could not list users: %s", said)
+            return False, f"Could not list users: {said}"
         if any(str(u.role) == UserRole.ADMIN.value and u.is_active for u in users):
             setup_token.clear(self._setup_dir())  # a token left from before the administrator existed
             return False, "An active administrator already exists"

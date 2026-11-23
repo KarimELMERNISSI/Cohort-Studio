@@ -1162,11 +1162,17 @@ def apply_steps(
             current, missing, mode = skipped.args[0], None, skipped.args[1]
             result.not_replayable.append(i)
         except Exception as exc:
-            # without the values the error quotes (a cell of the data), in the result and in the log; an unknown id is
-            # the trace's, never the data's, and is named with the valid ones
+            # without the values the error quotes (a cell of the data) in the result; an unknown id is the trace's,
+            # never the data's, and is named with the valid ones. The log names the error's kind alone: a text can
+            # hold a value that no quote surrounds, and the page shows the result's message to its user
             said = single_line(exc) if isinstance(exc, UnknownIdError) else without_values(exc)
             message = f"Error during step {i + 1} ({step.get('function')}): {said}"
-            logger.error(message)
+            logger.error(
+                "Error during step %d (%s): %s",
+                i + 1,
+                single_line(step.get("function")),
+                type(exc).__name__,
+            )
             result.error, result.steps_applied = message, offset
             result.population_frames.clear()
             return result

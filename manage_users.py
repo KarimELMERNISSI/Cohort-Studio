@@ -116,9 +116,6 @@ def cmd_setup_token(_: argparse.Namespace) -> None:
 
 def cmd_bootstrap(_: argparse.Namespace) -> None:
     """Run before the server (Docker entry point): the administrator from CMP_ADMIN_*, or a setup token in the log."""
-    from utils.logging_config import configure_logging
-
-    configure_logging()
     _, message = get_iam_manager().ensure_bootstrap_admin()
     print(f"Administrator bootstrap: {message}")
 
@@ -160,7 +157,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    from utils.logging_config import configure_logging
+
     args = build_parser().parse_args(argv)
+    # for every command: the log's handler and level, and no exception's text in a record (a warning of the
+    # identity provider, or a traceback, would otherwise reach the terminal as Python writes it)
+    configure_logging()
     try:
         args.func(args)
     except IAMConfigurationError as exc:  # an unknown CMP_IAM_PROVIDER: the valid names, never the value

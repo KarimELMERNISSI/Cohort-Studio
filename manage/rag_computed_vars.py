@@ -13,7 +13,7 @@ from core.derived import KINDS, DerivedVariable
 from enrich.formulas import MAX_FORMULA_LENGTH, formula_from_model, read_formula
 from manage.ai_payload import document_name, taxonomy_for_prompt
 from utils.llm_utils import ProviderError, parse_json_safe, provider_error, validate_and_parse
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 # Import Pydantic schemas for structured output
 from .rag_schemas import (
@@ -238,7 +238,7 @@ class ComputedVarsMixin:
         except ProviderError:
             raise
         except Exception as e:
-            logger.warning(f"Failed to get theoretical formulas: {e}")
+            logger.warning("Failed to get theoretical formulas: %s", exception_said(e))
             return []
 
     def _map_formulas_to_data(self, concepts, columns, allow_missing, limit, use_taxonomy=True, existing_categories=None):
@@ -290,7 +290,7 @@ class ComputedVarsMixin:
         except ProviderError:
             raise
         except Exception as e:
-            logger.warning(f"Failed to map formulas to data: {e}")
+            logger.warning("Failed to map formulas to data: %s", exception_said(e))
             return json.dumps({"suggestions": [], "error": str(e)})
 
     def suggest_computed_variables_with_validation(self, columns, search_hint=None, num_suggestions=5, suggestion_mode="Comprehensive", allow_missing_variables=False, use_taxonomy=True, existing_categories=None, progress_callback=None):
@@ -307,7 +307,7 @@ class ComputedVarsMixin:
                 data = {"suggestions": data if isinstance(data, list) else []}
             suggestions = data.get("suggestions", [])
         except Exception as e:
-            logger.warning(f"Failed to parse suggestions: {e}")
+            logger.warning("Failed to parse suggestions: %s", exception_said(e))
             return None, f"Failed to parse suggestions: {e}"
 
         if progress_callback: progress_callback(60, "Validating and aligning variables...")
@@ -387,7 +387,7 @@ class ComputedVarsMixin:
                     if s['name'] in md_map:
                         s['markdown_formula'] = md_map[s['name']]
             except Exception as e:
-                logger.debug(f"Markdown formula conversion failed: {e}")
+                logger.debug("Markdown formula conversion failed: %s", exception_said(e))
 
         data['suggestions'] = validated
         return json.dumps(data), None
@@ -405,7 +405,7 @@ class ComputedVarsMixin:
                 return result.model_dump()
             return parse_json_safe(response.content, default={"proxy_found": False})
         except Exception as e:
-            logger.warning(f"suggest_proxy_variable failed: {e}")
+            logger.warning("suggest_proxy_variable failed: %s", exception_said(e))
             return {"proxy_found": False}
 
     def suggest_alternative_formula(self, target_concept, missing_variable, available_columns):
@@ -421,7 +421,7 @@ class ComputedVarsMixin:
                 return result.model_dump()
             return parse_json_safe(response.content, default={"alternative_found": False})
         except Exception as e:
-            logger.warning(f"suggest_alternative_formula failed: {e}")
+            logger.warning("suggest_alternative_formula failed: %s", exception_said(e))
             return {"alternative_found": False}
 
     def suggest_imputation_formulas(self, target_variable, available_columns, search_hint=None, context_columns=None, context_stats=None, num_suggestions=3, column_kinds=None):
@@ -491,7 +491,7 @@ class ComputedVarsMixin:
             return suggestions, None
             
         except Exception as e:
-            logger.warning(f"Failed to suggest imputation formulas: {e}")
+            logger.warning("Failed to suggest imputation formulas: %s", exception_said(e))
             return [], str(e)
 
     def suggest_derived_variables(

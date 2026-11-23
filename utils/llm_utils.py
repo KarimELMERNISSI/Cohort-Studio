@@ -11,7 +11,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +169,7 @@ def validate_and_parse(
         
     except ValidationError as e:
         error_msg = f"Schema validation failed: {e.error_count()} errors"
-        logger.warning(f"{error_msg}: {e.errors()}")
+        logger.warning("%s: %s", error_msg, ", ".join(".".join(str(part) for part in error["loc"]) for error in e.errors()))
         
         if strict:
             raise
@@ -185,7 +185,7 @@ def validate_and_parse(
             
     except Exception as e:
         error_msg = f"Unexpected error: {e!s}"
-        logger.error(error_msg)
+        logger.error("Unexpected error (%s)", type(e).__name__)
         return None, error_msg
 
 
@@ -301,7 +301,7 @@ class StructuredOutputHelper:
                         
             except Exception as e:
                 error = str(e)
-                logger.warning(f"Attempt {attempt + 1} failed: {error}")
+                logger.warning("Attempt %s failed: %s", attempt + 1, exception_said(e))
                 
                 if attempt == self.max_retries:
                     return None, f"All attempts failed: {error}"

@@ -84,8 +84,183 @@ def test_raw_html_is_ratcheted_down() -> None:
 
 
 def test_print_calls_are_ratcheted_down() -> None:
+    # none since ruff's T20 holds over the whole application (pyproject.toml); this one reads the same folders
     hits = _count(r"^\s*print\(", "app_pages", "utils", "manage", "enrich", "explore", "monitor")
-    assert len(hits) <= 72, f"{len(hits)} print() calls (ceiling 72); use logging"
+    assert not hits, f"print() calls: {hits}; use logging"
+
+
+_LOG_CALLS = {"debug", "info", "warning", "error", "exception", "critical", "log"}
+_LOGGERS = {"logger", "logging", "log", "_logger", "LOGGER", "_LOGGER"}
+# what writes an exception without its values: the three functions of utils.logging_config, and no other
+_WITHOUT_VALUES = {"exception_kind", "exception_said", "without_values"}
+# what a logging call takes besides its message and the message's arguments
+_NOT_TEXT = {"exc_info", "stack_info", "stacklevel"}
+# a caught exception read otherwise in a logging call, and why it may be
+_EXCEPTION_READ = {
+    ("manage/preferences.py", 'str(e["loc"][0]) for e in exc.errors()'): "the names of the fields a file got wrong",
+    ("utils/llm_utils.py", 'error["loc"]) for error in e.errors()'): "the fields a reply got wrong, not their values",
+    ("manage/workers/wire.py", "it was not used\", str(refused)"): "a global's name, checked by _refused",
+    ("manage/workers/pool.py", "did not start: %s\", str(exc)"): "_NotReady's own words: fixed, with numbers only",
+    ("manage/workers/pool.py", "did not start (%s%s)\", type(exc).__name__"): "the number of a Windows error",
+}
+
+
+def _reads_exception_text(node: ast.AST, caught: set[str]) -> bool:
+    """Whether ``node`` reads a caught exception otherwise than by its kind or through a function that writes it
+    without its values."""
+    if isinstance(node, ast.Call):
+        name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
+        if name in _WITHOUT_VALUES or (name == "type" and len(node.args) == 1):
+            return False
+    if isinstance(node, ast.Name):
+        return node.id in caught
+    return any(_reads_exception_text(child, caught) for child in ast.iter_child_nodes(node))
+
+
+def _gives_a_logger(node: ast.AST) -> bool:
+    """A call that gives a logger: ``logging.getLogger(__name__)``, ``audit_logger()``."""
+    if not isinstance(node, ast.Call):
+        return False
+    name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
+    return name == "getLogger" or name.lower().endswith("logger")
+
+
+def _logger_names(tree: ast.AST) -> set[str]:
+    """The names a file gives a logger (``_audit = audit_logger()``), whatever they are."""
+    return {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and _gives_a_logger(node.value)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def _is_logger(node: ast.AST, named: set[str]) -> bool:
+    """A logger: a name of ``_LOGGERS`` or one the file gave a logger, an attribute that ends in "logger"
+    (``self.logger``), or one obtained by a call."""
+    if isinstance(node, ast.Name):
+        return node.id in _LOGGERS or node.id in named
+    if isinstance(node, ast.Attribute):
+        return node.attr.lower().endswith("logger")
+    return _gives_a_logger(node)
+
+
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+
+
+def _texts_held(scope: ast.AST) -> set[str]:
+    """The names of ``scope`` (a function, or the module) that hold an exception or its text: assigned from an
+    expression that reads a caught exception (``last = exc``, ``err = f"failed: {exc}"``), or from such a name."""
+    held: set[str] = set()
+
+    def walk(node: ast.AST, caught: set[str]) -> bool:
+        grew = False
+        if isinstance(node, _SCOPES) and node is not scope:
+            return False  # its own scope
+        if isinstance(node, ast.ExceptHandler) and node.name:
+            caught = caught | {node.name}
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)) and node.value is not None:
+            if _reads_exception_text(node.value, caught | held):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                names = {n.id for target in targets for n in ast.walk(target) if isinstance(n, ast.Name)}
+                grew = not names <= held
+                held.update(names)
+        for child in ast.iter_child_nodes(node):
+            grew = walk(child, caught) or grew
+        return grew
+
+    while walk(scope, set()):
+        pass
+    return held
+
+
+def _logged_exception_texts(tree: ast.AST, source: str) -> list[tuple[int, str]]:
+    found: list[tuple[int, str]] = []
+    named = _logger_names(tree)
+
+    def visit(node: ast.AST, caught: set[str], held: set[str]) -> None:
+        if isinstance(node, _SCOPES):
+            held = _texts_held(node)
+        if isinstance(node, ast.ExceptHandler) and node.name:
+            caught = caught | {node.name}
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _LOG_CALLS
+            and _is_logger(node.func.value, named)
+            and any(
+                _reads_exception_text(arg, caught | held)
+                for arg in [*node.args, *(k.value for k in node.keywords if k.arg not in _NOT_TEXT)]
+            )
+        ):
+            found.append((node.lineno, " ".join((ast.get_source_segment(source, node) or "").split())))
+        for child in ast.iter_child_nodes(node):
+            visit(child, caught, held)
+
+    visit(tree, set(), _texts_held(tree))
+    return found
+
+
+def test_a_logging_call_names_a_caught_exception_by_its_kind_or_without_its_values() -> None:
+    """
+    An exception's text can quote a cell of the data ("could not convert string to float: 'Jean Dupont'") and a
+    file's error its path, which names the account: a logging call gives ``type(exc).__name__`` (a failure on the
+    data), or ``exception_said(exc)`` (a service's error: the kind and the text without quoted strings and paths).
+    Never the exception itself, its ``str`` or an f-string of it, nor a name that was given one (``err = f"...
+    {exc}"``, then ``logger.error(err)``): the process-wide cleaning of records (``records_without_values``) cannot
+    undo a text already formatted, and a process that did not install it would write the whole text. ``exc_info`` is
+    written by that cleaning, and stays allowed. Not seen here: a text that travels through a call or an attribute.
+    """
+    hits, used = [], set()
+    for file in _files(*SOURCE_DIRS, "manage_users.py"):
+        rel = file.relative_to(ROOT).as_posix()
+        source = file.read_text(encoding="utf-8")
+        for line, call in _logged_exception_texts(ast.parse(source), source):
+            allowed = [key for key in _EXCEPTION_READ if key[0] == rel and key[1] in call]
+            used.update(allowed)
+            if not allowed:
+                hits.append(f"{rel}:{line}: {call[:120]}")
+    assert not hits, "a logging call writes an exception's text:\n" + "\n".join(hits)
+    assert used == set(_EXCEPTION_READ), f"entries no call uses: {sorted(set(_EXCEPTION_READ) - used)}"
+
+
+def test_the_logging_gate_reads_each_way_of_writing_an_exception() -> None:
+    source = (
+        "try:\n    pass\nexcept ValueError as exc:\n"
+        "    logger.warning('a %s', exc)\n"
+        "    logger.warning(f'b {exc}')\n"
+        "    logger.warning('c %s', str(exc))\n"
+        "    logger.warning('d ' + repr(exc))\n"
+        "    logging.error('e %s', exc.args[0])\n"
+        "    logger.warning('f (%s)', type(exc).__name__)\n"
+        "    logger.warning('g %s', exception_said(exc))\n"
+        "    logger.debug('h', exc_info=exc)\n"
+        "    st.error(f'i {exc}')\n"
+        "logger.warning('j %s', exc)\n"
+        "def later():\n"
+        "    last = said = None\n"
+        "    try:\n        pass\n"
+        "    except OSError as error:\n"
+        "        last = error\n"
+        "        text = f'failed: {error}'\n"
+        "        said = exception_said(error)\n"
+        "        logging.getLogger(__name__).error('k %s', error)\n"
+        "        self.logger.error('l %s', error)\n"
+        "    logger.error(text)\n"
+        "    logger.error('n %s', last)\n"
+        "    logger.error('o %s', said)\n"
+        "    other.error('p %s', last)\n"
+        "    logger.error(msg=f'q {last}')\n"
+        "    logger.error('r %s', _reason(last))\n"
+        "    logger.error('s %s', exception_kind(last), exc_info=last)\n"
+        "    logger.log(30, 't %s', extra={'why': last})\n"
+        "    _audit = audit_logger()\n"
+        "    _audit.info('u %s', last)\n"
+        "    _audit.info('v %s', exception_kind(last))\n"
+    )
+    found = [line for line, _ in _logged_exception_texts(ast.parse(source), source)]
+    assert found == [4, 5, 6, 7, 8, 22, 23, 24, 25, 28, 29, 31, 33]
 
 
 def test_version_is_recorded_in_the_changelog() -> None:

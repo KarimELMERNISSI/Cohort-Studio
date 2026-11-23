@@ -14,7 +14,7 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 
@@ -53,7 +53,7 @@ class OllamaChatConnector(BaseLLMConnector):
                     if models:
                         return models
         except Exception as e:
-            logger.debug(f"Ollama local ping failed ({endpoint}): {e}")
+            logger.debug("Ollama local ping failed (%s): %s", endpoint, exception_said(e))
 
         # Recommended open-weights models
         return [
@@ -124,7 +124,7 @@ class OllamaChatConnector(BaseLLMConnector):
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(err)}"))])
 
         except Exception as e:
-            logger.error(f"Ollama execution error: {e}")
+            logger.error("Ollama execution error: %s", exception_said(e))
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(str(e))}"))])
 
 
@@ -185,7 +185,7 @@ class OllamaEmbeddingConnector(BaseEmbeddingConnector):
                 results.append(res[0] if res else [])
             return results
         except Exception as e:
-            logger.error(f"Error computing local Ollama embeddings: {e}")
+            logger.error("Error computing local Ollama embeddings: %s", exception_said(e))
             raise
 
     def embed_query(self, text: str) -> list[float]:
@@ -193,5 +193,5 @@ class OllamaEmbeddingConnector(BaseEmbeddingConnector):
             res = self._call_embed(text)
             return res[0] if res else []
         except Exception as e:
-            logger.error(f"Error computing local Ollama query embedding: {e}")
+            logger.error("Error computing local Ollama query embedding: %s", exception_said(e))
             raise

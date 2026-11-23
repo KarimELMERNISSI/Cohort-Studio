@@ -17,7 +17,7 @@ import duckdb
 
 import utils.data_paths as dp
 from core.workspace import safe_dirname
-from utils.logging_config import single_line
+from utils.logging_config import exception_said, single_line
 from utils.settings import get_settings
 
 from ..base import BaseIAMProvider
@@ -83,7 +83,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
         try:
             return duckdb.connect(self.user_db_path)
         except Exception as e:
-            logger.error(f"Failed to connect to User DuckDB at {self.user_db_path}: {e}")
+            logger.error("Failed to connect to the user database: %s", exception_said(e))
             return None
 
     def _init_database(self) -> None:
@@ -128,7 +128,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                     pass  # the column already exists
 
         except Exception as e:
-            logger.error(f"Error initializing local user database: {e}")
+            logger.error("Error initializing local user database: %s", exception_said(e))
         finally:
             con.close()
 
@@ -206,7 +206,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
             con.execute("UPDATE users SET failed_attempts = ? WHERE username = ?", [failed_attempts, credentials.username])
             return AuthResult(success=False, message="Invalid username or password")
         except Exception as e:
-            logger.error(f"Exception during user verification: {e}")
+            logger.error("Exception during user verification: %s", exception_said(e))
             return AuthResult(success=False, message=f"Authentication error: {e}")
         finally:
             con.close()
@@ -252,7 +252,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                 return True, "User created and activated successfully"
             return True, "Account created! Please wait for admin approval to access the app."
         except Exception as e:
-            logger.error("Error creating user %s: %s", single_line(username), e)
+            logger.error("Error creating user %s: %s", single_line(username), exception_said(e))
             return False, f"Error creating user: {e}"
         finally:
             con.close()
@@ -299,7 +299,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                 created_at=str(row[3]) if row[3] is not None else None,
             )
         except Exception as e:
-            logger.error(f"Error fetching user {username}: {e}")
+            logger.error("Error fetching user %s: %s", single_line(username), exception_said(e))
             return None
         finally:
             con.close()
@@ -328,7 +328,7 @@ class LocalDuckDBIAMProvider(BaseIAMProvider):
                 )
             return users
         except Exception as e:
-            logger.error(f"Error listing users: {e}")
+            logger.error("Error listing users: %s", exception_said(e))
             return []
         finally:
             con.close()

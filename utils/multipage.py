@@ -66,7 +66,7 @@ def load_dataframe(uploaded_file: Any, options: ParseOptions | None = None) -> p
     try:
         kind = file_kind(name)
     except ValueError as exc:
-        logger.error("%s", exc)
+        logger.error("A file of a kind that is not read was given (%s)", type(exc).__name__)
         return None
     try:
         if kind == "excel":
@@ -75,7 +75,8 @@ def load_dataframe(uploaded_file: Any, options: ParseOptions | None = None) -> p
                 return {"__multi_sheet__": True, "sheet_names": sheets}
         return _with_options(read_table(data, name, options))
     except Exception as exc:
-        logger.error("Error loading file %s: %s", name, exc)
+        # neither the file's name nor the reader's text: the first is the user's, the second can quote a cell
+        logger.error("A file could not be loaded (%s)", type(exc).__name__)
         return None
 
 
@@ -86,7 +87,7 @@ def _load_excel_with_selection(file_bytes: bytes, sheet_names: list, selected_sh
         options = ParseOptions(sheets=tuple(selected_sheets), merge_key=merge_key)
         return _with_options(read_table(file_bytes, "workbook.xlsx", options))
     except Exception as exc:
-        logger.error("Error loading Excel sheets: %s", exc)
+        logger.error("The sheets of a workbook could not be loaded (%s)", type(exc).__name__)
         return None
 
 

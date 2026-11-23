@@ -140,7 +140,7 @@ def compare_dataframes(df1, df2, id_column, exception_list):
 
         return merged_df
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e!s}")
+        logging.error("The comparison of the two tables failed (%s)", type(e).__name__)
         return None
 
 
@@ -170,9 +170,9 @@ def process_comparison(comparison_name, comparison_info, config, exclude_cols=No
         if not os.path.exists(comparison_folder):
             os.makedirs(comparison_folder)
 
-        logging.info(f"Processing outliers file: {input_file_1}")
+        logging.info("Processing the first file of a comparison")
         df1 = read_path(input_file_1).df
-        logging.info(f"Processing outliers file: {input_file_2}")
+        logging.info("Processing the second file of a comparison")
         df2 = read_path(input_file_2).df
 
         if exclude_cols is not None:
@@ -193,7 +193,7 @@ def process_comparison(comparison_name, comparison_info, config, exclude_cols=No
 
         return df1, df2, common_id_name, comparison_result_filtered, common_id_only_in_df1, common_id_only_in_df2, common_id_modified, output_file
     except Exception as e:
-        logging.error(f"An unexpected error occurred for comparison: {comparison_name}. Error: {e!s}")
+        logging.error("The comparison failed (%s)", type(e).__name__)
         return None
 
 def process_comparisons_from_config(config, exclude_cols_stats):
@@ -311,11 +311,11 @@ def process_comparison_st(comparison_name, df1, df2, common_id=None, common_cols
         return df1, df2, common_id, comparison_result_filtered, rows_only_in_df1, rows_only_in_df2, modified_common_ids, output_file
 
     except FileNotFoundError as fnf_error:
-        logging.error(f"File not found: {fnf_error}")
+        logging.error("A file of the comparison was not found")  # its path names the account
         return None
     except KeyError as key_error:
-        logging.error(f"Missing key in comparison_info: {key_error}")
+        logging.error("The comparison request lacks a key (%s)", type(key_error).__name__)
         return None
     except Exception as e:
-        logging.error(f"An unexpected error occurred for '{comparison_name}': {e!s}")
+        logging.error("The comparison failed (%s)", type(e).__name__)
         return None

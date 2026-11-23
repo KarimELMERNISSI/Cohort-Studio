@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from core.registry import Availability
+from utils.logging_config import exception_said
 
 from .base import BaseVectorIndex, ChunkRow, Hit, VectorEngine, VectorStoreError
 
@@ -146,7 +147,7 @@ class LanceDBIndex(BaseVectorIndex):
         try:
             self._table().create_index(metric="cosine", vector_column_name="vector", replace=True)
         except Exception as exc:  # an approximate index is an optimisation, never a requirement
-            logger.warning("LanceDB index creation skipped: %s", exc)
+            logger.warning("LanceDB index creation skipped: %s", exception_said(exc))
 
     def close(self) -> None:
         self._db = None

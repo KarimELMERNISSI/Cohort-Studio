@@ -32,6 +32,26 @@ from manage.workers.wire import round_trip as _round_trip
 
 _install_runner(_round_trip)
 
+# Every log record without an exception's text, as in the application (main.py and every command of manage_users.py
+# install it through configure_logging): installed here once, so that what a test reads in the log does not depend
+# on whether an AppTest ran main.py before it. A test of a call site's own words asks for ``plain_log_records``.
+from utils.logging_config import records_without_values as _records_without_values
+
+_records_without_values()
+
+
+@pytest.fixture
+def plain_log_records():
+    """Log records as they were made before the cleaning (``records_without_values``), an exception's text whole:
+    for a test that a logging call, or a handler's filter, keeps a value out of the log by itself. Not for a test
+    that runs main.py in an AppTest or calls ``configure_logging``: either installs the cleaning again."""
+    import logging
+
+    installed = logging.getLogRecordFactory()
+    logging.setLogRecordFactory(getattr(installed, "wraps", None) or logging.LogRecord)
+    yield
+    logging.setLogRecordFactory(installed)
+
 
 @pytest.fixture(autouse=True)
 def _ollama_server_runs_it_here(monkeypatch: pytest.MonkeyPatch):

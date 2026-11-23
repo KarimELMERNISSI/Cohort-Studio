@@ -399,7 +399,7 @@ def _merge(df, additional_df, left_id_names, right_id_names, additional_cols=Non
         return combined_df
 
     except KeyError as e:
-        logging.error(f"Key error: {e}")  # a column's name
+        logging.error("The merge failed: a column was not found (%s)", type(e).__name__)
         return df
     except Exception as e:
         # the type only: pandas' message quotes values (the keys a many-to-one merge finds repeated), patient data
@@ -444,7 +444,7 @@ def process_data_enrichment(df, additional_data_info):
                 if not isinstance(right_id_names, list):
                     right_id_names = [right_id_names]
 
-            logging.info(f"Processing additional data file: {input_file}")
+            logging.info("Processing an additional data file")
             additional_df = read_path(input_file).df
 
             if not additional_df.empty:
@@ -457,13 +457,13 @@ def process_data_enrichment(df, additional_data_info):
             logger.debug("No enrichment request")
             return df  # unchanged: the caller goes on with it
     except FileNotFoundError:
-        logging.error(f"File not found: {input_file}")
+        logging.error("The file to enrich was not found")  # its path names the account
         return df
     except KeyError as e:
-        logging.error(f"Key error: {e}")
+        logging.error("The enrichment failed: a key was not found (%s)", type(e).__name__)
         return df
     except Exception as e:
-        logging.error(f"An unexpected error occurred during data enrichment: {additional_data_info}. Error: {e!s}")
+        logging.error("The enrichment failed (%s)", type(e).__name__)  # its text can quote a value, its request a path
         return df
 
 

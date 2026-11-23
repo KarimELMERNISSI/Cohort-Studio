@@ -10,6 +10,12 @@ files = []
 # No usage statistics leave the server (privacy requirement for clinical deployments).
 gatherUsageStats = false
 
+[logger]
+# A page's uncaught error goes to the log, where each exception is written by its kind alone
+# (utils/logging_config.py). With this on, which is Streamlit's default whenever the package "rich" is installed,
+# the traceback is printed to the console instead, the error's text whole: it can quote a cell of the data.
+enableRich = false
+
 [server]
 maxUploadSize = 500
 enableXsrfProtection = true

@@ -250,7 +250,7 @@ class TransformationManager:
                             "file_path": step.get("output_dataset_path")
                         })
             except Exception as e:
-                logging.error(f"Error reading trace file {trace_file}: {e}")
+                logging.error("A trace file could not be read (%s)", type(e).__name__)
                 
         # Sort by timestamp descending
         datasets.sort(key=lambda x: x["timestamp"], reverse=True)

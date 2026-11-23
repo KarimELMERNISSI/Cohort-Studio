@@ -12,7 +12,7 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
@@ -95,8 +95,8 @@ class MistralChatConnector(BaseLLMConnector):
             content = response.choices[0].message.content or ""
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
         except Exception as e:
-            err = f"Mistral API Error: {e!s}"
-            logger.error(err)
+            err = f"Mistral API Error: {e!s}"  # for the page's own message
+            logger.error("Mistral API Error: %s", exception_said(e))
             return ChatResult(generations=[ChatGeneration(message=AIMessage(content=f"Error: {redact_secrets(err)}"))])
 
 
@@ -128,7 +128,7 @@ class MistralEmbeddingConnector(BaseEmbeddingConnector):
             )
             return [data.embedding for data in response.data]
         except Exception as e:
-            logger.error(f"Mistral embedding error: {e}")
+            logger.error("Mistral embedding error: %s", exception_said(e))
             raise
 
     def embed_query(self, text: str) -> list[float]:

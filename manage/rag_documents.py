@@ -8,7 +8,7 @@ import os
 
 from manage.ai_payload import document_name
 from manage.rag.providers import file_readers
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 
 def _passages(docs) -> str:
@@ -218,5 +218,5 @@ class DocumentsMixin:
             return chain.invoke(query)
         except Exception as e:
             import logging
-            logging.getLogger(__name__).error("RAG Chat Error: %s", e, exc_info=True)
+            logging.getLogger(__name__).error("RAG Chat Error: %s", exception_said(e), exc_info=True)
             return f"System Error: {e!s}"

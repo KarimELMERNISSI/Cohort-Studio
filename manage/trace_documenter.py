@@ -40,7 +40,7 @@ class TraceDocumenter:
                     self.trace = json.load(f)
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).error("Error loading trace file: %s", e)
+                logging.getLogger(__name__).error("A trace file could not be loaded (%s)", type(e).__name__)
         
     def generate_report(self):
         """

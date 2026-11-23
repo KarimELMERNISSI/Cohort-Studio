@@ -104,3 +104,21 @@ class TestDatasetRowIds:
     def test_a_missing_version_is_reported(self, isolated_db_manager: DBManager) -> None:
         loaded, message = isolated_db_manager.load_dataset("nothing_v9")
         assert loaded is None and "not found" in message
+
+
+def test_saving_a_version_writes_no_cell_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, plain_log_records: None
+) -> None:
+    """pyarrow's error quotes the cell it could not convert (a text in a column of numbers, as a workbook gives
+    one): the log names the error's kind, and the version is written all the same (by DuckDB)."""
+    import logging
+
+    from manage.db_manager import write_parquet
+
+    frame = pd.DataFrame({"crp": [12, 7.5, "zq-lab-55", 3.5]})
+    target = tmp_path / "labs_v1.parquet"
+    with caplog.at_level(logging.DEBUG):
+        write_parquet(frame, str(target))
+    assert "pyarrow could not write labs_v1.parquet (ArrowInvalid)" in caplog.text
+    assert "zq-lab-55" not in caplog.text
+    assert pd.read_parquet(target)["crp"].tolist() == ["12", "7.5", "zq-lab-55", "3.5"]

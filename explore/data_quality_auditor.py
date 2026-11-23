@@ -577,7 +577,7 @@ class DataQualityAuditor:
                         "Difference": vals_missing.mean() - vals_observed.mean()
                     })
             except Exception as exc:
-                logger.debug("MAR check: t-test of %s by missingness of %s skipped: %s", col, target_col, exc)
+                logger.debug("MAR check: t-test of %s by missingness of %s skipped (%s)", col, target_col, type(exc).__name__)
                 
         return sorted(dependencies, key=lambda x: x['p_value'])
 
@@ -613,7 +613,7 @@ class DataQualityAuditor:
                         _, p_val = stats.ttest_ind(vals_missing, vals_observed, equal_var=False)
                         p_values.append(p_val)
                     except Exception as exc:
-                        logger.debug("MCAR check: t-test of %s by missingness of %s skipped: %s", col, target_col, exc)
+                        logger.debug("MCAR check: t-test of %s by missingness of %s skipped (%s)", col, target_col, type(exc).__name__)
         
         if not p_values:
              return {"p_value": 1.0, "interpretation": "Insufficient data to test MCAR", "is_mcar": True}

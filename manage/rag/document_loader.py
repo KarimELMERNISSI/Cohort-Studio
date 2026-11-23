@@ -11,6 +11,8 @@ from pathlib import Path
 from langchain_core.documents import Document
 from pypdf import PdfReader
 
+from utils.logging_config import exception_said
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,7 +45,7 @@ class PDFDocumentLoader:
         """
         path = Path(file_path)
         if not path.is_file() or path.suffix.lower() != ".pdf":
-            logger.warning(f"Skipping non-PDF file: {path}")
+            logger.warning("Skipping a file that is not a PDF")  # not its name: an uploaded document's is the user's
             return []
 
         documents: list[Document] = []
@@ -67,11 +69,11 @@ class PDFDocumentLoader:
                         }
                         documents.append(Document(page_content=cleaned_text, metadata=metadata))
                 except Exception as page_err:
-                    logger.warning(f"Error extracting page {page_idx} from {path.name}: {page_err}")
+                    logger.warning("Error extracting page %s of a document: %s", page_idx, exception_said(page_err))
                     continue
 
         except Exception as e:
-            logger.error(f"Failed to read PDF file '{path}': {e}")
+            logger.error("A PDF document could not be read: %s", exception_said(e))
             return []
 
         return documents
@@ -87,7 +89,7 @@ class PDFDocumentLoader:
             Aggregated list of Document objects from all discovered PDFs.
         """
         if not self.path.exists():
-            logger.warning(f"Specified path does not exist: {self.path}")
+            logger.warning("The documents folder does not exist: %s", self.path.name)  # its name, not its path
             return []
 
         if self.path.is_file():

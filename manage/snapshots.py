@@ -28,16 +28,11 @@ import pandas as pd
 
 from core.workspace import UserScope, resolve_within
 from utils.data_paths import get_data_root, get_traces_dir
-from utils.logging_config import single_line
+from utils.logging_config import exception_kind, single_line
 
 logger = logging.getLogger(__name__)
 
 SUFFIX = ".parquet"
-
-
-def _reason(exc: BaseException) -> str:
-    """Why an operation failed, without the full path (it names the server's account)."""
-    return (exc.strerror if isinstance(exc, OSError) else None) or type(exc).__name__
 
 
 def folders(scope: UserScope | None) -> tuple[Path, Path, Path]:
@@ -80,7 +75,9 @@ def referenced(traces: Path, steps: Iterable[Mapping[str, Any]] = ()) -> set[str
             names.update(_parquet_names(json.loads(path.read_text(encoding="utf-8"))))
         except (OSError, ValueError, RecursionError) as exc:  # RecursionError: nested too deeply
             name = single_line(path.name)
-            logger.warning("Snapshots kept: the trace %s cannot be read (%s)", name, _reason(exc))
+            logger.warning(
+                "Snapshots kept: the trace %s cannot be read (%s)", name, exception_kind(exc)
+            )
             return None
     return names
 
@@ -132,7 +129,7 @@ def delete_unreferenced(
     try:
         root, traces, snapshots = folders(scope)
     except OSError as exc:
-        logger.warning("Snapshots kept: the workspace cannot be read (%s)", _reason(exc))
+        logger.warning("Snapshots kept: the workspace cannot be read (%s)", exception_kind(exc))
         return []
     files = [f for f in (snapshot_file(p, root, snapshots) for p in paths) if f is not None]
     files = [f for f in dict.fromkeys(files) if f.is_file()]
@@ -148,7 +145,9 @@ def delete_unreferenced(
         try:
             path.unlink()
         except OSError as exc:
-            logger.warning("Snapshot %s not deleted (%s)", single_line(path.name), _reason(exc))
+            logger.warning(
+                "Snapshot %s not deleted (%s)", single_line(path.name), exception_kind(exc)
+            )
             continue
         deleted.append(path.name)
     if deleted:

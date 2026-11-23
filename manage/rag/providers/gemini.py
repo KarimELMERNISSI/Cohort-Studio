@@ -17,7 +17,7 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 from ..base import BaseEmbeddingConnector, BaseLLMConnector
 from ..schemas import ProviderConfig
@@ -98,7 +98,7 @@ class GeminiChatConnector(BaseLLMConnector):
                     models.append(clean_name)
             return models or fallback
         except Exception as e:
-            logger.warning(f"Could not fetch Gemini models list: {e}")
+            logger.warning("Could not fetch Gemini models list: %s", exception_said(e))
             return fallback
 
     def _generate(
@@ -148,7 +148,7 @@ class GeminiChatConnector(BaseLLMConnector):
         max_retries = self.config.max_retries
         base_delay = 2.0
 
-        error_str = "no attempt was made (max_retries is 0)"
+        error_str = error_said = "no attempt was made (max_retries is 0)"
         for attempt in range(max_retries):
             try:
                 response = self.client.models.generate_content(
@@ -159,13 +159,14 @@ class GeminiChatConnector(BaseLLMConnector):
                 generated_text = response.text or ""
                 return ChatResult(generations=[ChatGeneration(message=AIMessage(content=generated_text))])
             except Exception as e:
-                error_str = str(e)
+                error_str = str(e)  # for the page's own message
+                error_said = exception_said(e)  # for the log
                 if attempt == max_retries - 1:
                     break
                 delay = (base_delay * (2 ** attempt)) + (random.random() * 0.5)
-                logger.info(f"Gemini API retry {attempt+1}/{max_retries} in {delay:.2f}s: {error_str}")
+                logger.info("Gemini API retry %s/%s in %.2fs: %s", attempt + 1, max_retries, delay, error_said)
                 time.sleep(delay)
-        logger.error(f"Gemini API failure after {max_retries} attempts: {error_str}")
+        logger.error("Gemini API failure after %s attempts: %s", max_retries, error_said)
         return ChatResult(generations=[ChatGeneration(
             message=AIMessage(content=f"API Error (Gemini): {redact_secrets(error_str)}")
         )])
@@ -278,6 +279,7 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
         deduped = [m for m in models_to_try if not (m in seen or seen.add(m))]
 
         last_err = None
+        last_said = "no model answered"  # the last error as the log writes it
         for m in deduped:
             try:
                 response = self.client.models.embed_content(
@@ -288,9 +290,10 @@ class GeminiEmbeddingConnector(BaseEmbeddingConnector):
                     return response.embeddings[0].values
             except Exception as e:
                 last_err = e
-                logger.warning(f"Embedding attempt with {m} failed: {e}. Trying fallback model...")
+                last_said = exception_said(e)
+                logger.warning("Embedding attempt with %s failed: %s. Trying fallback model...", m, last_said)
                 continue
-        logger.error(f"All Gemini embedding attempts failed: {last_err}")
+        logger.error("All Gemini embedding attempts failed: %s", last_said)
         if last_err:
             raise last_err
         return []

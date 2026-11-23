@@ -199,7 +199,10 @@ def logistic_regression(
         auc = d["auc"]
         auc_ci = None if auc_interval_missing(d) else (d["ci"].lower, d["ci"].upper)
     except Exception as exc:  # the AUC is reported as missing, the model itself stands
-        logger.warning("logistic regression: AUC of the fitted probabilities unavailable: %s", exc)
+        logger.warning(
+            "logistic regression: AUC of the fitted probabilities unavailable (%s)",
+            type(exc).__name__,
+        )
     events = int(y.sum())
     params, vcov = _coefficients(res, x)
     if events < 10 * (x.shape[1] - 1) or (len(y) - events) < 10 * (x.shape[1] - 1):

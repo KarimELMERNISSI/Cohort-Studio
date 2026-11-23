@@ -9,6 +9,7 @@ import pandas as pd
 
 from core.workspace import UserScope
 from utils.data_paths import get_datasets_dir, get_stats_dir
+from utils.logging_config import exception_said
 
 
 def _sql_literal(value: str) -> str:
@@ -28,7 +29,8 @@ def write_parquet(df: pd.DataFrame, path: str) -> None:
         frame.to_parquet(path, index=frame.index.name is not None)
         return
     except Exception as exc:
-        logger.warning("pyarrow could not write %s (%s); writing it with DuckDB", os.path.basename(path), exc)
+        # the kind alone: pyarrow's text quotes the cell it could not convert
+        logger.warning("pyarrow could not write %s (%s); writing it with DuckDB", os.path.basename(path), type(exc).__name__)
     flat = frame.reset_index() if frame.index.name else frame
     con = duckdb.connect()
     try:
@@ -62,7 +64,7 @@ class DBManager:
         try:
             return duckdb.connect(self.db_path)
         except Exception as e:
-            logging.error(f"Failed to connect to DuckDB: {e}")
+            logging.error("Failed to connect to DuckDB: %s", exception_said(e))
             return None
 
     def _get_next_version(self, base_name: str) -> int:

@@ -404,7 +404,7 @@ def check_ancova_assumptions(
                     f"Homogeneity of regression slopes holds (p={homog_p:.4f} >= 0.05). The covariate adjustment is valid across all groups."
                 )
         except Exception as e:
-            logger.warning(f"Slopes interaction test error: {e}")
+            logger.warning("Slopes interaction test error (%s)", type(e).__name__)
 
     # 3. Residual Normality Check
     residuals = base_model.resid
@@ -433,7 +433,7 @@ def check_ancova_assumptions(
                 "Residual variance is not uniform across fitted values."
             )
     except Exception as e:
-        logger.debug(f"Breusch-Pagan test skipped: {e}")
+        logger.debug("Breusch-Pagan test skipped (%s)", type(e).__name__)
 
     return ANCOVADiagnosticsResult(
         homogeneity_of_slopes_pvalue=round(homog_p, 4) if homog_p is not None else None,

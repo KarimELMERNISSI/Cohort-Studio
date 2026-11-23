@@ -18,7 +18,7 @@ from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from utils.logging_config import redact_secrets
+from utils.logging_config import exception_said, redact_secrets
 
 from ..base import BaseLLMConnector
 from ..schemas import ProviderConfig
@@ -109,7 +109,7 @@ class ClaudeChatConnector(BaseLLMConnector):
             ids = [m.id for m in self.client.models.list(limit=100).data]
             return ids or list(CLAUDE_MODELS)
         except Exception as exc:
-            logger.warning("Claude model list unavailable: %s", exc)
+            logger.warning("Claude model list unavailable: %s", exception_said(exc))
             return list(CLAUDE_MODELS)
 
     def _generate(
@@ -136,7 +136,7 @@ class ClaudeChatConnector(BaseLLMConnector):
         try:
             response = self.client.messages.create(**request)
         except Exception as exc:
-            logger.error("Claude API error: %s", exc)
+            logger.error("Claude API error: %s", exception_said(exc))
             return self._error(f"Claude API Error: {exc!s}")
         text = "".join(
             getattr(block, "text", "")

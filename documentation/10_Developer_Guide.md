@@ -1026,4 +1026,22 @@ configuration (`from_config`), and is loaded when used. A custom provider is ins
 5. Put new code in the layer it belongs to (*Architecture*, above), never in a page: a computation in `biostats`
    or `core`, a service in `manage`, a component in `ui`. `utils` holds platform code (settings, logging, paths,
    optional extras); its older modules are being moved out, so do not add to them.
-6. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).
+6. Say things through the log, never `print` (ruff's `T20`), and keep values and paths out of it: a log line holds
+   counts, column names and settings, never a cell, a file's path or what a user typed. Of a file, at most the name
+   of one the application named (a saved version's), never an uploaded file's name, which is the user's.
+   - **A caught exception** is named by its kind where the failure comes from the data, whose text can quote a
+     cell: `type(exc).__name__`, or `utils.logging_config.exception_kind(exc)`, which adds the system's own words
+     for a system error. A service's error (the identity provider, an AI provider, a store) goes through
+     `exception_said(exc)`: the kind and the text without quoted strings and paths. When unsure whose error it is,
+     the kind alone: pyarrow's write error looked like a store's and quoted the cell.
+   - **Never** the exception itself, its `str` or an f-string of it, nor a message built from it beforehand or the
+     exception kept under another name (`err = f"... {exc}"`, then `logger.error(err)`).
+   - **A quality gate** (`tests/test_quality_gates.py`) reads the logging calls for it: a logger held in a name, in
+     an attribute or obtained by `getLogger`, and the names a function gives a caught exception or its text. It does
+     not follow a text through a call or an attribute.
+   - **The net under it** is `records_without_values`: an exception that reaches a log record as itself, and each
+     exception of a traceback (`exc_info`, `logger.exception`), is written by its kind alone, the traceback's frames
+     kept, whichever logger makes the record (Streamlit's own included). It cannot undo a text already put into a
+     message. Each entry point calls `configure_logging()` first, which installs it: `main.py`, every command of
+     `manage_users.py`, and a new command line or script of yours.
+7. Test with the scripts in `tests/` (e.g. `test_rag_full_integration.py`, `test_trace_documenter.py`).

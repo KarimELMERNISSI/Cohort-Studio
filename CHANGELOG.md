@@ -32,6 +32,47 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   imputation's debug lines, which no screen turns on, no longer list the columns after one-hot encoding: they count
   them (an encoded column's name holds a category).
 
+### No cell or path in the server's log
+
+- **An exception's text no longer reaches the log as Python writes it.** Such a text can quote a cell ("could not
+  convert string to float: 'Jean Dupont'"), and a file's error its path, which names the account. Four cases wrote
+  one at the default level:
+  - showing a table whose column mixes numbers and text (a workbook's "<5" among results): Streamlit wrote
+    "Serialization of dataframe to Arrow table was unsuccessful" with a traceback whose last line quoted the cell,
+    at each run of the page; the preview of Import shows such a table, so this is the most frequent of the four;
+  - saving such a table as a dataset version (ticked by default on Import): pyarrow's error quoted the cell;
+  - an error a page did not catch: Streamlit wrote its traceback, the cell in its last line. Both of Streamlit's
+    lines went to its own log, which the application's filter of API keys never saw;
+  - the other log lines that wrote an error's text, a file's whole path or a comparison's name: nearly eighty in
+    all, in the loading of files, the comparison of tables, the replay, the identity provider and the AI features.
+- **Now:**
+  - every log record that carries an exception (as its message, an argument or its traceback), whichever library
+    writes it, names it by its kind alone ("ValueError"; a system error with the system's own words for its
+    number, "No space left on device"); a traceback keeps its files, its lines and the code's own text, and every
+    exception of its chain is named the same way;
+  - the application's own log lines name an error on the data by its kind, and the error of a service (the
+    identity provider, an AI provider, a store) by its kind and its text without quoted strings and paths (a path
+    keeps its file's name). A rule of the developer guide and a quality gate keep it so;
+  - every command of `manage_users.py` writes its log the same way, and Streamlit's printing of a page's error
+    through the package rich, which goes round the log, is turned off in `.streamlit/config.toml`;
+  - not covered: a text that a library puts into its own message before logging it (asyncio's "Task exception was
+    never retrieved" is one);
+  - the page still shows its user the error whole.
+- **If you run a server:** the log kept so far may hold such lines. Whether they hold participants' data depends
+  on your files. Search the logs and their copies for:
+  - `Serialization of dataframe to Arrow table was unsuccessful` and `Uncaught app execution`: the traceback that
+    follows runs to the line that names the exception (`ArrowInvalid: ...`, `ValueError: ...`), which holds the
+    text; an exception raised from another one adds a block before it, with its own such line;
+  - `pyarrow could not write`, `Error loading file`, `Error loading Excel sheets`, `Lineage sidecar of`;
+  - `Error during step`: a replay's error, written whole from 9 October 2026 and without its quoted strings from
+    9 November;
+  - for the comparison of two tables: `An unexpected error occurred for '` and `File not found:`;
+  - for the documents of the AI features: `Failed to read PDF file`, `Skipping non-PDF file`, `Specified path does
+    not exist`;
+  - `An earlier workspace folder was not moved`.
+
+  The entry above says how to delete entries, and whose judgement a reportable breach is.
+
 ### The study definition can hold a study's privacy choices
 
 - **A section `privacy` of the study definition** holds what a study asks for the documents made from it: the

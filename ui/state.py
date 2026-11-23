@@ -1596,7 +1596,10 @@ class AppState:
         try:
             self.db_manager.save_lineage(saved, lineage)
         except OSError as exc:
-            logger.warning("Lineage sidecar of %s not written: %s", saved, exc)
+            # the kind alone: an OSError names the file by its whole path, the account's folder in it
+            logger.warning(
+                "The lineage sidecar of a saved version was not written (%s)", type(exc).__name__
+            )
 
     def note(self, step: str, params: dict[str, Any] | None, description: str) -> bool:
         """A trace step that documents something without changing the data (parse report, export...); whether it was

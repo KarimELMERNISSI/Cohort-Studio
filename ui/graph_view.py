@@ -173,7 +173,7 @@ def render_graph_exports(
             try:
                 payload = chosen.export_html(spec, _resolve_theme(options))
             except Exception as exc:  # export must never break the page
-                logger.warning("HTML export failed: %s", exc)
+                logger.warning("HTML export failed (%s)", type(exc).__name__)
                 payload = None
             if payload:
                 st.download_button(

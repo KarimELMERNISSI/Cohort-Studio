@@ -301,8 +301,11 @@ def read_answer(payload: bytes) -> dict[str, Any]:
     try:
         answer = _AnswerReader(io.BytesIO(payload)).load()
     except _Refused as refused:
+        # its text, not the exception: a name _refused has checked, which the log's cleaning of exceptions
+        # (utils.logging_config.records_without_values) would otherwise write as "_Refused"
         logger.warning(
-            "A worker's answer named %s, which the server does not read; it was not used", refused
+            "A worker's answer named %s, which the server does not read; it was not used",
+            str(refused),
         )
         raise WorkerUnavailable(UNREAD) from None
     except Exception as exc:
