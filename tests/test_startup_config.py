@@ -112,6 +112,45 @@ def test_the_command_line_stops_on_a_wrong_setting(tmp_path: Path) -> None:
     assert "CMP_IAM_CACHE_TTL" in out.stderr and "zz9" not in out.stderr
 
 
+def test_the_command_line_stops_on_a_first_administrators_password_that_cannot_be_used(tmp_path: Path) -> None:
+    """The Docker entry point runs ``manage_users.py bootstrap`` before the server. A password that is set and cannot
+    be used ends it with the reason: no administrator, and no setup token in the container's log in its place. A file
+    in another encoding ended it with Python's own error, whose text quotes a byte of the password and its place."""
+    app = tmp_path / "app"
+    app.mkdir()
+    shutil.copy(ROOT / "manage_users.py", app / "manage_users.py")  # no .env next to it: the developer's is not read
+    secret = tmp_path / "admin_password.txt"
+    secret.write_bytes(("P" + chr(0xE4) + "sswort-erfunden-1").encode("cp1252"))
+    base = {**os.environ, "PYTHONPATH": str(ROOT), "DATA_ROOT": str(tmp_path / "data"), "CMP_IAM_PROVIDER": "local"}
+    for name in ("CMP_ADMIN_PASSWORD", "CMP_ADMIN_PASSWORD_FILE"):  # the suite sets the first for its own needs
+        base.pop(name, None)
+
+    def run(*command: str, **settings: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(app / "manage_users.py"), *command],
+            capture_output=True, text=True, env={**base, **settings}, cwd=tmp_path, timeout=300,
+            stdin=subprocess.DEVNULL,
+        )
+
+    short = run("bootstrap", CMP_ADMIN_PASSWORD="short-pw-1")
+    said = short.stdout + short.stderr
+    assert short.returncode != 0 and "short-pw-1" not in said and "Traceback" not in said
+    assert "Error: the first administrator cannot be created from CMP_ADMIN_PASSWORD. Password must be at least 12" in said
+    unread = run("bootstrap", CMP_ADMIN_PASSWORD_FILE=str(secret))
+    said += unread.stdout + unread.stderr
+    assert unread.returncode != 0
+    assert "CMP_ADMIN_PASSWORD_FILE. Its file is not UTF-8 text (UnicodeDecodeError)." in said
+    for held in ("0xe4", "erfunden", "Traceback", "one-time setup token: ", secret.name):
+        assert held not in said, held
+    listed = run("list")
+    assert listed.returncode == 0 and "No users registered." in listed.stdout
+    # with no password set, the token is this installation's way, as before; and a password is typed on a terminal
+    issued = run("bootstrap")
+    assert issued.returncode == 0 and "Administrator bootstrap: Setup token issued" in issued.stdout
+    asked = run("create-admin", "chief")
+    assert asked.returncode != 0 and "typed on a terminal, and there is none here" in asked.stderr
+
+
 def test_an_empty_setting_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     """CMP_IAM_CACHE_TTL= (a line left empty in .env) stopped the identity manager with int('')."""
     monkeypatch.setenv("CMP_IAM_PROVIDER", "")

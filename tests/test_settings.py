@@ -100,6 +100,21 @@ def test_every_wrong_value_is_named_without_its_value(env: pytest.MonkeyPatch) -
     assert not any(value in message for value in ("-7771", "enabled-zz", "verbose-zz", "twelve-zz"))
 
 
+def test_the_password_minimum_is_between_8_and_64(env: pytest.MonkeyPatch) -> None:
+    """12 characters by default. An installation may ask for fewer down to 8, and for more up to 64 (the hash of a
+    local account takes 72 bytes: a higher minimum could be met by no password). Outside, the start stops, naming
+    the setting and its bound."""
+    for taken in ("8", "64"):
+        env.setenv("CMP_MIN_PASSWORD_LENGTH", taken)
+        assert cfg.get_settings().iam.min_password_length == int(taken)
+    for refused, bound in (("7", "greater than or equal to 8"), ("65", "less than or equal to 64")):
+        env.setenv("CMP_MIN_PASSWORD_LENGTH", refused)
+        with pytest.raises(cfg.SettingsError) as raised:
+            cfg.get_settings()
+        message = str(raised.value)
+        assert "CMP_MIN_PASSWORD_LENGTH" in message and bound in message
+
+
 def test_keys_are_hidden_when_printed(env: pytest.MonkeyPatch) -> None:
     env.setenv("GOOGLE_API_KEY", "AIza-planted-secret-value")
     env.setenv("CMP_ADMIN_PASSWORD", "planted-password-value")

@@ -52,6 +52,36 @@ def test_the_page_lists_and_changes_the_accounts_that_sign_in(iam) -> None:
     assert next(u for u in iam.list_users() if u.username == "dr_lee").is_active
 
 
+def test_the_page_gives_no_account_a_password_the_rule_refuses(iam) -> None:
+    """The reset form asks the one rule of every way a password is set (``manage.iam.authz.validate_password``) and
+    shows its words; the page kept a copy of the length check, which a new part of the rule did not reach."""
+    from manage.iam.schemas import UserCredentials
+
+    def signs_in(password: str) -> bool:
+        return iam.authenticate(UserCredentials(username="dr_lee", password=password)).success
+
+    def reset_to(at: AppTest, password: str) -> None:
+        fields = {field.label: field for field in at.text_input}
+        fields["New Password"].input(password)
+        fields["Confirm Password"].input(password)
+        next(b for b in at.button if b.label == "Reset Password").click().run()
+        assert not at.exception, [str(e.value)[:300] for e in at.exception]
+
+    assert iam.activate_user("dr_lee")[0] and signs_in("a-long-password-7")
+    at = AppTest.from_function(_script, default_timeout=120)
+    at.run()
+    for refused, why in (
+        ("x", "Password must be at least 12 characters."),
+        (" " * 12, "Password cannot be made of spaces only."),
+        ("x" * 73, "Password is too long: at most 72 bytes"),
+    ):
+        reset_to(at, refused)
+        assert any(why in e.value for e in at.error), [e.value for e in at.error]
+        assert signs_in("a-long-password-7") and not signs_in(refused)
+    reset_to(at, "a-long-password-8")
+    assert not at.error and signs_in("a-long-password-8") and not signs_in("a-long-password-7")
+
+
 def test_without_sign_in_there_is_nothing_to_manage(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

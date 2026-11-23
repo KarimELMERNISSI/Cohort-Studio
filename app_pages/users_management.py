@@ -11,7 +11,7 @@ This page allows administrators to:
 import streamlit as st
 
 from manage.iam import IAMProviderType, get_iam_manager
-from manage.iam.authz import MIN_PASSWORD_LENGTH, is_admin_role
+from manage.iam.authz import MIN_PASSWORD_LENGTH, is_admin_role, validate_password
 from manage.iam.providers import IAM_PROVIDERS
 
 
@@ -169,10 +169,9 @@ def app():
             submit = st.form_submit_button("Reset Password", width="stretch")
             
             if submit:
-                if not new_password:
-                    st.error("Password cannot be empty.")
-                elif len(new_password) < MIN_PASSWORD_LENGTH:
-                    st.error(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+                problem = validate_password(new_password)  # the one rule of every way a password is set
+                if problem:
+                    st.error(problem)
                 elif new_password != confirm_password:
                     st.error("Passwords do not match.")
                 else:

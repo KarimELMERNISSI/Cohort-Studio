@@ -7,14 +7,13 @@ Better Auth, or Disabled) based on environment configuration or runtime paramete
 """
 
 import logging
-import os
 from typing import Any
 
 from core.workspace import workspace_exists
-from utils.logging_config import exception_said, single_line
+from utils.logging_config import exception_kind, exception_said, single_line
 from utils.settings import Settings, get_settings
 
-from . import setup_token
+from . import authz, setup_token
 from .base import BaseIAMProvider
 from .providers import IAM_PROVIDERS
 from .schemas import (
@@ -30,7 +29,41 @@ logger = logging.getLogger(__name__)
 
 
 class IAMConfigurationError(ValueError):
-    """The identity provider is misconfigured: the app must not start with another one in its place."""
+    """The accounts are misconfigured, and the app must not start as if they were not: an identity provider that is
+    not the one configured, or a first administrator's password that is set and cannot be used. Its words name
+    settings, never their values."""
+
+
+def _configured_password(iam: Any) -> tuple[str | None, str, str]:
+    """
+    The first administrator's password as the installation gives it: ``(password, setting, problem)``.
+
+    - No password configured: ``(None, "", "")``.
+    - One that can be used: the password, the setting it was read from, ``""``.
+    - One that is set and cannot be used: ``(None, setting, why)``, a sentence that holds nothing of the password.
+
+    CMP_ADMIN_PASSWORD comes before CMP_ADMIN_PASSWORD_FILE, which is then not read. The file is read as UTF-8, a
+    byte order mark aside (Notepad's "UTF-8 with BOM": the mark is no character of the password); an error of
+    reading it is named by its kind, since a decoding error's own text quotes a byte of the password.
+    """
+    variable = iam.admin_password.get_secret_value() if iam.admin_password is not None else ""
+    if variable:
+        password, setting = variable, "CMP_ADMIN_PASSWORD"
+    elif iam.admin_password_file:
+        setting = "CMP_ADMIN_PASSWORD_FILE"
+        try:
+            with open(iam.admin_password_file, encoding="utf-8-sig") as handle:
+                password = handle.read().strip()
+        except OSError as exc:
+            return None, setting, f"Its file could not be read ({exception_kind(exc)})."
+        except UnicodeError as exc:
+            return None, setting, f"Its file is not UTF-8 text ({exception_kind(exc)})."
+        if not password:
+            return None, setting, "Its file is empty."
+    else:
+        return None, "", ""
+    problem = authz.validate_password(password)
+    return (None, setting, problem) if problem else (password, setting, "")
 
 
 class IAMManager:
@@ -131,8 +164,12 @@ class IAMManager:
         Provision a new user account. A name whose workspace folder exists is refused, with the message of a name taken
         (core.workspace.workspace_exists): the folder may hold another account's files, such as the folder an earlier
         version gave an account that has not signed in since. The server's operator may reuse it (``reuse_folder``,
-        manage_users.py create-admin).
+        manage_users.py create-admin). A password the rule refuses (``authz.validate_password``) creates no account:
+        held here, whatever the caller checked.
         """
+        problem = authz.validate_password(password)
+        if problem:
+            return False, problem
         if not reuse_folder and workspace_exists(username):
             return False, "Username already exists"
         return self._provider.create_user(
@@ -185,7 +222,10 @@ class IAMManager:
         return self._provider.delete_user(username)
 
     def update_user_password(self, username: str, new_password: str) -> tuple[bool, str]:
-        """Update user credentials."""
+        """Update user credentials; a password the rule refuses (``authz.validate_password``) changes nothing."""
+        problem = authz.validate_password(new_password)
+        if problem:
+            return False, problem
         return self._provider.update_password(username, new_password)
 
     @staticmethod
@@ -218,6 +258,9 @@ class IAMManager:
             return False, "No first-run setup is pending: an administrator exists, or no setup token was issued."
         if not setup_token.check(self._setup_dir(), token):
             return False, "The setup token is not valid. Copy it from the server log (the most recent one)."
+        problem = authz.validate_password(password)
+        if problem:  # the token is kept: it is used once an administrator is created
+            return False, problem
         ok, msg = self._provider.create_user(username, password, role=UserRole.ADMIN, auto_activate=True)
         if ok:
             setup_token.clear(self._setup_dir())
@@ -230,8 +273,11 @@ class IAMManager:
 
         Credentials come from CMP_ADMIN_USERNAME (default 'admin') and CMP_ADMIN_PASSWORD or
         CMP_ADMIN_PASSWORD_FILE. Without them, a one-time setup token is written to the server log and the
-        login page creates the first administrator with it (manage/iam/setup_token.py). Nothing happens when
-        the IAM provider is disabled or when an active administrator already exists.
+        login page creates the first administrator with it (manage/iam/setup_token.py). A password that is set
+        and cannot be used (shorter than CMP_MIN_PASSWORD_LENGTH or refused by ``authz.validate_password``
+        otherwise; a file that is missing, empty or not UTF-8 text) raises IAMConfigurationError, which stops the
+        start: no administrator, and no setup token in its place. Nothing happens when the IAM provider is
+        disabled or when an active administrator already exists.
         """
         if not self._provider.is_enabled:
             return False, "IAM disabled; no bootstrap needed"
@@ -249,12 +295,8 @@ class IAMManager:
 
         iam = get_settings().iam
         username = iam.admin_username
-        password = iam.admin_password.get_secret_value() if iam.admin_password is not None else None
-        password_file = iam.admin_password_file
-        if not password and password_file and os.path.isfile(password_file):
-            with open(password_file, encoding="utf-8") as handle:
-                password = handle.read().strip()
-        if not password:
+        password, setting, problem = _configured_password(iam)
+        if not setting:  # no password is configured: the setup token is this installation's way
             if setup_token.pending(self._setup_dir()):  # keep the token already in the log (server start-up)
                 logger.warning(
                     "No administrator account exists. A first-run setup token is pending: it was written to the "
@@ -269,6 +311,22 @@ class IAMManager:
                 token,
             )
             return False, "Setup token issued"
+        if problem and self._provider.get_user(username) is None:
+            # a password that is set and cannot be used stops the start, as any wrong setting does. No setup token
+            # in its place: whoever sets a password keeps every credential out of the log, which may be read by
+            # others than those who run the server
+            also = (
+                " (CMP_ADMIN_PASSWORD_FILE is set too and is not read: the variable comes first)"
+                if setting == "CMP_ADMIN_PASSWORD" and iam.admin_password_file
+                else ""
+            )
+            # raised, not logged here: whoever stops the start says why (main.py on the page and in the server's
+            # log, manage_users.py on the terminal), as for any other wrong setting
+            raise IAMConfigurationError(
+                f"the first administrator cannot be created from {setting}{also}. {problem} Give a password that "
+                f"can be used, or remove {setting} to create the first administrator with a one-time setup token; "
+                "then restart the application."
+            )
         if self._provider.get_user(username) is not None:
             logger.warning(
                 "Bootstrap account '%s' exists but is not an active administrator; "
@@ -276,6 +334,7 @@ class IAMManager:
                 username,
             )
             return False, f"User '{username}' exists but is not an active administrator"
+        assert password is not None  # a password with a problem returned or raised above
         ok, msg = self._provider.create_user(username, password, role=UserRole.ADMIN, auto_activate=True)
         if ok:
             logger.info("Bootstrap administrator '%s' created from environment configuration.", username)

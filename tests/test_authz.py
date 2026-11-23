@@ -1,6 +1,8 @@
 """Role checks and credential policy (audit E5)."""
 
 from manage.iam.authz import (
+    CANNOT_BE_STORED,
+    MAX_PASSWORD_BYTES,
     MIN_PASSWORD_LENGTH,
     is_admin_role,
     validate_new_credentials,
@@ -29,6 +31,24 @@ def test_password_policy() -> None:
     assert validate_password("x" * MIN_PASSWORD_LENGTH) is None
     assert validate_password("x" * (MIN_PASSWORD_LENGTH - 1)) is not None
     assert validate_password("") is not None
+
+
+def test_a_password_is_counted_in_characters_and_fits_the_hash() -> None:
+    """The minimum counts characters, not bytes; a password of spaces is none; the hash of a local account takes 72
+    bytes, and a longer password was refused by the hash itself, in a programmer's words."""
+    accent = chr(0xE9)  # two bytes in UTF-8
+    assert validate_password(accent * MIN_PASSWORD_LENGTH) is None  # 12 characters, 24 bytes
+    assert validate_password(" " * MIN_PASSWORD_LENGTH) == "Password cannot be made of spaces only."
+    assert validate_password("  a phrase with spaces  ") is None  # spaces are part of a password
+    assert validate_password("x" * MAX_PASSWORD_BYTES) is None
+    too_long = (
+        "Password is too long: at most 72 bytes (a letter with an accent counts for two or more)."
+    )
+    assert validate_password("x" * (MAX_PASSWORD_BYTES + 1)) == too_long
+    assert validate_password(accent * 36) is None and validate_password(accent * 37) == too_long
+    # what no form lets anyone type: a NUL (a file in another encoding read as text), bytes that were no text
+    assert validate_password("twelve-chars" + chr(0)) == CANNOT_BE_STORED
+    assert validate_password("twelve-chars" + chr(0xDCE4)) == CANNOT_BE_STORED
 
 
 def test_new_credentials_order_of_checks() -> None:

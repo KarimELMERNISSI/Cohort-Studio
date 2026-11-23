@@ -10,8 +10,9 @@ Examples:
     python manage_users.py setup-token     # a new one-time token to create the first administrator
     python manage_users.py bootstrap       # at start-up: administrator from CMP_ADMIN_*, or a setup token
 
-Passwords are read from the CMP_ADMIN_PASSWORD environment variable when set, otherwise prompted
-interactively. They are never accepted on the command line, so they do not end up in shell history.
+Passwords are typed at a prompt, twice, and never shown. They are never accepted on the command line, so they do
+not end up in shell history. One exception: create-admin for the account named by CMP_ADMIN_USERNAME takes
+CMP_ADMIN_PASSWORD when it is set (an installation scripted without a terminal), as the start-up does.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import sys
+import warnings
 from pathlib import Path
 
 from utils.settings import SettingsError, get_settings, load_settings
@@ -38,12 +40,38 @@ def _fail(message: str) -> None:
     sys.exit(f"Error: {message}")
 
 
-def _read_password(prompt: str) -> str:
+NO_TERMINAL = (
+    "the password is typed on a terminal, and there is none here: run the command in a terminal (in a container: "
+    "docker exec -it <container> python manage_users.py ...)."
+)
+
+
+def _at_a_terminal() -> bool:
+    """Whether somebody can type a password here: on Windows the null device says it is a terminal too, and the
+    prompt then waits for keys nobody types (manage.replay.commandline)."""
+    from manage.replay.commandline import at_a_terminal
+
+    return at_a_terminal(sys.stdin)
+
+
+def _read_password(prompt: str, *, from_setting: bool = False) -> str:
+    """
+    A password typed twice at a prompt, unseen. ``from_setting``: CMP_ADMIN_PASSWORD in its place when it is set,
+    for the one account it is the password of (create-admin of CMP_ADMIN_USERNAME). Read for every command, it gave
+    the account of a reset-password the administrator's password, without a question.
+    """
     env_password = get_settings().iam.admin_password
-    if env_password is not None:
+    if from_setting and env_password is not None:
         return env_password.get_secret_value()
-    first = getpass.getpass(prompt)
-    second = getpass.getpass("Confirm password: ")
+    if not _at_a_terminal():
+        _fail(NO_TERMINAL)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", getpass.GetPassWarning)  # a prompt that would show what is typed
+        try:
+            first = getpass.getpass(prompt)
+            second = getpass.getpass("Confirm password: ")
+        except (getpass.GetPassWarning, EOFError):
+            _fail(NO_TERMINAL)
     if first != second:
         _fail("passwords do not match.")
     return first
@@ -53,7 +81,9 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
     problem = validate_username(args.username)
     if problem:
         _fail(problem)
-    password = _read_password("Administrator password: ")
+    password = _read_password(
+        "Administrator password: ", from_setting=args.username == get_settings().iam.admin_username
+    )
     problem = validate_password(password)
     if problem:
         _fail(problem)
@@ -67,8 +97,10 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
     ok, msg = get_iam_manager().create_user(
         args.username, password, role=UserRole.ADMIN, auto_activate=True, reuse_folder=args.reuse_folder
     )
-    print(msg if ok else f"Error: {msg}")
-    sys.exit(0 if ok else 1)
+    if not ok:
+        _fail(msg)
+    print(f"Administrator '{args.username}' created.")  # the command's own words: the accounts' are for a refusal
+    sys.exit(0)
 
 
 def cmd_activate(args: argparse.Namespace) -> None:
@@ -92,8 +124,10 @@ def cmd_reset_password(args: argparse.Namespace) -> None:
     if problem:
         _fail(problem)
     ok, msg = iam.update_user_password(args.username, password)
-    print(msg if ok else f"Error: {msg}")
-    sys.exit(0 if ok else 1)
+    if not ok:
+        _fail(msg)
+    print(f"Password updated for user '{args.username}'.")
+    sys.exit(0)
 
 
 def cmd_list(_: argparse.Namespace) -> None:
@@ -115,7 +149,9 @@ def cmd_setup_token(_: argparse.Namespace) -> None:
 
 
 def cmd_bootstrap(_: argparse.Namespace) -> None:
-    """Run before the server (Docker entry point): the administrator from CMP_ADMIN_*, or a setup token in the log."""
+    """Run before the server (Docker entry point): the administrator from CMP_ADMIN_*, or a setup token in the log
+    when no password is set. A password that is set and cannot be used ends the command with the reason; the
+    server then started says the same on its page."""
     _, message = get_iam_manager().ensure_bootstrap_admin()
     print(f"Administrator bootstrap: {message}")
 
@@ -165,7 +201,9 @@ def main(argv: list[str] | None = None) -> None:
     configure_logging()
     try:
         args.func(args)
-    except IAMConfigurationError as exc:  # an unknown CMP_IAM_PROVIDER: the valid names, never the value
+    # an unknown CMP_IAM_PROVIDER, or a first administrator's password that is set and cannot be used: the words
+    # name the settings, never a value
+    except IAMConfigurationError as exc:
         _fail(str(exc))
 
 

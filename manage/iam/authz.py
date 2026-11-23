@@ -15,6 +15,9 @@ from .schemas import UserRole
 
 # the CMP_MIN_PASSWORD_LENGTH setting, read once; tests patch this attribute
 MIN_PASSWORD_LENGTH = get_settings().iam.min_password_length
+# what the hash of a local account takes (bcrypt): a longer password was refused by the hash, in a programmer's words
+MAX_PASSWORD_BYTES = 72
+CANNOT_BE_STORED = "Password holds a character that cannot be stored."
 # a new name starts and ends with a letter or a digit: it is its own workspace folder (core.workspace.safe_dirname,
 # which gives any other name a code of its own)
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{1,30}[A-Za-z0-9]$")
@@ -39,9 +42,26 @@ def validate_username(username: str | None) -> str | None:
 
 
 def validate_password(password: str | None) -> str | None:
-    """Return an error message when the password is unacceptable, else None."""
+    """
+    Return an error message when the password is unacceptable, else None: shorter than the minimum (counted in
+    characters), made of spaces only, or longer than the hash takes. The one rule of every way a password is set:
+    ``IAMManager`` applies it too, so that no caller can forget it. The words never quote the password.
+    """
     if not password or len(password) < MIN_PASSWORD_LENGTH:
         return f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    if not password.strip():
+        return "Password cannot be made of spaces only."
+    try:
+        size = len(password.encode("utf-8"))
+    except UnicodeEncodeError:  # bytes that were no text where it was read (an environment variable): by no word of it
+        return CANNOT_BE_STORED
+    if chr(0) in password:  # a file in another encoding read as text (UTF-16 without its mark): nobody types it
+        return CANNOT_BE_STORED
+    if size > MAX_PASSWORD_BYTES:
+        return (
+            f"Password is too long: at most {MAX_PASSWORD_BYTES} bytes (a letter with an accent counts for two or "
+            "more)."
+        )
     return None
 
 

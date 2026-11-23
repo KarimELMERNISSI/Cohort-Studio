@@ -351,7 +351,8 @@ Copy `.env.example` to `.env` and fill in what you use (the example documents ev
 # Application storage root (default: ./data)
 DATA_ROOT=./data
 
-# First administrator: created on first start when no active administrator exists
+# First administrator: created on first start when no active administrator exists. Its password has at
+# least CMP_MIN_PASSWORD_LENGTH characters (12 by default); one that cannot be used stops the start.
 # (alternatively: python manage_users.py create-admin <username>)
 CMP_ADMIN_USERNAME=admin
 CMP_ADMIN_PASSWORD=choose-a-long-passphrase
@@ -390,8 +391,10 @@ session; a key, a password, an address or a consent never is.
 
 - Accounts created from the sign-in page are **pending** until an administrator activates them. The username `admin` receives no special treatment.
 - Bootstrap the first administrator with `CMP_ADMIN_USERNAME` / `CMP_ADMIN_PASSWORD` (or `CMP_ADMIN_PASSWORD_FILE`), or run `python manage_users.py create-admin <username>` (the password is prompted, never passed as an argument).
-- Without them, the first start writes a **one-time setup token** to the server log, and the login page creates the administrator with it. Only a hash of the token is stored; it stops working once used. `python manage_users.py setup-token` issues a new one.
-- `python manage_users.py list | activate | deactivate | reset-password <username>` covers day-to-day administration.
+- Without a configured password, the first start writes a **one-time setup token** to the server log, and the login page creates the administrator with it. Only a hash of the token is stored; it stops working once used. `python manage_users.py setup-token` issues a new one.
+- A password set or changed in CohortStudio has at least `CMP_MIN_PASSWORD_LENGTH` characters (12 by default; the setting takes 8 to 64) and at most 72 bytes. A `CMP_ADMIN_PASSWORD` that is set and cannot be used (too short; a file that is missing, empty or not UTF-8 text) stops the start with the reason: no setup token is written in its place. Under Better Auth, a password changed on its own pages follows its own rule.
+- Once the administrator exists, remove `CMP_ADMIN_PASSWORD` from `.env`: the start reads it only while no active administrator exists.
+- `python manage_users.py list | activate | deactivate | reset-password <username>` covers day-to-day administration; `reset-password` asks for the new password on the terminal.
 
 ### The data folder
 

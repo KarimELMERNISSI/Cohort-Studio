@@ -88,7 +88,9 @@ class IAMSection(_Names):
     )
     better_auth_api_key: SecretStr | None = Field(None, validation_alias="CMP_BETTER_AUTH_API_KEY")
     cache_ttl: int = Field(300, ge=0, validation_alias="CMP_IAM_CACHE_TTL")
-    min_password_length: int = Field(12, ge=1, validation_alias="CMP_MIN_PASSWORD_LENGTH")
+    # a new or changed password: 12 characters by default; an installation may ask for fewer down to 8, and for
+    # more up to 64 (a local account's hash takes 72 bytes: a higher minimum could be met by no password)
+    min_password_length: int = Field(12, ge=8, le=64, validation_alias="CMP_MIN_PASSWORD_LENGTH")
     max_failed_logins: int = Field(5, ge=1, validation_alias="CMP_MAX_FAILED_LOGINS")
     lockout_minutes: int = Field(15, ge=1, validation_alias="CMP_LOCKOUT_MINUTES")
     admin_username: str = Field("admin", validation_alias="CMP_ADMIN_USERNAME")

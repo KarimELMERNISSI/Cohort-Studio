@@ -120,6 +120,42 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 - **The Reproduce page** draws a large imputation again in the worker processes that are free, as the Enrich page
   does, for the time of that draw; the values are the same in one process.
 
+### Passwords: one rule wherever one is set, and a first administrator's password that cannot be used stops the start
+
+- **Every password set or changed in CohortStudio** (sign-up, the first administrator's page, the Users page,
+  `manage_users.py`) has at least `CMP_MIN_PASSWORD_LENGTH` characters: 12 by default, as before. The setting now
+  takes 8 to 64: another value stops the start and names the setting. The accounts' own code applies the rule,
+  not only the pages and the command line that call it. Two more passwords are refused, in plain words: one of
+  spaces only, and one longer than 72 bytes, which the hash of a local account refused in a programmer's words (a
+  letter with an accent counts for two or more). Passwords set earlier keep working: the rule applies when a
+  password is set or changed.
+- **The first administrator made from `CMP_ADMIN_PASSWORD` (or `CMP_ADMIN_PASSWORD_FILE`)** was created whatever
+  the password's length, and a file that was missing or blank was passed over without a word. A password that is
+  set and cannot be used (too short; a file that is missing, empty or not UTF-8 text) now stops the start: the
+  page and the log name the setting and the reason, never the password, and no setup token is written in its
+  place. A file saved as UTF-8 with a byte order mark (Notepad) is read without the mark, which was counted in the
+  length and stored with the password.
+- **A password file in another encoding** (Notepad's ANSI, PowerShell's `>`) raised an error whose text quotes a
+  byte of the file and its place: for a file in a legacy code page (ANSI), a byte of the password. It went to the
+  container's log and onto the page shown before sign-in. The reason now gives the error's kind only.
+- **`python manage_users.py reset-password <username>`** took `CMP_ADMIN_PASSWORD` as the new password whenever
+  it was set, without a question: the account then opened with the administrator's password. It now always asks
+  for the new password on the terminal, as `create-admin` does for any account but the one named by
+  `CMP_ADMIN_USERNAME`. Where nobody can type, the command says so and changes nothing.
+- **If you run a server:**
+  - Before you update, check that `CMP_MIN_PASSWORD_LENGTH` is between 8 and 64: otherwise the page and every
+    `manage_users.py` command stop and name the setting.
+  - On an installation with no administrator yet (a fresh install, a script that builds test servers), check that
+    `CMP_ADMIN_PASSWORD` has the minimum's length: otherwise the page and `manage_users.py bootstrap` stop with
+    the reason. A container still reports healthy: look at the page, or at its log.
+  - Once an active administrator exists, the start no longer reads `CMP_ADMIN_PASSWORD`: remove it from `.env`.
+  - If you ever ran `reset-password` while `CMP_ADMIN_PASSWORD` was set, that account has the administrator's
+    password: reset it again, and change the administrator's.
+  - An account given a shorter password while the setting was lower keeps it until it is reset (the Users page,
+    `reset-password`).
+  - If the start ever stopped with a `UnicodeDecodeError` on `CMP_ADMIN_PASSWORD_FILE`, the log and the page showed
+    one byte of that password: change it if it is in use.
+
 ### The study definition can hold a study's privacy choices
 
 - **A section `privacy` of the study definition** holds what a study asks for the documents made from it: the

@@ -6,8 +6,10 @@ A fresh installation (a new Docker container) has no administrator. When no boot
 its log; the login page then offers to create the first administrator with it. Whoever can read the server log
 operates the server, which is the trust this relies on (as Jupyter's token does).
 
-Only a SHA-256 hash of the token is stored, in the data root. The token is valid until it is used or until an
-administrator exists; a restart without an administrator issues a new one.
+Only a SHA-256 hash of the token is stored, in the data root. The token is valid until it is used, until an
+administrator exists, or until a new one is asked for (``python manage_users.py setup-token``); a restart without
+an administrator keeps it. A bootstrap password that is set and cannot be used issues no token: the start stops
+(``IAMManager.ensure_bootstrap_admin``).
 """
 
 from __future__ import annotations

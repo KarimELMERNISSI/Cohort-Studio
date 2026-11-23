@@ -1,5 +1,6 @@
 """CohortStudio - entry point: configuration, authentication, navigation and shell."""
 
+import sys
 from pathlib import Path
 
 from utils.settings import SettingsError, load_settings
@@ -12,8 +13,6 @@ try:
 
     check_connector_settings(settings)  # each CMP_* connector setting names a connector of this version
 except SettingsError as exc:  # stopped before a module reads the wrong value; the message never shows a value
-    import sys
-
     import streamlit as st
 
     # .env is read once per server process: a correction applies after a restart
@@ -79,8 +78,12 @@ def main() -> None:
     show_logo()
     try:
         _bootstrap_admin_once()
-    except IAMConfigurationError as exc:  # never another identity provider in place of the one configured
-        st.error(f"CohortStudio cannot start: {exc}", icon=":material/gpp_bad:")
+    # never another identity provider in place of the one configured, nor a start with a first administrator's
+    # password that is set and cannot be used: the words name settings, never a value
+    except IAMConfigurationError as exc:
+        message = f"CohortStudio cannot start: {exc}"
+        print(message, file=sys.stderr)  # noqa: T201 (the server log, as for a wrong setting above)
+        st.error(message, icon=":material/gpp_bad:")
         st.stop()
     _expression_workers_once()
 
