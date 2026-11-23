@@ -23,9 +23,9 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
   `docker compose logs`, a log service it is shipped to, their archives, a `nohup.out`. A trace's imputation step
   with MissForest for one kind of column only tells when it happened (a replay printed it again on its own day; a
   discarded draft left no step).
-  Search the logs and their copies for a line `X data imputation:`: the table follows it, up to a blank line.
-  Delete those entries, or the logs that hold them where single entries cannot be deleted. Whether a copy is a
-  personal-data breach to report is for you and your data protection officer to judge.
+  Search the logs and their copies promptly for a line `X data imputation:`: the table follows it, up to a blank
+  line. Delete those entries, or the logs that hold them where single entries cannot be deleted. Whether a copy is
+  a personal-data breach to report is for you and your data protection officer to judge.
 - The other messages that went to the output now go to the log without a file's path or an exception's text, which
   can name an account or quote a value: the clustering of a correlation matrix (on every heatmap), the comparison
   of two tables, the export of correlations to a workbook, a merge or a comparison that was not asked for. The
