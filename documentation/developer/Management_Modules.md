@@ -756,7 +756,13 @@ it back when the run ends, however it ends. When fewer than two are free, the ru
 own process (one worker), which uses none of the budget.
 
 ``CMP_MI_MAX_WORKERS`` (utils.settings) sets the total. The default is the processors of this process minus one; a
-container's CPU quota is not visible in that count, so set the variable there._
+container's CPU quota is not visible in that count, so set the variable there.
+
+The cells of an imputation are the same in one process and in several: every chain is drawn on one BLAS thread
+(``biostats.mi.engine.one_blas_thread``), and so is everything a replay compares: the server's own process runs
+its linear algebra on one thread from its start, and a replay from its first step
+(:func:`one_blas_thread_for_this_process`). The budget, and whether several processes pay for their start
+(:func:`pays_to_parallel`), decide the time a draw takes, on the page and in a replay alike._
 
 **Imports**:
 `__future__.annotations`, `os`, `threading`, `collections.abc.Iterator`, `contextlib.contextmanager`, `utils.settings.get_settings`
@@ -776,6 +782,40 @@ Worker processes shared by the sessions of this server process.
 - **lease**(`self, wanted: int`) -> `Iterator[int]`
   > Grants ``min(wanted, free)`` worker processes, or 1 (a run in this process, outside the budget) when one or
   > none would be granted; returns them when the run ends.
+
+### def `pays_to_parallel` (compute.py)
+
+- **Arguments**: `rows: int, variables: int, m: int, iterations: int`
+
+- **Returns**: `bool`
+
+Whether an imputation of this size is worth several processes: the page's default for its switch, and what a
+replay asks before it leases workers for a draw.
+
+### def `one_blas_thread_for_this_process` (compute.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+The linear algebra of this process on one thread, set once and never given back: by the server when it starts
+(``main.py``), by a replay as it begins (``manage.replay``), and by the test suite.
+
+The rule is one: what a fingerprint is taken of is computed on one BLAS thread, when it is recorded and when it
+is replayed. A BLAS adds a long product up in another order with several threads than with one, and the last
+digits follow: an imputation's cells (a ``norm`` variable observed on more than 10,000 rows), the scores of a
+PCA or a FAMD of a large table (50,000 rows by 13 columns differed; 20,000 by 6 did not), and the values of a
+single imputation by chained equations (MICE; 50,000 by 13 differed).
+
+The setting is the process's, and other code moves it: scikit-learn's KMeans sets one thread for the time of
+each of its runs and restores what it found, from whichever session's thread runs it. What another session
+computed meanwhile ran partly on one thread and partly on all; and a limit that the imputation set for the time
+of a draw, and restored, was undone the same way, then left wrong for good. Set once and kept, nothing moves it:
+what a session computes never depends on what another one is doing, nor on the number of cores of the machine.
+The sessions of a server are threads of one process and shared one pool of BLAS threads; at a cohort's
+sizes one thread costs little (measured on 14 cores: nothing for a PCA, a correlation matrix or K-Means, up to
+half as long again for a regression of 50,000 rows and more). The loops other libraries run on OpenMP keep
+their threads.
 
 ### def `default_total` (compute.py)
 
@@ -1339,7 +1379,7 @@ is checked against the counts it recorded), with a draw's progress. :func:`packa
 study package's members from its index's files._
 
 **Imports**:
-`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Iterable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `typing.Any`, `typing.Literal`, `numpy`, `pandas`, `enrich.external_data`, `core.criteria.RULES_VERSION`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ids_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.package.ROLE_WORDS`, `core.package.DataFile`, `core.package.FileRole`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.state.file_checksum`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.logging_config.single_line`, `utils.logging_config.without_values`
+`__future__.annotations`, `logging`, `os`, `collections.abc.Callable`, `collections.abc.Iterable`, `collections.abc.Mapping`, `dataclasses.dataclass`, `dataclasses.field`, `pathlib.Path`, `typing.Any`, `typing.Literal`, `numpy`, `pandas`, `enrich.external_data`, `core.criteria.RULES_VERSION`, `core.fingerprint.ensure_row_ids`, `core.fingerprint.frame_fingerprint`, `core.fingerprint.ids_fingerprint`, `core.fingerprint.ranges_to_ids`, `core.package.ROLE_WORDS`, `core.package.DataFile`, `core.package.FileRole`, `core.population.criteria_from_trace`, `core.population.evaluate_population`, `core.registry.UnknownIdError`, `core.session.restrict_cells`, `core.session.sort_filled`, `core.state.ParseOptions`, `core.state.file_checksum`, `core.steps.DOCUMENT`, `core.steps.SNAPSHOT`, `core.steps.ids`, `enrich.derived.APPROACHES`, `enrich.derived.impute_and_derive`, `enrich.formulas.evaluate_formula_safely`, `enrich.formulas.read_formula`, `enrich.imputation_service.describe_formula_fill`, `enrich.imputation_service.describe_imputation`, `enrich.imputation_service.fill_with_formula`, `enrich.imputation_service.impute_rows`, `enrich.imputation_service.left_missing`, `enrich.recode.FOLD`, `enrich.recode.level_counts`, `enrich.recode.recode_column`, `enrich.recode.values_fp`, `enrich.transformation_logic.apply_variable_transformation`, `ingest.dates.METHOD`, `ingest.dates.convert`, `ingest.dates.smart_parse_dates`, `manage.compute.WorkerBudget`, `manage.compute.one_blas_thread_for_this_process`, `manage.paths.PathResolver`, `manage.paths.read_version`, `utils.logging_config.single_line`, `utils.logging_config.without_values`
 
 ### class `StepSeen` (engine.py)
 
@@ -1364,9 +1404,19 @@ in each column, its m); a difference lists it in ``mi_divergence``, with the cou
 ``not_drawn`` and passed in the mode ``not_drawn``: the caller holds the imputation already (the pre-flight of a
 study package, from its session). ``progress``: a draw's progress, from 0 to 1.
 
-A draw runs in this process: the chains drawn in worker processes can give other last digits for a variable
-observed on more than 10,000 rows (one BLAS thread against several; ``norm`` does, ``pmm`` did not at 15,000
-rows), so a replay never draws there until every chain is drawn on one thread.
+``workers``: the server's budget of worker processes (``manage.compute.mi_workers()``), from which each draw
+large enough to pay for their start (``manage.compute.pays_to_parallel``) leases what is free, for the time of
+that draw alone; None, or a draw too small: the draw runs in this process. The cells are the same either way,
+every chain being drawn on one BLAS thread (``biostats.mi.engine.one_blas_thread``): a busy budget changes the
+time a replay takes, never its verdict. ``scratch``: the folder under which a parallel draw writes its copy of
+the table, deleted with the run; the system's temporary folder when none is given. A caller with a private
+folder of its own gives it (the check of a study package): a process that is killed deletes nothing, and
+nothing sweeps the system's folder.
+
+A step recorded before every chain was drawn on one thread, and drawn then in the session's process, can give
+other last digits now for a variable observed on more than 10,000 rows, or on fewer with very many predictor
+columns (``norm`` does; ``pmm``, ``logreg`` and ``polyreg`` did not at 18,400 rows): the warning names the BLAS
+threads it recorded ("BLAS threads 14 -> 1"), and ``ReplayResult.mi_changes`` holds them as data.
 
 **Methods:**
 
@@ -1748,11 +1798,13 @@ it gives them all, or when the step recorded none (an early one).
 
 ### def `_mi_draw` (engine.py)
 
-- **Arguments**: `df, rows, spec, params, index, warnings, result, progress`
+- **Arguments**: `df, rows, spec, params, index, warnings, result, options`
 
 - **Returns**: `None`
 
-The draw of a multiple imputation step, in this process, its cells checked against the recorded hash.
+The draw of a multiple imputation step, its cells checked against the recorded hash; in this process, or in
+worker processes leased from ``options.workers`` for this draw alone when it is large enough to pay for their
+start: the cells are the same.
 
 ### def `_freeze_population` (engine.py)
 
@@ -1792,6 +1844,9 @@ redone one change at a time names the dataset it was built on). ``on_step(StepSe
 the replay passes (not on the one it stops at), so that a caller takes each step's shape, profile or fingerprint
 in the same pass (the study package's checks). ``options``: :class:`ReplayOptions`.
 
+A replay leaves the calling process on one BLAS thread, for good: what it compares was recorded so
+(``manage.compute.one_blas_thread_for_this_process``).
+
 ### def `run_trace` (engine.py)
 
 - **Arguments**: `trace_data: dict[ComplexType]`
@@ -1799,8 +1854,9 @@ in the same pass (the study package's checks). ``options``: :class:`ReplayOption
 - **Returns**: `ReplayResult`
 
 Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame; ``on_step``
-and ``options`` as for :func:`apply_steps`. A file that is not a trace this version replays (``trace_problems``)
-is refused, with the first reason as the error.
+and ``options`` as for :func:`apply_steps`, which also leaves the calling process on one BLAS thread. A file
+that is not a trace this version replays (``trace_problems``) is refused, with the first reason as the
+error.
 
 ### def `execute_trace_pipeline` (engine.py)
 

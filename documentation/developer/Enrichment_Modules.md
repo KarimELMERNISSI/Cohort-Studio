@@ -512,7 +512,8 @@ its formula was imputed, and the formula of the imputed values gives another val
 
 - **Returns**: `Any`
 
-A multiple imputation (biostats.mi.impute, ``spec`` an ImputationSpec) with declared derived variables
+A multiple imputation (biostats.mi.impute, ``spec`` an ImputationSpec; ``workers`` and ``scratch`` are its own)
+with declared derived variables
 (IMPUTE_THEN_DERIVE): each is left out of the chains, so neither imputed nor a predictor of any variable, then
 computed in every completed dataset from the imputed values (:func:`derive`). The imputation keeps how
 (``info["derived"]``: the approach, the steps, the values left missing and, for the definitions of ``watch``, the
