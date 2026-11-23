@@ -1,5 +1,69 @@
 # Backend Management Logic
 
+## __main__.py
+
+_``python -m manage.replay``: the command line of a study package.
+
+- ``inspect PACKAGE`` says what a received package holds, without replaying it (:mod:`manage.replay.inspection`):
+  its hash before any password, its files, and with its password what its index says of it.
+
+- ``verify`` (the replay of a package against what it recorded) comes with the package's own replay.
+
+Each command names its arguments here and its module in ``_COMMANDS``; the module is imported when the command runs,
+so that reading a package's hash loads nothing a replay needs (the engine, numpy, pandas, pydantic, Streamlit, a
+setting or ``.env``): a recipient checks a hash on a computer where only this command has run. What every command
+shares is :mod:`manage.replay.commandline`: a command that was not understood exits 64 (not argparse's 2, which a
+reader gives a file it did not read), and nothing typed is written back._
+
+**Imports**:
+`__future__.annotations`, `argparse`, `importlib`, `json`, `sys`, `collections.abc.Callable`, `typing.TextIO`, `manage.replay.commandline.EXIT_FAILED`, `manage.replay.commandline.EXIT_STOPPED`, `manage.replay.commandline.PROGRAM`, `manage.replay.commandline.Parser`, `manage.replay.commandline.at_a_terminal`, `manage.replay.commandline.wrapped`
+
+### def `_inspect_arguments` (__main__.py)
+
+- **Arguments**: `parser: argparse.ArgumentParser`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `_lists_its_options` (__main__.py)
+
+- **Arguments**: `name: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `parser` (__main__.py)
+
+- **Arguments**: ``
+
+- **Returns**: `argparse.ArgumentParser`
+
+No description available.
+
+### def `_as_a_command` (__main__.py)
+
+- **Arguments**: `command: str`
+
+- **Returns**: `None`
+
+What the process is given when it is the command itself, not a call from a test or another program: streams
+that write any character on any console, and its log. A command that writes one has it configured here (no
+record then holds an exception's text: ``utils.logging_config``), so that no command can forget to; one that
+writes none has the process's logging turned off, so that no library's line comes among its report.
+
+### def `main` (__main__.py)
+
+- **Arguments**: `argv: ComplexType`
+
+- **Returns**: `int`
+
+The command's exit code (see :mod:`manage.replay.inspection`); a command that was not understood exits
+through ``SystemExit(64)``, as ``--help`` does through ``SystemExit(0)``.
+
+---
+
 ## ai_payload.py
 
 _What the AI features may send about a dataset to a cloud provider: a summary of each column, never a row.
@@ -743,6 +807,140 @@ LangChain messages -> (system prompt, Messages API turns).
 
 System messages are joined into the ``system`` parameter. The turns alternate user / assistant and start
 with a user turn, as the API requires: consecutive turns of the same role are merged.
+
+---
+
+## commandline.py
+
+_What every command of ``python -m manage.replay`` shares: the exit codes, the parser that never writes back what was
+typed, the password read from a file or typed without being shown, and the lines of 78 columns.
+
+Standard library and ``manage.package_zip``'s exit codes only: a command's own module (``manage.replay.inspection``;
+later the one that replays a package) is imported when that command runs, so that reading a package's hash never
+loads what a replay needs.
+
+**The password is never an argument**, and nothing typed on the command line is written back: a command line is
+kept by the shell, and an error message is what a recipient pastes into an e-mail to the sender. argparse's own
+messages repeat what they refuse ("invalid choice: '...'", "unrecognized arguments: ..."): only those of a known
+form, which name options and never values, are written; any other becomes fixed words._
+
+**Imports**:
+`__future__.annotations`, `argparse`, `codecs`, `getpass`, `os`, `re`, `sys`, `unicodedata`, `warnings`, `collections.abc.Sequence`, `typing.Any`, `typing.NoReturn`, `typing.TextIO`, `manage.package_zip`
+
+### class `Parser` (commandline.py)
+
+A parser whose errors exit 64, never repeat what was typed, and end with the command that lists the options
+(``listed_by``: its own for a command's parser, every command's for the parser of the command line); its help
+is 78 columns wide. No abbreviation: ``--password X`` would read as ``--password-file``.
+
+**Methods:**
+
+- **__init__**(`self`) -> `None`
+  > No description available.
+
+- **parse_known_args**(`self, args: ComplexType, namespace: Any`) -> `tuple[ComplexType]`
+  > What this parser does not take, it refuses itself. argparse hands what a command did not take back to
+  > the parser of the command line, whose usage names none of the command's options: refused here, the usage
+  > above the error is the command's own, where a misspelt option is found again.
+
+- **error**(`self, message: str`) -> `NoReturn`
+  > No description available.
+
+### class `CannotAsk` (commandline.py)
+
+The terminal cannot hide what is typed, or there is none.
+
+### def `columns` (commandline.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `int`
+
+The columns ``text`` takes on a terminal: two for a wide character (an ideograph, a kana).
+
+### def `wrapped` (commandline.py)
+
+- **Arguments**: `text: str, indent: int`
+
+- **Returns**: `list[str]`
+
+``text`` in lines of ``WIDTH`` columns at most, the first indented by ``indent`` and the others by two more.
+A word longer than a line stays whole on a line of its own (the hash, a command to copy), unless ``breakable``:
+a text someone typed (a recipient's name in a script without spaces, or shown as escapes) then goes on from
+the line begun, cut between two characters or two escapes, never inside one.
+
+### def `usage_words` (commandline.py)
+
+- **Arguments**: `message: str`
+
+- **Returns**: `str`
+
+What is written of an argparse error: itself when its form names no value, else fixed words.
+
+### def `way_back` (commandline.py)
+
+- **Arguments**: `listed_by: Sequence[str]`
+
+- **Returns**: `list[str]`
+
+The lines that end a usage error: the command that lists the options, on a line of its own so that a copy keeps
+it whole. A misspelt command or option is not written back, and argparse's "(choose from ...)" goes with it:
+these lines are the way back to what a command takes.
+
+### def `_help` (commandline.py)
+
+- **Arguments**: `prog: str`
+
+- **Returns**: `argparse.HelpFormatter`
+
+No description available.
+
+### def `at_a_terminal` (commandline.py)
+
+- **Arguments**: `stream: Any`
+
+- **Returns**: `bool`
+
+Whether somebody can type on ``stream`` (the standard input): a terminal, and on Windows a console. There the
+null device says it is a terminal too, and ``getpass`` reads the console's keys whatever the input is: asked
+without this check, a command run by a script with no input waits for a password nobody types.
+
+### def `no_console_words` (commandline.py)
+
+- **Arguments**: ``
+
+- **Returns**: `str`
+
+What ``--ask-password`` says where nobody can type a password unseen.
+
+### def `typed_unseen` (commandline.py)
+
+- **Arguments**: `prompt: str, err: TextIO`
+
+- **Returns**: `str`
+
+A password typed on the terminal, each key shown as ``*`` (a prompt that shows nothing reads as a window that
+froze; the length it shows is the format's own, which is public). ``CannotAsk`` where what is typed would be
+shown (``getpass`` then only warns, and echoes).
+
+### def `password_from_file` (commandline.py)
+
+- **Arguments**: `path: str`
+
+- **Returns**: `tuple[ComplexType]`
+
+The password a file's first line holds, or None with why (in words that name no path and quote nothing). The
+file is read as its byte order mark says: Notepad's "UTF-8 with BOM" and the UTF-16 that Windows PowerShell's
+``>`` writes are a password as much as plain text is, and refusing them would blame the password itself.
+
+### def `password_file_note` (commandline.py)
+
+- **Arguments**: `path: str`
+
+- **Returns**: `str`
+
+What is said of a password file that other users of the computer can read ("" when they cannot, and on a
+system without such rights): its path is not named.
 
 ---
 
@@ -2001,6 +2199,214 @@ Embedding connector for Google Gemini models.
 - **Returns**: `bool`
 
 A Gemini or Gemma model that answers text (generateContent) and is not one of the specialised models.
+
+---
+
+## inspection.py
+
+_``python -m manage.replay inspect PACKAGE``: what a received study package holds, without replaying it. (The module
+is not named ``inspect``: a file run from this folder would then import it in place of the standard library's.)
+
+It reads the file with the safe reader (``manage.package_zip``) and writes, for a terminal of 80 columns and of any
+code page: the file, the kind of package, **the package's hash before any password**, and its files with their
+sizes; then, with the password of a package that holds the data, that each file is the sender's, and what the
+package's index says of it: the software that made it, the study, to whom and under what it was sent, the data by
+role, the trace and the privacy rules. Nothing of a file that holds the study's own texts is shown: the numbers and
+the closed values of the index only, and the two texts the exporter typed for the export, through
+``core.package.shown``, as the file's name is. It writes nothing to disk.
+
+Its exit code says what happened:
+
+- ``0``: read, and nothing failed: the clear part when no password is given, every file with it, and the hash given,
+  if any, is the package's;
+
+- ``1``: read, but not the package its sender made: a file does not match its checksum, or the package's hash is not
+  the one given;
+
+- ``2``: not read: not a package, a later version's, a zip that is not laid out as the writer's, the wrong password,
+  a password file that cannot be read;
+
+- ``64``: the command was not understood (an option, or the value given to one), or cannot run here (a password
+  asked for where nobody can type one unseen);
+
+- ``70``: an error of the program itself (``manage.replay.__main__`` names it by its kind).
+
+The password is never an argument (a command line is kept by the shell and shown to every user of the computer):
+``--password-file FILE`` reads it from a file's first line, ``--ask-password`` asks for it on a terminal that can
+hide what is typed, three times at most. Without either, the clear part is all it reads, and it says so: it never
+waits for an input nobody is there to give. Nothing typed on the command line is written back: a file that is not
+found is not named.
+
+Standard library, ``core.package`` (with ``core.privacy``), ``manage.package_zip``, ``manage.replay.commandline``
+and ``utils.environment`` only: never numpy, pandas, pydantic, Streamlit or the replay's engine; no ``.env`` and no
+setting; pyzipper only once a password is given (a test reads the modules a run has loaded). It configures no log
+and writes none: its report is its output._
+
+**Imports**:
+`__future__.annotations`, `argparse`, `json`, `os`, `collections.abc.Callable`, `pathlib.Path`, `typing.Any`, `typing.BinaryIO`, `typing.TextIO`, `core.package`, `manage.package_zip`, `manage.replay.commandline.EXIT_NOT_READ`, `manage.replay.commandline.EXIT_NOT_WHAT_WAS_SENT`, `manage.replay.commandline.EXIT_OK`, `manage.replay.commandline.EXIT_USAGE`, `manage.replay.commandline.PROMPT`, `manage.replay.commandline.CannotAsk`, `manage.replay.commandline.no_console_words`, `manage.replay.commandline.password_file_note`, `manage.replay.commandline.password_from_file`, `manage.replay.commandline.typed_unseen`, `manage.replay.commandline.wrapped`, `utils.environment.app_version`, `utils.environment.git_commit`
+
+### class `_Report` (inspection.py)
+
+Where the report goes: lines as they come, or one JSON object at the end.
+
+**Methods:**
+
+- **__init__**(`self, out: TextIO, err: TextIO, as_json: bool`) -> `None`
+  > No description available.
+
+- **say**(`self, lines: list[str]`) -> `None`
+  > No description available.
+
+- **note**(`self, text: str`) -> `None`
+  > Words for whoever runs the command, on the error stream, wrapped.
+
+- **refuse**(`self, text: str`) -> `None`
+  > A refusal: on the error stream, and kept among the facts.
+
+- **end**(`self, code: int`) -> `int`
+  > No description available.
+
+### def `hash_given` (inspection.py)
+
+- **Arguments**: `text: str`
+
+- **Returns**: `ComplexType`
+
+The package hash a sender gave, as it is compared: its 16 to 64 hexadecimal characters in lower case, the
+hyphens and the spaces between them dropped; None for anything else.
+
+### def `differs_at` (inspection.py)
+
+- **Arguments**: `given: str, package_hash: str`
+
+- **Returns**: `ComplexType`
+
+The first character (counted from 1) at which the hash given is not the package's; None when it is.
+
+### def `_grouped` (inspection.py)
+
+- **Arguments**: `digits: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_size` (inspection.py)
+
+- **Arguments**: `count: int`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `_plural` (inspection.py)
+
+- **Arguments**: `count: int, one: str, many: ComplexType`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `refusal_words` (inspection.py)
+
+- **Arguments**: `refused: pz.Refused, name: str, size: int`
+
+- **Returns**: `str`
+
+Why a file was refused, for whoever received it: what happened, what was not done, what to do. Nothing of the
+file is quoted: a member is named only by the format's own name (``Refused.member``, set once the names passed
+the format's list), ``core.package``'s reason quotes nothing, and ``name`` is the file's name as shown.
+``from_file``: the password came from ``--password-file``; ``opened``: the clear part was read and shown.
+
+### def `not_matching_words` (inspection.py)
+
+- **Arguments**: `members: list[str]`
+
+- **Returns**: `list[str]`
+
+What is said of members whose bytes are not those the manifest lists (their names are the format's own).
+
+### def `_member_line` (inspection.py)
+
+- **Arguments**: `entry: pz.Entry, tier: str`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `clear_part` (inspection.py)
+
+- **Arguments**: `opened: pz.Opened, name: str, given: ComplexType, this_version: tuple[ComplexType]`
+
+- **Returns**: `list[str]`
+
+What is read before any password: the file, the kind of package, its hash and its files.
+
+### def `_file_line` (inspection.py)
+
+- **Arguments**: `entry: pk.DataFile`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `opened_part` (inspection.py)
+
+- **Arguments**: `read: pz.Opened, utf8: bool`
+
+- **Returns**: `list[str]`
+
+What the index of a package that holds the data says of it, once every file was read with the password.
+
+### def `_policy_words` (inspection.py)
+
+- **Arguments**: `policy: pk.Policy`
+
+- **Returns**: `str`
+
+No description available.
+
+### def `without_data_part` (inspection.py)
+
+- **Arguments**: `read: pz.Opened`
+
+- **Returns**: `list[str]`
+
+A package without the data, read whole: it is not encrypted.
+
+### def `_is_utf8` (inspection.py)
+
+- **Arguments**: `stream: TextIO`
+
+- **Returns**: `bool`
+
+No description available.
+
+### def `run` (inspection.py)
+
+- **Arguments**: `options: argparse.Namespace`
+
+- **Returns**: `int`
+
+``inspect`` for the options ``manage.replay.__main__`` defines: the report on ``out``, the refusals and the prompts on
+``err``, and the exit code. ``is_terminal``: whether a person is there to type a password; ``typed``: how one
+is read without being shown (``CannotAsk`` when it cannot be).
+
+### def `_inspected` (inspection.py)
+
+- **Arguments**: `file: BinaryIO, report: _Report, given: ComplexType, options: argparse.Namespace, typed: Callable[ComplexType]`
+
+- **Returns**: `int`
+
+No description available.
+
+### def `_read` (inspection.py)
+
+- **Arguments**: `report: _Report, read: ComplexType, name: str, size: int, utf8: bool`
+
+- **Returns**: `int`
+
+The end of the report once every file was read, or the reading refused.
 
 ---
 
