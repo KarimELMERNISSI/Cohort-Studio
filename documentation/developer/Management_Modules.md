@@ -626,7 +626,7 @@ pooling, short-lived in-memory TTL session caching to eliminate UI latency, and
 resilient error handling._
 
 **Imports**:
-`logging`, `time`, `requests`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `time`, `requests`, `utils.logging_config.exception_said`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `BetterAuthIAMProvider` (better_auth.py)
 
@@ -702,7 +702,7 @@ Ollama by default, so the document library never leaves the server for indexing)
 Claude models choose their own sampling: the temperature setting of the app is not sent._
 
 **Imports**:
-`__future__.annotations`, `logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseLLMConnector`, `schemas.ProviderConfig`, `declarations.Claude`
+`__future__.annotations`, `logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`, `base.BaseLLMConnector`, `schemas.ProviderConfig`, `declarations.Claude`
 
 ### class `ClaudeChatConnector` (claude.py)
 
@@ -833,7 +833,7 @@ For each connector setting that names nothing this version offers, the variable 
 _No module description._
 
 **Imports**:
-`glob`, `logging`, `os`, `re`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`
+`glob`, `logging`, `os`, `re`, `typing.Any`, `duckdb`, `pandas`, `core.workspace.UserScope`, `utils.data_paths.get_datasets_dir`, `utils.data_paths.get_stats_dir`, `utils.logging_config.exception_said`
 
 ### class `DBManager` (db_manager.py)
 
@@ -1137,7 +1137,7 @@ Replaces deprecated `langchain_community.document_loaders` with native `pypdf` e
 improving performance, eliminating deprecation warnings, and resiliently handling errors._
 
 **Imports**:
-`logging`, `pathlib.Path`, `langchain_core.documents.Document`, `pypdf.PdfReader`
+`logging`, `pathlib.Path`, `langchain_core.documents.Document`, `pypdf.PdfReader`, `utils.logging_config.exception_said`
 
 ### class `PDFDocumentLoader` (document_loader.py)
 
@@ -1888,7 +1888,7 @@ Utilizes the modern `google-genai` SDK (v2.x) with retry logic,
 temperature controls, and embedding integration._
 
 **Imports**:
-`logging`, `mimetypes`, `random`, `secrets`, `time`, `collections.abc.Callable`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`, `declarations.Gemini`
+`logging`, `mimetypes`, `random`, `secrets`, `time`, `collections.abc.Callable`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`, `declarations.Gemini`
 
 ### class `GeminiChatConnector` (gemini.py)
 
@@ -1957,7 +1957,7 @@ beside the application. Search is exact (brute force, cosine) up to :data:`ANN_T
 beyond that :meth:`LanceDBIndex.optimize` builds an IVF index for approximate search._
 
 **Imports**:
-`__future__.annotations`, `logging`, `pathlib.Path`, `typing.Any`, `core.registry.Availability`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.VectorEngine`, `base.VectorStoreError`
+`__future__.annotations`, `logging`, `pathlib.Path`, `typing.Any`, `core.registry.Availability`, `utils.logging_config.exception_said`, `base.BaseVectorIndex`, `base.ChunkRow`, `base.Hit`, `base.VectorEngine`, `base.VectorStoreError`
 
 ### class `LanceDBIndex` (lancedb_index.py)
 
@@ -2097,7 +2097,7 @@ and bcrypt password hashing. Designed for single-node deployments, air-gapped
 clinical environments, and full backward compatibility._
 
 **Imports**:
-`logging`, `os`, `collections.abc.Iterable`, `datetime.datetime`, `datetime.timedelta`, `typing.Any`, `typing.cast`, `bcrypt`, `duckdb`, `utils.data_paths`, `core.workspace.safe_dirname`, `utils.logging_config.single_line`, `utils.settings.get_settings`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `os`, `collections.abc.Iterable`, `datetime.datetime`, `datetime.timedelta`, `typing.Any`, `typing.cast`, `bcrypt`, `duckdb`, `utils.data_paths`, `core.workspace.safe_dirname`, `utils.logging_config.exception_said`, `utils.logging_config.single_line`, `utils.settings.get_settings`, `base.BaseIAMProvider`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `LocalDuckDBIAMProvider` (local_duckdb.py)
 
@@ -2185,7 +2185,7 @@ Dynamically resolves and instantiates the active IAM provider (Local DuckDB,
 Better Auth, or Disabled) based on environment configuration or runtime parameters._
 
 **Imports**:
-`logging`, `os`, `typing.Any`, `core.workspace.workspace_exists`, `utils.logging_config.single_line`, `utils.settings.Settings`, `utils.settings.get_settings`, `.setup_token`, `base.BaseIAMProvider`, `providers.IAM_PROVIDERS`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `os`, `typing.Any`, `core.workspace.workspace_exists`, `utils.logging_config.exception_said`, `utils.logging_config.single_line`, `utils.settings.Settings`, `utils.settings.get_settings`, `.setup_token`, `base.BaseIAMProvider`, `providers.IAM_PROVIDERS`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `IAMConfigurationError` (manager.py)
 
@@ -2383,7 +2383,7 @@ Integrates European sovereign models (Mistral Small, Mistral Large, Codestral)
 and Mistral Embeddings via Mistral OpenAI-compatible API._
 
 **Imports**:
-`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
 
 ### class `MistralChatConnector` (mistral.py)
 
@@ -2432,7 +2432,7 @@ open-source models (Llama 3.2, Mistral, DeepSeek, Qwen) and local embeddings
 (Nomic Embed Text, BGE-M3, etc.) via Ollama REST API._
 
 **Imports**:
-`logging`, `typing.Any`, `httpx`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`
+`logging`, `typing.Any`, `httpx`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`
 
 ### class `OllamaChatConnector` (ollama.py)
 
@@ -2564,7 +2564,7 @@ Integrates OpenAI chat completion models (GPT-4o, GPT-4o-mini) and embeddings
 (text-embedding-3-small, text-embedding-3-large) using official OpenAI client._
 
 **Imports**:
-`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
+`logging`, `typing.Any`, `langchain_core.callbacks.manager.CallbackManagerForLLMRun`, `langchain_core.messages.AIMessage`, `langchain_core.messages.BaseMessage`, `langchain_core.messages.HumanMessage`, `langchain_core.messages.SystemMessage`, `langchain_core.outputs.ChatGeneration`, `langchain_core.outputs.ChatResult`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`, `base.BaseEmbeddingConnector`, `base.BaseLLMConnector`, `schemas.ProviderConfig`
 
 ### class `OpenAIChatConnector` (openai.py)
 
@@ -3746,7 +3746,7 @@ Contains all computed variable suggestion and validation methods.
 This is part of the RAGManager class composition pattern._
 
 **Imports**:
-`hashlib`, `json`, `logging`, `unicodedata`, `core.derived.KINDS`, `core.derived.DerivedVariable`, `enrich.formulas.MAX_FORMULA_LENGTH`, `enrich.formulas.formula_from_model`, `enrich.formulas.read_formula`, `manage.ai_payload.document_name`, `manage.ai_payload.taxonomy_for_prompt`, `utils.llm_utils.ProviderError`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.llm_utils.validate_and_parse`, `utils.logging_config.redact_secrets`, `rag_schemas.AlternativeFormula`, `rag_schemas.ProxyVariable`
+`hashlib`, `json`, `logging`, `unicodedata`, `core.derived.KINDS`, `core.derived.DerivedVariable`, `enrich.formulas.MAX_FORMULA_LENGTH`, `enrich.formulas.formula_from_model`, `enrich.formulas.read_formula`, `manage.ai_payload.document_name`, `manage.ai_payload.taxonomy_for_prompt`, `utils.llm_utils.ProviderError`, `utils.llm_utils.parse_json_safe`, `utils.llm_utils.provider_error`, `utils.llm_utils.validate_and_parse`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`, `rag_schemas.AlternativeFormula`, `rag_schemas.ProxyVariable`
 
 ### class `ComputedVarsMixin` (rag_computed_vars.py)
 
@@ -3888,7 +3888,7 @@ Contains all document processing, knowledge graph extraction and chat methods.
 This is part of the RAGManager class composition pattern._
 
 **Imports**:
-`os`, `manage.ai_payload.document_name`, `manage.rag.providers.file_readers`, `utils.logging_config.redact_secrets`
+`os`, `manage.ai_payload.document_name`, `manage.rag.providers.file_readers`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`
 
 ### class `DocumentsMixin` (rag_documents.py)
 
@@ -5457,15 +5457,7 @@ names it. The replay also finds a file by its name alone (:class:`manage.paths.P
 file of the same name in any folder keeps it. When a trace cannot be read, nothing is deleted._
 
 **Imports**:
-`__future__.annotations`, `contextlib`, `json`, `logging`, `os`, `uuid`, `collections.abc.Iterable`, `collections.abc.Iterator`, `collections.abc.Mapping`, `datetime.datetime`, `pathlib.Path`, `typing.Any`, `pandas`, `core.workspace.UserScope`, `core.workspace.resolve_within`, `utils.data_paths.get_data_root`, `utils.data_paths.get_traces_dir`, `utils.logging_config.single_line`
-
-### def `_reason` (snapshots.py)
-
-- **Arguments**: `exc: BaseException`
-
-- **Returns**: `str`
-
-Why an operation failed, without the full path (it names the server's account).
+`__future__.annotations`, `contextlib`, `json`, `logging`, `os`, `uuid`, `collections.abc.Iterable`, `collections.abc.Iterator`, `collections.abc.Mapping`, `datetime.datetime`, `pathlib.Path`, `typing.Any`, `pandas`, `core.workspace.UserScope`, `core.workspace.resolve_within`, `utils.data_paths.get_data_root`, `utils.data_paths.get_traces_dir`, `utils.logging_config.exception_kind`, `utils.logging_config.single_line`
 
 ### def `folders` (snapshots.py)
 

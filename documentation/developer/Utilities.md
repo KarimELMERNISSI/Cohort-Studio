@@ -882,7 +882,7 @@ Provides robust JSON parsing, schema validation, and structured LLM invocation
 with retry and repair capabilities._
 
 **Imports**:
-`json`, `logging`, `re`, `typing.Any`, `typing.TypeVar`, `pydantic.BaseModel`, `pydantic.ValidationError`, `utils.logging_config.redact_secrets`
+`json`, `logging`, `re`, `typing.Any`, `typing.TypeVar`, `pydantic.BaseModel`, `pydantic.ValidationError`, `utils.logging_config.exception_said`, `utils.logging_config.redact_secrets`
 
 ### class `ProviderError` (llm_utils.py)
 
@@ -1024,10 +1024,22 @@ Returns:
 _Central logging configuration. Call ``configure_logging()`` once from the application entry point.
 
 Every record is written without API keys (:func:`redact_secrets`): a provider's error can quote the key it refused,
-as Google does for a suspended key ("Consumer 'api_key:...' has been suspended")._
+as Google does for a suspended key ("Consumer 'api_key:...' has been suspended").
+
+No record holds an exception's text as Python writes it: an error raised while computing on the data can quote a
+cell ("could not convert string to float: 'Jean Dupont'"), and a file's error its path, which names the account.
+
+- A logging call names a caught exception by its kind (``type(exc).__name__`` or :func:`exception_kind`) where the
+  failure comes from the data, or whenever it is unsure, and through :func:`exception_said` for a service's error;
+  never by the exception itself, its ``str``, or a message built from it beforehand. A quality gate reads the
+  logging calls for it (``tests/test_quality_gates.py``).
+
+- Under those calls, :func:`records_without_values` writes every exception that reaches a record as itself by its
+  kind alone, whichever logger makes the record. Each entry point installs it through :func:`configure_logging`:
+  ``main.py``, every command of ``manage_users.py``, and the test suite._
 
 **Imports**:
-`__future__.annotations`, `logging`, `re`, `threading`, `utils.settings.get_settings`, `utils.settings.secret_values`
+`__future__.annotations`, `logging`, `os`, `re`, `threading`, `traceback`, `collections.abc.Mapping`, `typing.Any`, `utils.settings.get_settings`, `utils.settings.secret_values`
 
 ### class `RedactSecrets` (logging_config.py)
 
@@ -1081,13 +1093,91 @@ An error's text for a record that travels (a replay's error, the log): every quo
 the data ("could not convert string to float: 'Jean Dupont'"), becomes "…", and a path its file name (an absolute
 path names the account); on one line.
 
+### def `exception_kind` (logging_config.py)
+
+- **Arguments**: `exc: BaseException`
+
+- **Returns**: `str`
+
+An exception for the log by its kind alone: its class's name, and for one of Python's own system errors that
+holds an error number the system's words for that number ("OSError: No space left on device"), looked up here
+and never read from the exception, whose own words can name the file. Not for a library's subclass, whose
+number is not the system's (an ``ssl.SSLError`` holds 1, which would read "Operation not permitted"; a
+``socket.gaierror`` its own codes), nor when the system does not know the number. What the cleaning of records
+writes for every exception it meets (:func:`records_without_values`), and what a call site writes for a failure
+on the data, or whenever it is unsure whose error it is (``type(exc).__name__`` says the same without the
+system's words).
+
+### def `exception_said` (logging_config.py)
+
+- **Arguments**: `exc: BaseException`
+
+- **Returns**: `str`
+
+An exception for the log, where a call site chooses it for a service's error (an identity or AI provider's
+reply, a store's refusal): its kind, then its text without quoted strings and paths (:func:`without_values`).
+Where the failure comes from a computation on the data, log the kind alone (:func:`exception_kind`): a text can
+hold a value that no quote surrounds ("KeyError: 990017", "year must be in 1..9999, not 12021").
+
+### def `_traceback_lines` (logging_config.py)
+
+- **Arguments**: `exc: BaseException, lines: list[str], seen: set[int]`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `traceback_without_values` (logging_config.py)
+
+- **Arguments**: `exc: BaseException`
+
+- **Returns**: `str`
+
+The traceback of ``exc`` for the log: the frames of every exception of its chain as Python writes them (the
+files, the lines and the code's own text), and each exception by its kind alone, the members of a group
+included. Neither its text nor its notes: Python's own last line holds the text whole, and the error is most
+often one on the data, whose text can hold a value no quote surrounds.
+
+### def `_kind` (logging_config.py)
+
+- **Arguments**: `value: Any`
+
+- **Returns**: `Any`
+
+No description available.
+
+### def `_without_exception_text` (logging_config.py)
+
+- **Arguments**: `record: logging.LogRecord`
+
+- **Returns**: `None`
+
+No description available.
+
+### def `records_without_values` (logging_config.py)
+
+- **Arguments**: ``
+
+- **Returns**: `None`
+
+Every log record of this process, whichever logger writes it, without the text of an exception: an exception
+given as the message or as an argument is written by its kind alone, and so is each exception of a traceback
+(:func:`traceback_without_values`), which then leaves the record. This is the net for what the application did
+not word itself, above all a page's uncaught error, most often one on the data. Done when the record is made,
+not on a handler: Streamlit's loggers have their own handlers and do not propagate, so the traceback of a page's
+uncaught error ("Uncaught app execution") never passes the root handlers' filters; a library's logger is covered
+the same way. A text already formatted into the message (an f-string, ``str(exc)``) cannot be undone here: the
+application's own calls never do it (see the module's docstring), a library's may. Installed once per process
+(:func:`configure_logging`); a second call changes nothing.
+
 ### def `configure_logging` (logging_config.py)
 
 - **Arguments**: `level: ComplexType`
 
 - **Returns**: `None`
 
-Configure the root logger from ``CMP_LOG_LEVEL`` (default INFO). Safe to call repeatedly.
+Configure the root logger from ``CMP_LOG_LEVEL`` (default INFO), and every record of the process without an
+exception's values (:func:`records_without_values`). Safe to call repeatedly.
 
 ---
 
