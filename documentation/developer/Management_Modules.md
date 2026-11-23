@@ -371,7 +371,9 @@ Return an error message when the username is unacceptable, else None.
 
 - **Returns**: `ComplexType`
 
-Return an error message when the password is unacceptable, else None.
+Return an error message when the password is unacceptable, else None: shorter than the minimum (counted in
+characters), made of spaces only, or longer than the hash takes. The one rule of every way a password is set:
+``IAMManager`` applies it too, so that no caller can forget it. The words never quote the password.
 
 ### def `validate_new_credentials` (authz.py)
 
@@ -2647,11 +2649,13 @@ Dynamically resolves and instantiates the active IAM provider (Local DuckDB,
 Better Auth, or Disabled) based on environment configuration or runtime parameters._
 
 **Imports**:
-`logging`, `os`, `typing.Any`, `core.workspace.workspace_exists`, `utils.logging_config.exception_said`, `utils.logging_config.single_line`, `utils.settings.Settings`, `utils.settings.get_settings`, `.setup_token`, `base.BaseIAMProvider`, `providers.IAM_PROVIDERS`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
+`logging`, `typing.Any`, `core.workspace.workspace_exists`, `utils.logging_config.exception_kind`, `utils.logging_config.exception_said`, `utils.logging_config.single_line`, `utils.settings.Settings`, `utils.settings.get_settings`, `.authz`, `.setup_token`, `base.BaseIAMProvider`, `providers.IAM_PROVIDERS`, `schemas.AuthResult`, `schemas.IAMConfig`, `schemas.IAMProviderType`, `schemas.UserCredentials`, `schemas.UserProfile`, `schemas.UserRole`
 
 ### class `IAMConfigurationError` (manager.py)
 
-The identity provider is misconfigured: the app must not start with another one in its place.
+The accounts are misconfigured, and the app must not start as if they were not: an identity provider that is
+not the one configured, or a first administrator's password that is set and cannot be used. Its words name
+settings, never their values.
 
 ### class `IAMManager` (manager.py)
 
@@ -2695,7 +2699,8 @@ Central facade managing IAM operations and provider lifecycle.
   > Provision a new user account. A name whose workspace folder exists is refused, with the message of a name taken
   > (core.workspace.workspace_exists): the folder may hold another account's files, such as the folder an earlier
   > version gave an account that has not signed in since. The server's operator may reuse it (``reuse_folder``,
-  > manage_users.py create-admin).
+  > manage_users.py create-admin). A password the rule refuses (``authz.validate_password``) creates no account:
+  > held here, whatever the caller checked.
 
 - **verify_session**(`self, token: str`) -> `AuthResult`
   > Verify an existing session token.
@@ -2722,7 +2727,7 @@ Central facade managing IAM operations and provider lifecycle.
   > Delete user account.
 
 - **update_user_password**(`self, username: str, new_password: str`) -> `tuple[ComplexType]`
-  > Update user credentials.
+  > Update user credentials; a password the rule refuses (``authz.validate_password``) changes nothing.
 
 - **_setup_dir**(``) -> `str`
   > No description available.
@@ -2744,8 +2749,29 @@ Central facade managing IAM operations and provider lifecycle.
   >
   > Credentials come from CMP_ADMIN_USERNAME (default 'admin') and CMP_ADMIN_PASSWORD or
   > CMP_ADMIN_PASSWORD_FILE. Without them, a one-time setup token is written to the server log and the
-  > login page creates the first administrator with it (manage/iam/setup_token.py). Nothing happens when
-  > the IAM provider is disabled or when an active administrator already exists.
+  > login page creates the first administrator with it (manage/iam/setup_token.py). A password that is set
+  > and cannot be used (shorter than CMP_MIN_PASSWORD_LENGTH or refused by ``authz.validate_password``
+  > otherwise; a file that is missing, empty or not UTF-8 text) raises IAMConfigurationError, which stops the
+  > start: no administrator, and no setup token in its place. Nothing happens when the IAM provider is
+  > disabled or when an active administrator already exists.
+
+### def `_configured_password` (manager.py)
+
+- **Arguments**: `iam: Any`
+
+- **Returns**: `tuple[ComplexType]`
+
+The first administrator's password as the installation gives it: ``(password, setting, problem)``.
+
+- No password configured: ``(None, "", "")``.
+
+- One that can be used: the password, the setting it was read from, ``""``.
+
+- One that is set and cannot be used: ``(None, setting, why)``, a sentence that holds nothing of the password.
+
+CMP_ADMIN_PASSWORD comes before CMP_ADMIN_PASSWORD_FILE, which is then not read. The file is read as UTF-8, a
+byte order mark aside (Notepad's "UTF-8 with BOM": the mark is no character of the password); an error of
+reading it is named by its kind, since a decoding error's own text quotes a byte of the password.
 
 ### def `get_iam_manager` (manager.py)
 
@@ -5848,8 +5874,10 @@ A fresh installation (a new Docker container) has no administrator. When no boot
 its log; the login page then offers to create the first administrator with it. Whoever can read the server log
 operates the server, which is the trust this relies on (as Jupyter's token does).
 
-Only a SHA-256 hash of the token is stored, in the data root. The token is valid until it is used or until an
-administrator exists; a restart without an administrator issues a new one._
+Only a SHA-256 hash of the token is stored, in the data root. The token is valid until it is used, until an
+administrator exists, or until a new one is asked for (``python manage_users.py setup-token``); a restart without
+an administrator keeps it. A bootstrap password that is set and cannot be used issues no token: the start stops
+(``IAMManager.ensure_bootstrap_admin``)._
 
 **Imports**:
 `__future__.annotations`, `contextlib`, `hashlib`, `hmac`, `json`, `os`, `secrets`, `datetime.UTC`, `datetime.datetime`, `pathlib.Path`

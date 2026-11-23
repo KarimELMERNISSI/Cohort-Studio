@@ -5173,7 +5173,7 @@ This page allows administrators to:
 - Delete user accounts_
 
 **Imports**:
-`streamlit`, `manage.iam.IAMProviderType`, `manage.iam.get_iam_manager`, `manage.iam.authz.MIN_PASSWORD_LENGTH`, `manage.iam.authz.is_admin_role`, `manage.iam.providers.IAM_PROVIDERS`
+`streamlit`, `manage.iam.IAMProviderType`, `manage.iam.get_iam_manager`, `manage.iam.authz.MIN_PASSWORD_LENGTH`, `manage.iam.authz.is_admin_role`, `manage.iam.authz.validate_password`, `manage.iam.providers.IAM_PROVIDERS`
 
 ### def `app` (users_management.py)
 
