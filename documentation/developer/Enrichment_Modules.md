@@ -5,7 +5,7 @@
 _No module description._
 
 **Imports**:
-`pandas`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats._types.RANDOM_STATE`, `ingest.analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`
+`logging`, `pandas`, `sklearn.base.TransformerMixin`, `sklearn.compose.ColumnTransformer`, `sklearn.impute.KNNImputer`, `sklearn.impute.SimpleImputer`, `sklearn.pipeline.Pipeline`, `sklearn.preprocessing.OneHotEncoder`, `sklearn.preprocessing.StandardScaler`, `biostats._types.RANDOM_STATE`, `ingest.analyzer.DataAnalyzer`, `utils.miss_forest.missforest.MissForest`
 
 ### class `MissForestTransformer` (data_imputation.py)
 
@@ -25,7 +25,7 @@ No description available.
   >     If True, enables debug information output.
 
 - **debug_print**(`self`) -> `None`
-  > Helper function for controlled debug printing.
+  > A debug line in the log when ``debug`` is set: the steps and the columns' names, never a value.
 
 - **fit**(`self, X, y`) -> `None`
   > Fit the MissForest imputer on X.

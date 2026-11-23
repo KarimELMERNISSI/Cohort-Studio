@@ -5,7 +5,7 @@
 _No module description._
 
 **Imports**:
-`re`, `warnings`, `matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `seaborn`, `matplotlib.colors.to_hex`, `openpyxl.styles.Font`, `openpyxl.styles.PatternFill`, `explore.correlation_strength.STRENGTH_ORDER`, `explore.correlation_strength.STRENGTH_THRESHOLDS`, `explore.correlation_strength.CorrelationMethod`, `explore.correlation_strength.categorize_strength`, `functools.cache`
+`logging`, `re`, `warnings`, `matplotlib.pyplot`, `numpy`, `pandas`, `plotly.express`, `plotly.figure_factory`, `plotly.graph_objects`, `seaborn`, `matplotlib.colors.to_hex`, `openpyxl.styles.Font`, `openpyxl.styles.PatternFill`, `explore.correlation_strength.STRENGTH_ORDER`, `explore.correlation_strength.STRENGTH_THRESHOLDS`, `explore.correlation_strength.CorrelationMethod`, `explore.correlation_strength.categorize_strength`, `functools.cache`
 
 ### def `plotly_corr_mat` (corr_matrix.py)
 
