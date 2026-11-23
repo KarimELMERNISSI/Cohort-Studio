@@ -870,9 +870,11 @@ def impute_and_derive(
     watch: Sequence[Mapping[str, Any]] = (),
     progress: Callable[[float], None] | None = None,
     workers: int = 1,
+    scratch: Any = None,
 ) -> Any:
     """
-    A multiple imputation (biostats.mi.impute, ``spec`` an ImputationSpec) with declared derived variables
+    A multiple imputation (biostats.mi.impute, ``spec`` an ImputationSpec; ``workers`` and ``scratch`` are its own)
+    with declared derived variables
     (IMPUTE_THEN_DERIVE): each is left out of the chains, so neither imputed nor a predictor of any variable, then
     computed in every completed dataset from the imputed values (:func:`derive`). The imputation keeps how
     (``info["derived"]``: the approach, the steps, the values left missing and, for the definitions of ``watch``, the
@@ -889,7 +891,7 @@ def impute_and_derive(
     spec = spec.model_copy(
         update={"methods": {**spec.methods, **{t: "" for t in targets if t in spec.columns}}}
     )
-    run = impute(frame, spec, progress=progress, workers=workers)
+    run = impute(frame, spec, progress=progress, workers=workers, scratch=scratch)
     mi, left = derive(run.mi, steps)
     derived = [t for t in targets if mi.methods.get(t) == DERIVED_METHOD]
     notes = [w for w in run.warnings if w not in {NOT_IMPUTED.format(column=t) for t in derived}]

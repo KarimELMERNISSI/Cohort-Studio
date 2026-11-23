@@ -40,6 +40,13 @@ from utils.logging_config import records_without_values as _records_without_valu
 _records_without_values()
 
 
+# The linear algebra on one thread, as the server sets it when it starts (main.py): what a test computes then does
+# not depend on whether an AppTest ran main.py, or an imputation was drawn, before it.
+from manage.compute import one_blas_thread_for_this_process as _one_blas_thread_for_this_process
+
+_one_blas_thread_for_this_process()
+
+
 @pytest.fixture
 def plain_log_records():
     """Log records as they were made before the cleaning (``records_without_values``), an exception's text whole:

@@ -22,6 +22,7 @@ import pickle
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -41,16 +42,59 @@ from biostats.mi.spec import (
 ENGINE = "cohortstudio-fcs 1"
 
 
-def drawn_with() -> dict[str, Any]:
+def blas_threads() -> list[int]:
+    """The threads of each BLAS library this process has loaded (numpy's and SciPy's are two), as they are now."""
+    from threadpoolctl import threadpool_info
+
+    return [
+        int(pool.get("num_threads") or 0)
+        for pool in threadpool_info()
+        if pool.get("user_api") == "blas"
+    ]
+
+
+def one_blas_thread() -> None:
+    """
+    Makes sure the linear algebra of this process runs on one thread, and leaves it so. Every chain is drawn so,
+    here as in a worker process (:func:`_init_worker`), so that an imputation's cells do not depend on where it was
+    drawn: a BLAS adds up a long product in another order with several threads than with one (OpenBLAS from 10,000
+    numbers), and the last digits of a draw follow. A ``norm`` variable observed on more rows than that came out
+    otherwise in the session's process than in workers.
+
+    Nothing is given back. The setting is the process's, not a thread's, and a limit set for the time of a draw and
+    restored after it does not hold beside other code that saves and restores the same setting: scikit-learn's
+    KMeans does around every run, from another session's thread. Returning in the middle of a draw, it put the
+    chains back on every thread; and a draw that began during one of its runs later "restored" the one thread it had
+    found, for good. With one thread set and kept, every such code saves one and restores one. A server sets it
+    once when it starts, and a replay as it begins (``manage.compute.one_blas_thread_for_this_process``), so that
+    what a session computes never depends on whether an imputation has run; a process that only calls
+    :func:`impute` gets it at its first draw. The BLAS only: the loops other libraries run on OpenMP keep their
+    threads. More than 10,000 observed rows is where it shows for one variable; with very many predictor columns
+    it can on fewer (the products of a 9,000 by 60 table differed).
+    """
+    # the setting reaches the libraries loaded when it is made, and SciPy brings a BLAS of its own with this
+    # module: loaded after, it would start on every thread and stay so until the next draw or replay
+    import scipy.linalg  # noqa: F401
+
+    if any(threads != 1 for threads in blas_threads()):
+        from threadpoolctl import threadpool_limits
+
+        threadpool_limits(limits=1, user_api="blas")
+
+
+def drawn_with(threads: int | None = None) -> dict[str, Any]:
     """
     What the draws of an imputation depend on besides its specification and its seed, recorded with the step that
     drew them: the versions of numpy, scikit-learn and SciPy (the solver of ``polyreg`` is SciPy's), the system and
     the machine, and every BLAS library the process loaded with its version, its kernel, its threading layer and
     its threads. Two machines with the same lock file can run different kernels (the wheels choose one by processor),
-    and numpy and SciPy each bring their own BLAS. Never a path or a host name. The threads are those of the process
-    that records, the session's: the chains of a parallel run are drawn in worker processes of one BLAS thread each,
-    and a replay draws in its own process. The lock file's checksum, in the trace's environment record, covers
-    pandas and Python.
+    and numpy and SciPy each bring their own BLAS. Never a path or a host name. ``threads``: those a draw ran on
+    (``ImputationRun.blas_threads``, read by the draw itself), recorded for each library: one, in the session's
+    process, in a worker and in a replay alike (:func:`one_blas_thread`), so that two installations that differ by
+    their processors' cores record the same. Without it, the threads of this process as they are now, which a
+    replay compares a record with. A step recorded before every chain was drawn on one thread holds the threads of
+    the session's process, with which its chains were drawn unless they ran in worker processes. The lock file's
+    checksum, in the trace's environment record, covers pandas and Python.
     """
     import platform
 
@@ -76,7 +120,9 @@ def drawn_with() -> dict[str, Any]:
                     "version": str(pool.get("version") or ""),
                     "kernel": str(pool.get("architecture") or ""),
                     "threading": str(pool.get("threading_layer") or ""),
-                    "threads": int(pool.get("num_threads") or 0),
+                    "threads": int(pool.get("num_threads") or 0)
+                    if threads is None
+                    else int(threads),
                 }
                 for pool in threadpool_info()
                 if pool.get("user_api") == "blas"
@@ -88,17 +134,31 @@ def drawn_with() -> dict[str, Any]:
     return found
 
 
+def _threads_words(count: Any) -> str:
+    return "1 thread" if count == 1 else f"{count} threads"
+
+
 def _blas_words(pools: Any) -> str:
     if isinstance(pools, str):  # one library as text, as an early record wrote it
         return pools
     return (
         "; ".join(
             f"{p.get('library')} {p.get('version')} {p.get('kernel')} "
-            f"({p.get('threading') or 'threading layer not given'}, {p.get('threads')} threads)"
+            f"({p.get('threading') or 'threading layer not given'}, {_threads_words(p.get('threads'))})"
             for p in pools or []
             if isinstance(p, Mapping)
         )
         or "not available"
+    )
+
+
+def _without_threads(pools: Any) -> Any:
+    """The BLAS libraries of a record without their thread counts, or ``None`` when it is not a list of them."""
+    if not isinstance(pools, list) or not all(isinstance(p, Mapping) for p in pools):
+        return None
+    return sorted(
+        ({k: v for k, v in p.items() if k != "threads"} for p in pools),
+        key=lambda pool: tuple(str(v) for v in pool.values()),
     )
 
 
@@ -109,6 +169,9 @@ def drawn_with_changes(
     What differs between what a recorded ``mi_impute`` step was drawn with (its ``versions`` and ``platform``) and
     this process (``now``: :func:`drawn_with`), in words: "scipy 1.15.0 -> 1.16.2", "machine x86_64 -> aarch64". What
     a step written by an earlier version did not record is said too ("scipy not recorded"): it may have changed.
+    The same BLAS libraries with other threads read "BLAS threads 14 -> 1": a step recorded before every chain was
+    drawn on one thread, in the session's process, can give other last digits now (:func:`one_blas_thread`). Read
+    after a draw, as a replay does: the process is then on one thread.
     """
     now = drawn_with() if now is None else now
     recorded_versions = params.get("versions") or {}
@@ -129,9 +192,17 @@ def drawn_with_changes(
     if "blas" not in recorded_platform:
         changes.append("BLAS not recorded")
     elif recorded_platform["blas"] != now["platform"].get("blas"):
-        changes.append(
-            f"BLAS {_blas_words(recorded_platform['blas'])} -> {_blas_words(now['platform'].get('blas'))}"
-        )
+        was, current = recorded_platform["blas"], now["platform"].get("blas")
+        libraries = _without_threads(was)
+        if libraries is not None and libraries == _without_threads(current):
+            # the same libraries: only the threads the chains were drawn with
+            counts = [
+                sorted({p.get("threads") for p in pools}, key=str) for pools in (was, current)
+            ]
+            said = [", ".join(str(c) for c in found) for found in counts]
+            changes.append(f"BLAS threads {said[0]} -> {said[1]}")
+        else:
+            changes.append(f"BLAS {_blas_words(was)} -> {_blas_words(current)}")
     return changes
 
 
@@ -153,6 +224,10 @@ class ImputationRun:
     dropped: dict[str, list[str]] = field(default_factory=dict)  # predictors left out at least once
     warnings: list[str] = field(default_factory=list)
     elapsed: float = 0.0
+    # the most BLAS threads the process had when the draw began, after each chain drawn in it and when the draw
+    # ended: 1, unless other code of the process changed them meanwhile (a warning then says so); what the step
+    # records (drawn_with). A reading takes a few milliseconds: one per chain, not one per iteration
+    blas_threads: int = 1
 
 
 @dataclass
@@ -427,14 +502,17 @@ def impute(
     *,
     progress: Callable[[float], None] | None = None,
     workers: int = 1,
+    scratch: str | Path | None = None,
 ) -> ImputationRun:
     """
     Multiple imputation of ``df`` by chained equations; returns the imputed data and the diagnostics.
 
-    ``workers`` > 1 runs the chains in that many processes; the result is identical (one stream per chain). The
-    processes are started from a separate interpreter (:mod:`biostats.mi.parallel`), so that they never re-run
-    the Streamlit page script that is ``__main__`` in the application. If that run fails (the system refuses
-    the processes, the interpreter stops), the chains run here, one after another, with a warning: the result is the
+    ``workers`` > 1 runs the chains in that many processes; the result is identical: one stream per chain, and
+    every chain drawn on one BLAS thread, here as in a worker (:func:`one_blas_thread`). The processes are started
+    from a separate interpreter (:mod:`biostats.mi.parallel`), so that they never re-run the Streamlit page script
+    that is ``__main__`` in the application; the copy of the table that run needs is written under ``scratch`` (the
+    system's temporary folder when none is given) and deleted with it. If that run fails (the system refuses the
+    processes, the interpreter stops), the chains run here, one after another, with a warning: the result is the
     same.
     """
     from biostats.mi.parallel import in_subprocess, run_in_subprocess
@@ -443,7 +521,7 @@ def impute(
     fallback: str | None = None
     if workers > 1 and spec.m > 1 and not in_subprocess():
         try:
-            return run_in_subprocess(df, spec, workers, progress)
+            return run_in_subprocess(df, spec, workers, progress, scratch=scratch)
         except (RuntimeError, OSError, EOFError, pickle.UnpicklingError) as exc:
             # named by its type: the warning is saved with the imputation, and the child's last line can quote a
             # cell, an OSError the temporary folder, which names the server's account
@@ -452,6 +530,21 @@ def impute(
                 "is the same)"
             )
             workers = 1  # a pool started here would re-run the page script, __main__ in Streamlit, in each worker
+    return _impute_here(df, spec, progress, workers, fallback)
+
+
+def _impute_here(
+    df: pd.DataFrame,
+    spec: ImputationSpec,
+    progress: Callable[[float], None] | None,
+    workers: int,
+    fallback: str | None,
+) -> ImputationRun:
+    """The chains drawn in this process, one after another, or in its pool of worker processes (``workers`` > 1:
+    this process is then the separate interpreter of a parallel run); on one BLAS thread either way, which the run
+    reads as it begins, after each chain it draws here and as it ends (``ImputationRun.blas_threads``)."""
+    one_blas_thread()
+    threads = blas_threads()
     started = time.perf_counter()
     methods, predictors, warnings = _resolve(df, spec)
     strata: list[tuple[int, Any, np.ndarray]] = []
@@ -514,7 +607,12 @@ def impute(
                         tick()
             chains = [o for o in outputs if o is not None]
         else:
-            chains = [_chain(*job, tick=tick) for job in jobs]
+            chains = []
+            for job in jobs:
+                chains.append(_chain(*job, tick=tick))
+                threads += (
+                    blas_threads()
+                )  # after each chain: other code may have moved them, and put them back
         draws = {t: [c.draws[t] for c in chains] for t in targets}
         trace_mean = {t: np.column_stack([c.mean[t] for c in chains]) for t in targets}
         trace_sd = {t: np.column_stack([c.sd[t] for c in chains]) for t in targets}
@@ -531,6 +629,13 @@ def impute(
             imputed[t].append(pd.DataFrame(columns, index=index))
             trace[f"{t}{suffix}"] = {"mean": trace_mean[t], "sd": trace_sd[t]}
     imputations = {t: pd.concat(frames).sort_index() for t, frames in imputed.items() if frames}
+    most = max([*threads, *blas_threads()], default=1)
+    moved = (
+        f"the linear algebra of this process ran on up to {most} threads during the draw (another computation "
+        "changed them): the last digits of these imputations may differ from another draw's"
+        if most != 1
+        else None
+    )
     mi = MIData(
         base=df.copy(),
         imputations=imputations,
@@ -546,9 +651,19 @@ def impute(
         trace=trace,
         rhat={name: _rhat(values["mean"]) for name, values in trace.items()},
         dropped={t: sorted(cols) for t, cols in dropped.items() if cols},
-        warnings=[*warnings, *([fallback] if fallback else [])],
+        warnings=[*warnings, *([fallback] if fallback else []), *([moved] if moved else [])],
         elapsed=time.perf_counter() - started,
+        blas_threads=most,
     )
 
 
-__all__ = ["ENGINE", "HAZARD", "NOT_IMPUTED", "ImputationRun", "impute", "nelson_aalen"]
+__all__ = [
+    "ENGINE",
+    "HAZARD",
+    "NOT_IMPUTED",
+    "ImputationRun",
+    "impute",
+    "nelson_aalen",
+    "blas_threads",
+    "one_blas_thread",
+]

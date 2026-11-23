@@ -626,6 +626,68 @@ def test_an_imputation_is_drawn_on_request_and_checked_when_it_is_not() -> None:
     assert refused.error is not None and "derivation approach" in refused.error
 
 
+def test_a_replay_gives_one_verdict_whether_it_draws_here_or_in_workers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A ``norm`` variable observed on more than 10,000 rows, recorded as the page records it in the session's
+    process: drawn again in this process (no budget, or a busy one, which grants one worker) or in worker processes
+    (a free one), the replay reads it reproduced. Every chain is drawn on one BLAS thread; drawn with the process's
+    own threads, the two gave other last digits, and the verdict followed the server's load. The engine leases the
+    workers around the draw alone, when the draw is large enough to pay for their start."""
+    from manage.compute import WorkerBudget
+    from tests.biostats_layer.test_mi_engine import LONG, _long
+
+    class Noted(WorkerBudget):
+        def __init__(self, total: int) -> None:
+            super().__init__(total)
+            self.granted: list[int] = []
+
+        def lease(self, wanted: int):  # type: ignore[override]
+            held = super().lease(wanted)
+            outer = self
+
+            class Lease:
+                def __enter__(self) -> int:
+                    granted = held.__enter__()
+                    outer.granted.append(granted)
+                    return granted
+
+                def __exit__(self, *exc: object) -> None:
+                    held.__exit__(*exc)
+
+            return Lease()
+
+    df = _long()
+    step = _recorded(df, LONG)
+    scratch = tmp_path / "private"
+    scratch.mkdir()
+
+    def replayed(options: ReplayOptions) -> None:
+        result = apply_steps(df, [step], options=options)
+        assert result.error is None and result.mi_divergence == [], result.warnings
+        assert result.reproducible and result.matches
+        assert result.imputations[0].fingerprint() == step["params"]["cells_fp"]
+
+    # a draw of this size does not pay for worker processes: none is leased
+    small = Noted(4)
+    replayed(ReplayOptions(workers=small, scratch=scratch))
+    assert small.granted == []
+    monkeypatch.setattr("manage.compute.PARALLEL_WORK", 1)  # from here on, it pays
+    replayed(ReplayOptions())  # no budget: this process
+    free = Noted(4)
+    replayed(ReplayOptions(workers=free, scratch=scratch))
+    assert (
+        free.granted == [2] and free.free == 4
+    )  # the two chains' workers, given back after the draw
+    busy = Noted(2)
+    with busy.lease(2):  # another session holds the budget
+        replayed(ReplayOptions(workers=busy, scratch=scratch))
+    assert busy.granted == [2, 1]  # the draw was granted one: this process
+    assert not list(
+        scratch.iterdir()
+    )  # the parallel draw's copy of the table, under the folder given, is gone
+
+
 def test_matches_fails_a_step_skipped_or_redone_in_part(tmp_path: Path) -> None:
     """The gate of a study package's checks: a step of a kind this version does not know, a step redone in part
     only, and a recorded table whose member is missing each leave it False, as a divergence does."""

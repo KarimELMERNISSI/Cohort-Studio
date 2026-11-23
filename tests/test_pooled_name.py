@@ -32,6 +32,9 @@ SPEC = ImputationSpec(columns=["x", "g", "y"], m=3, maxit=2, seed=5)
 
 
 def test_the_step_records_what_the_draws_depend_on_and_nothing_of_the_machine_s_own() -> None:
+    from biostats.mi.engine import one_blas_thread
+
+    one_blas_thread()  # as a draw sets it, and the server when it starts
     found = drawn_with()
     assert set(found) == {"versions", "platform"}
     assert set(found["versions"]) == {
@@ -42,6 +45,13 @@ def test_the_step_records_what_the_draws_depend_on_and_nothing_of_the_machine_s_
     assert {"system", "machine"} <= set(found["platform"]) <= {"system", "machine", "blas"}
     for pool in found["platform"].get("blas", []):
         assert set(pool) == {"library", "version", "kernel", "threading", "threads"}
+        # the threads every chain is drawn with: two installations that differ by their processors' cores record
+        # the same
+        assert pool["threads"] == 1
+    # a step records the threads its draw read (ImputationRun.blas_threads), not this process's as they are later
+    given = drawn_with(3)
+    assert {pool["threads"] for pool in given["platform"].get("blas", [])} <= {3}
+    assert {**given["platform"], "blas": None} == {**found["platform"], "blas": None}
     # never a path or a host name
     import socket
 
@@ -92,6 +102,27 @@ def test_what_changed_since_a_step_was_drawn_is_named() -> None:
     assert drawn_with_changes(layers[0], bare) == [
         "BLAS openblas 0.3.27 haswell (pthreads, 8 threads) -> not available"
     ]
+    # the same libraries with other threads: a step recorded when the session's process drew its chains with its own
+    # threads, read now that every chain is drawn on one
+    numpys, scipys = (
+        {**one, "threading": "pthreads"},
+        {**one, "version": "0.3.31", "threading": "pthreads"},
+    )
+    threads = [
+        {
+            **now,
+            "platform": {
+                **now["platform"],
+                "blas": [{**numpys, "threads": n}, {**scipys, "threads": n}],
+            },
+        }
+        for n in (14, 1)
+    ]
+    assert drawn_with_changes(*threads) == ["BLAS threads 14 -> 1"]
+    assert drawn_with_changes(threads[1], bare) == [
+        "BLAS openblas 0.3.27 haswell (pthreads, 1 thread); openblas 0.3.31 haswell (pthreads, 1 thread) -> "
+        "not available"
+    ]
     # a step written before these were recorded: said, since any of them may have changed
     before = {
         "versions": {
@@ -108,7 +139,10 @@ def test_what_changed_since_a_step_was_drawn_is_named() -> None:
 
 
 def test_a_replay_whose_imputation_differs_says_what_changed() -> None:
+    from biostats.mi.engine import one_blas_thread
+
     df = _data()
+    one_blas_thread()  # as a replay sets it when it begins: what this process compares a record with
     drawn = drawn_with()
 
     def step(**params) -> dict:
@@ -123,6 +157,17 @@ def test_a_replay_whose_imputation_differs_says_what_changed() -> None:
     assert same.warnings == [
         "step 1 (mi_impute): the re-computed imputation differs from the recorded one"
     ]
+    # the changes are kept as data too: none listed, the same software gave other cells; any listed, the two draws
+    # are not comparable (what a check of a study package reads)
+    assert same.mi_changes == {0: []}
+    blas = drawn["platform"].get("blas")
+    if blas:  # a step recorded when the page's own process drew with its 14 threads
+        was = {**drawn["platform"], "blas": [{**pool, "threads": 14} for pool in blas]}
+        threads = apply_steps(df, [step(versions=drawn["versions"], platform=was)])
+        assert threads.mi_changes == {0: ["BLAS threads 14 -> 1"]}
+        (said,) = threads.warnings
+        assert "(changed since: BLAS threads 14 -> 1); the step recorded the threads" in said
+        assert said.endswith("every chain is now drawn on one")
     elsewhere = apply_steps(
         df,
         [
@@ -132,6 +177,7 @@ def test_a_replay_whose_imputation_differs_says_what_changed() -> None:
             )
         ],
     )
+    assert elsewhere.mi_changes[0][0].startswith("scipy 1.15.0 -> ")
     (warning,) = elsewhere.warnings
     assert warning.endswith(
         f"(changed since: scipy 1.15.0 -> {drawn['versions']['scipy']}, "

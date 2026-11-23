@@ -61,6 +61,7 @@ from enrich.transformation_logic import apply_variable_transformation
 from ingest.dates import METHOD as DATES_METHOD
 from ingest.dates import convert as convert_dates
 from ingest.dates import smart_parse_dates
+from manage.compute import WorkerBudget, one_blas_thread_for_this_process
 from manage.paths import PathResolver, read_version
 from utils.logging_config import single_line, without_values
 
@@ -114,14 +115,26 @@ class ReplayOptions:
     ``not_drawn`` and passed in the mode ``not_drawn``: the caller holds the imputation already (the pre-flight of a
     study package, from its session). ``progress``: a draw's progress, from 0 to 1.
 
-    A draw runs in this process: the chains drawn in worker processes can give other last digits for a variable
-    observed on more than 10,000 rows (one BLAS thread against several; ``norm`` does, ``pmm`` did not at 15,000
-    rows), so a replay never draws there until every chain is drawn on one thread.
+    ``workers``: the server's budget of worker processes (``manage.compute.mi_workers()``), from which each draw
+    large enough to pay for their start (``manage.compute.pays_to_parallel``) leases what is free, for the time of
+    that draw alone; None, or a draw too small: the draw runs in this process. The cells are the same either way,
+    every chain being drawn on one BLAS thread (``biostats.mi.engine.one_blas_thread``): a busy budget changes the
+    time a replay takes, never its verdict. ``scratch``: the folder under which a parallel draw writes its copy of
+    the table, deleted with the run; the system's temporary folder when none is given. A caller with a private
+    folder of its own gives it (the check of a study package): a process that is killed deletes nothing, and
+    nothing sweeps the system's folder.
+
+    A step recorded before every chain was drawn on one thread, and drawn then in the session's process, can give
+    other last digits now for a variable observed on more than 10,000 rows, or on fewer with very many predictor
+    columns (``norm`` does; ``pmm``, ``logreg`` and ``polyreg`` did not at 18,400 rows): the warning names the BLAS
+    threads it recorded ("BLAS threads 14 -> 1"), and ``ReplayResult.mi_changes`` holds them as data.
     """
 
     process_seed: int | None = None
     draw: frozenset[str] | None = None
     progress: Callable[[float], None] | None = None
+    workers: WorkerBudget | None = None
+    scratch: Path | None = None
 
     def __post_init__(self) -> None:
         if self.draw is not None and not all(isinstance(h, str) for h in self.draw):
@@ -163,6 +176,10 @@ class ReplayResult:
     imputations: dict[int, Any] = field(default_factory=dict)  # step index -> MIData re-computed
     # mi_impute steps whose cells differ when drawn, or whose recorded inputs differ when not drawn
     mi_divergence: list[int] = field(default_factory=list)
+    # step index -> what changed since a step whose drawn cells differ was recorded (the libraries, the machine,
+    # the BLAS and its threads: biostats.mi.engine.drawn_with_changes), as the warning says it. Any change listed:
+    # the two draws are not comparable; none listed: the same software gave other cells
+    mi_changes: dict[int, list[str]] = field(default_factory=dict)
     # mi_impute steps, drawn or not, drawn on other inputs than the replay gives (their counts, their rows)
     mi_inputs_differ: list[int] = field(default_factory=list)
     # mi_impute steps checked without their draw (ReplayOptions.draw): not reproduced here
@@ -954,7 +971,7 @@ def _mi_impute(df, step, index, paths, warnings, result=None, options=None):
         if result is not None:
             result.not_drawn.append(index)
         return df, None
-    return _mi_draw(df, rows, spec, params, index, warnings, result, options.progress)
+    return _mi_draw(df, rows, spec, params, index, warnings, result, options)
 
 
 def _inputs_differ(
@@ -994,33 +1011,49 @@ def _inputs_differ(
     return said
 
 
-def _mi_draw(df, rows, spec, params, index, warnings, result, progress):
-    """The draw of a multiple imputation step, in this process, its cells checked against the recorded hash."""
+def _mi_draw(df, rows, spec, params, index, warnings, result, options):
+    """The draw of a multiple imputation step, its cells checked against the recorded hash; in this process, or in
+    worker processes leased from ``options.workers`` for this draw alone when it is large enough to pay for their
+    start: the cells are the same."""
     from biostats.mi import impute
-    from biostats.mi.engine import drawn_with_changes
+    from biostats.mi.engine import drawn_with, drawn_with_changes
+    from manage.compute import pays_to_parallel
 
     derived = params.get("derived") if isinstance(params.get("derived"), Mapping) else None
-    if derived is not None:
+
+    def draw(workers: int):
+        how = {"progress": options.progress, "workers": workers, "scratch": options.scratch}
+        if derived is None:
+            return impute(df.loc[rows], spec, **how)
         # the declared derived variables, computed in each completed dataset as recorded (or declined)
         steps = list(derived.get("steps") or []) if derived.get("recompute") else []
-        run = impute_and_derive(
-            df.loc[rows],
-            spec,
-            steps,
-            declined=list(derived.get("declined") or []),
-            progress=progress,
+        return impute_and_derive(
+            df.loc[rows], spec, steps, declined=list(derived.get("declined") or []), **how
         )
+
+    budget = options.workers
+    if budget is not None and pays_to_parallel(len(rows), len(spec.columns), spec.m, spec.maxit):
+        with budget.lease(min(spec.m, budget.total)) as granted:
+            run = draw(granted)
     else:
-        run = impute(df.loc[rows], spec, progress=progress)
+        run = draw(1)
     if result is not None:
         result.imputations[index] = run.mi
     recorded = params.get("cells_fp")
     if recorded and run.mi.fingerprint() != recorded:
         if result is not None:
             result.mi_divergence.append(index)
-        # the libraries, the machine and the BLAS the step was drawn with, against this process's
-        changed = drawn_with_changes(params)
+        # the libraries, the machine and the BLAS the step was drawn with, against this draw's: the threads it
+        # read itself (one, unless other code moved them meanwhile, which is then a change that is named)
+        changed = drawn_with_changes(params, drawn_with(run.blas_threads))
+        if result is not None:
+            result.mi_changes[index] = changed
         why = f" (changed since: {', '.join(changed)})" if changed else ""
+        if any(change.startswith("BLAS threads") for change in changed):
+            why += (
+                "; the step recorded the threads of the linear algebra library in the page's own process, with "
+                "which its chains were drawn unless they ran in worker processes: every chain is now drawn on one"
+            )
         warnings.append(
             f"step {index + 1} (mi_impute): the re-computed imputation differs from the recorded one{why}"
         )
@@ -1133,7 +1166,14 @@ def apply_steps(
     tables a step's population may name by fingerprint although the replay does not pass through them (a draft
     redone one change at a time names the dataset it was built on). ``on_step(StepSeen)`` is called after each step
     the replay passes (not on the one it stops at), so that a caller takes each step's shape, profile or fingerprint
-    in the same pass (the study package's checks). ``options``: :class:`ReplayOptions`."""
+    in the same pass (the study package's checks). ``options``: :class:`ReplayOptions`.
+
+    A replay leaves the calling process on one BLAS thread, for good: what it compares was recorded so
+    (``manage.compute.one_blas_thread_for_this_process``)."""
+    # what a fingerprint is taken of is computed on one BLAS thread, when recorded (the server's process, from its
+    # start) and here: the scores of a PCA of a large table, an imputation's cells, change their last digits with
+    # the threads
+    one_blas_thread_for_this_process()
     current = ensure_row_ids(df)
     result = ReplayResult(df=None)
     total = len(steps)
@@ -1236,8 +1276,9 @@ def run_trace(
     options: ReplayOptions | None = None,
 ) -> ReplayResult:
     """Replay ``trace_data`` (all steps, or up to and including ``upto``) and return the resulting frame; ``on_step``
-    and ``options`` as for :func:`apply_steps`. A file that is not a trace this version replays (``trace_problems``)
-    is refused, with the first reason as the error."""
+    and ``options`` as for :func:`apply_steps`, which also leaves the calling process on one BLAS thread. A file
+    that is not a trace this version replays (``trace_problems``) is refused, with the first reason as the
+    error."""
     problems = trace_problems(trace_data)
     if problems:
         return ReplayResult(df=None, error=f"Not a trace this version can replay: {problems[0]}")

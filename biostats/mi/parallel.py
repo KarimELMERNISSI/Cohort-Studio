@@ -60,10 +60,21 @@ def _remove(folder: str) -> None:
 
 
 def run_in_subprocess(
-    df: Any, spec: Any, workers: int, progress: Callable[[float], None] | None = None
+    df: Any,
+    spec: Any,
+    workers: int,
+    progress: Callable[[float], None] | None = None,
+    *,
+    scratch: str | Path | None = None,
 ) -> Any:
-    """Run ``impute(df, spec, workers=workers)`` in a fresh interpreter and return its ImputationRun."""
-    folder = tempfile.mkdtemp(prefix="cmp_mi_")
+    """
+    Run ``impute(df, spec, workers=workers)`` in a fresh interpreter and return its ImputationRun. The job's folder
+    (the copy of the table, the result) is made under ``scratch``, or under the system's temporary folder when none
+    is given, readable by its owner only where the system has such rights, and deleted however the run ends. A
+    process that is killed deletes nothing: a caller that has a private folder of its own, which it empties, gives
+    it (a check of a study package does), so that no copy of the data is left where nothing sweeps.
+    """
+    folder = tempfile.mkdtemp(prefix="cmp_mi_", dir=None if scratch is None else str(scratch))
     try:
         return _run(Path(folder), df, spec, workers, progress)
     finally:

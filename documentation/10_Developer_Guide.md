@@ -560,9 +560,28 @@ without loading the engine.
   difference is in `mi_divergence`), its rows are in `ReplayResult.mi_rows`, it is passed in the mode `not_drawn`
   and listed in `not_drawn`, which leaves the replay not `reproducible`. Every imputation step's inputs are checked
   so, drawn or not (`mi_inputs_differ`). `matches` says whether everything checked held: no error, no divergence of
-  a table or an imputation, no step skipped or redone in part. A draw runs in the replay's own process with its
-  `progress`: chains drawn in worker processes can give other last digits for a variable observed on more than
-  10,000 rows, so a replay does not draw there.
+  a table or an imputation, no step skipped or redone in part. A draw reports its `progress`, and runs in the
+  replay's own process, or in worker processes when `workers` is the server's budget
+  (`manage.compute.mi_workers()`): the engine leases what is free around each draw large enough to pay for their
+  start (`manage.compute.pays_to_parallel`), and gives it back when that draw ends. A parallel draw writes its copy
+  of the table under `scratch`, a private folder of the caller's, or under the system's temporary folder.
+- **One BLAS thread.** The cells of an imputation are the same wherever it is drawn: every chain runs on one BLAS
+  thread (`biostats.mi.engine.one_blas_thread`), in the session's process, in a worker and in a replay alike. The
+  setting is the process's and is never given back: a limit set for the time of a draw is undone by other code that
+  saves and restores it meanwhile (scikit-learn's KMeans does). The server sets it when it starts, a replay at its
+  first step and the test suite at its start (`manage.compute.one_blas_thread_for_this_process`); a process that
+  only draws gets it at its first draw. A draw reads the threads as it begins, after each chain and as it ends
+  (`ImputationRun.blas_threads`), which the step records (`platform.blas[].threads`: 1), and warns if other code
+  moved them. A step recorded before that, and drawn in the session's process, can give other last digits for a
+  variable observed on more than 10,000 rows (or on fewer with very many predictor columns): its warning then
+  names the threads it recorded ("BLAS threads 14 -> 1"), and `ReplayResult.mi_changes` holds what changed, by
+  step, as data: any change listed, the two draws are not comparable; none, the same software gave other cells.
+- **One rule for what a replay compares.** Whatever a fingerprint is taken of is computed on one BLAS thread, when
+  it is recorded (the server's process, from its start) and when it is replayed (a replay sets it at its first
+  step): `manage.compute.one_blas_thread_for_this_process`. The scores of a PCA or a FAMD of a large table, and the
+  values of a single imputation by chained equations, change their last digits with the threads, as a multiple
+  imputation's cells do. Such a step recorded before does not record its threads: replayed now, it can read as not
+  reproduced without the replay naming why.
 
 ### Kinds of trace step (`core/steps.py`)
 

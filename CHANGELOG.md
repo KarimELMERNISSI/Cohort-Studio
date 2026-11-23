@@ -73,6 +73,53 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
   The entry above says how to delete entries, and whose judgement a reportable breach is.
 
+### A multiple imputation gives the same values wherever it is drawn
+
+- **Every chain is drawn on one thread of the linear algebra library**, in the page's own process as in the worker
+  processes of "Use several processor cores". With several threads, the library adds a long product up in another
+  order, and the last digits follow. For a variable imputed by `norm` and observed on more than 10,000 rows, the
+  imputed values differed between the two by about 1e-16 of their size (2.8e-14 on values near 120), and so did the
+  answer of the Reproduce page, which draws in its own process: an imputation whose chains had run in worker
+  processes read "the re-computed imputation differs from the recorded one" although nothing had changed.
+  - Measured at about 18,400 observed rows: `logreg`, `polyreg` and `pmm` gave the same values on 14 threads and
+    on one, alone and beside a `norm` variable whose values differed.
+  - It can show on fewer rows with very many predictor columns (the products of a table of 9,000 rows by 60 columns
+    differed; a draw on 8,300 rows with 50 columns did not).
+  - Two computers with the same libraries and the same processor family now draw the same values, whatever their
+    number of cores.
+- **What changes for an imputation already recorded:**
+  - one whose chains ran in worker processes (the switch on, and cores free) now reads as reproduced;
+  - one whose chains ran in the page's own process (the switch off; or on, when no core was free, the server
+    allows one process, or the parallel run failed, as the page or the imputation's warning said), with a `norm`
+    variable observed on more than 10,000 rows, can now read "differs", with the reason: "changed since: BLAS
+    threads 14 -> 1" (the threads that process had). Its values are as right as before, and the Reproduce page
+    keeps naming that change for its step;
+  - an imputation drawn from now on is reproduced wherever it is drawn again. If you draw one again, run again on
+    it the pooled analyses that are to rest on it: each names the imputation it was computed on.
+  - No estimate moves beyond its last digits.
+- **The same rule for everything a replay compares: it is computed on one thread, when recorded and when
+  replayed.** The application's linear algebra runs on one thread from its start, and a replay's from its first
+  step. The number of threads is a setting of the whole process, shared by every session, and it already moved
+  under them: the K-Means of Data insight and Validate puts the whole process on one thread for the time of each
+  of its runs, so an imputation or a PCA that another session computed meanwhile ran partly on one thread and
+  partly on all, and its last digits followed.
+  - **A PCA or FAMD of Enrich, or a single imputation by chained equations (MICE), on a large table, recorded
+    before this version** on a computer with several cores, was computed on all of them: replayed now, its values
+    can differ in their last digits (a PCA's scores by 1.2e-13 and a MICE imputation's values by 4.8e-13 for 50,000
+    rows by 13 columns; a PCA's not at all for 20,000 by 6), and the Reproduce page then reads that step as not
+    reproduced. Such a step does not record its threads, so the page cannot name the cause: it is this one when
+    nothing else changed. Its values are as right as before. A replay on a computer with another number of cores
+    was open to the same difference (the order of adding follows the threads); it no longer is.
+  - What one thread costs, measured on 14 cores at 5,000, 50,000 and 200,000 rows: nothing for a PCA, a
+    correlation matrix or K-Means; a linear regression of 50,000 rows and more, and a logistic one at 50,000 rows,
+    take up to half as long again (a linear regression of 200,000 rows by 60 columns: 1.0 s, then 1.5 s); a
+    logistic one at 200,000 rows was faster; the imputation's chains were no slower at 12,000 rows.
+  - What it brings besides: a result never depends on what another session was computing, and the sessions of
+    a shared installation no longer compete for one pool of threads.
+  - The loops that other libraries run on OpenMP (K-Means, LightGBM for MissForest) keep their threads.
+- **The Reproduce page** draws a large imputation again in the worker processes that are free, as the Enrich page
+  does, for the time of that draw; the values are the same in one process.
+
 ### The study definition can hold a study's privacy choices
 
 - **A section `privacy` of the study definition** holds what a study asks for the documents made from it: the

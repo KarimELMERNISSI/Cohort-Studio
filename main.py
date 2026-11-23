@@ -58,8 +58,19 @@ def _expression_workers_once() -> bool:
     return install_for(settings)
 
 
+@st.cache_resource(show_spinner=False)
+def _one_blas_thread_once() -> bool:
+    """The linear algebra of the server's process on one thread, set once and kept: an imputation then gives the same
+    values wherever its chains are drawn, and no session's results depend on another's (manage.compute)."""
+    from manage.compute import one_blas_thread_for_this_process
+
+    one_blas_thread_for_this_process()
+    return True
+
+
 def main() -> None:
     configure_logging()
+    _one_blas_thread_once()
     # no prompt goes to a tracing service (LangSmith), whatever .env says: it would go round the data-sharing
     # confirmation of Settings
     disable_remote_tracing()

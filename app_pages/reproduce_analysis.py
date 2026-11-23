@@ -9,13 +9,20 @@ from core.lineage import verify_trace
 from core.workspace import safe_filename
 from ingest.loaders import UPLOAD_TYPES
 from manage.paths import PathResolver, normalize_path
-from manage.replay.engine import NeededFile, files_needed, locate, run_trace, trace_problems
+from manage.replay.engine import (
+    NeededFile,
+    ReplayOptions,
+    files_needed,
+    locate,
+    run_trace,
+    trace_problems,
+)
 
 # Import necessary modules for reproduction logic
 from manage.trace_documenter import TraceDocumenter
 from ui.components.text import plain
 from ui.progress import current_trace_session, mark_step
-from ui.services import services
+from ui.services import services, shared
 from ui.session_scope import get_current_scope
 from ui.state import get_state
 from utils.data_paths import get_traces_dir, get_uploads_dir
@@ -598,8 +605,10 @@ def jump_to_step(trace_data, target_step_index, rerun_mode):
         progress_bar.progress(min(max(int(pct), 0), 100) / 100, text=plain(msg, limit=300))
 
     with st.spinner(f"Replaying analysis up to Step {target_step_index + 1}..."):
+        # a large imputation is drawn again in the worker processes that are free, for the time of its draw: the
+        # values are the same in one process and in several
         result = run_trace(trace_data, upto=target_step_index, paths=_resolver().with_named(overrides),
-                           progress_callback=_on_progress)
+                           progress_callback=_on_progress, options=ReplayOptions(workers=shared().mi_workers))
     progress_bar.empty()
 
     if result.missing_file is not None:

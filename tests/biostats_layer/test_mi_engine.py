@@ -258,6 +258,215 @@ def test_parallel_chains_give_the_same_imputations() -> None:
     )
 
 
+def _long(n: int = 12_000) -> pd.DataFrame:
+    """Two complete numbers and two with missing values, observed on more than 10,000 rows: where a BLAS of several
+    threads adds a product up in another order than one thread does."""
+    rng = np.random.default_rng(7)
+    x, z = rng.normal(size=n), rng.normal(size=n)
+    y = 1.5 * x - 0.7 * z + rng.normal(size=n)
+    out = pd.DataFrame({"x": x, "z": z, "y": y, "w": 0.4 * x + rng.normal(size=n)})
+    out.loc[rng.random(n) < 0.08, "y"] = np.nan
+    out.loc[rng.random(n) < 0.08, "w"] = np.nan
+    return out
+
+
+LONG = ImputationSpec(
+    columns=["x", "z", "y", "w"], methods={"y": "norm", "w": "norm"}, m=2, maxit=3, seed=11
+)
+
+
+def _on_its_own_threads() -> bool:
+    """Puts this process's linear algebra on several threads, as a process that never set one is; False where the
+    machine has one only."""
+    from threadpoolctl import threadpool_limits
+
+    from biostats.mi.engine import blas_threads
+
+    threadpool_limits(limits=max(os.cpu_count() or 1, 2), user_api="blas")
+    return max(blas_threads(), default=1) > 1
+
+
+def _threads_change_a_long_product() -> bool:
+    """Whether this machine's BLAS adds a product of 12,000 numbers up otherwise on its own threads than on one:
+    where it does not (one core, a BLAS built for one thread), the cells cannot differ and a test of them shows
+    nothing. Twenty vectors: two orders of adding can give the same number for one of them. Leaves the process on
+    its own threads."""
+    from threadpoolctl import threadpool_limits
+
+    rng = np.random.default_rng(1)
+    vectors = [rng.normal(size=12_000) for _ in range(20)]
+    if not _on_its_own_threads():
+        return False
+    many = [float(v @ v) for v in vectors]
+    with threadpool_limits(limits=1, user_api="blas"):
+        one = [float(v @ v) for v in vectors]
+    return many != one
+
+
+def test_the_cells_are_the_same_in_this_process_and_in_workers_above_ten_thousand_rows(
+    tmp_path: Path,
+) -> None:
+    """Every chain is drawn on one BLAS thread, here as in a worker process. Drawn with this process's own threads,
+    a ``norm`` variable observed on more than 10,000 rows came out with other last digits than in workers (on 14
+    threads, this very table gave another fingerprint): whether a faithful imputation read as reproduced then
+    depended on where it was drawn again."""
+    from biostats.mi.engine import blas_threads
+
+    df = _long()
+    shows = _threads_change_a_long_product()
+    here = impute(df, LONG)
+    assert set(blas_threads()) <= {1}  # set by the draw, and kept
+    assert here.blas_threads == 1 and not any("threads" in w for w in here.warnings)
+    workers = impute(df, LONG, workers=2, scratch=tmp_path)
+    assert workers.blas_threads == 1
+    assert here.mi.fingerprint() == workers.mi.fingerprint()
+    for column in here.methods:
+        assert here.mi.imputations[column].equals(workers.mi.imputations[column])
+    # the parallel run's copy of the table was written under the folder given, and is gone
+    assert not list(tmp_path.iterdir())
+    if not shows:
+        pytest.skip(
+            "this machine's BLAS adds a long product up the same way on one thread and on its own: the cells could "
+            "not have differed here (the test of a chain's threads holds on any machine)"
+        )
+
+
+def test_a_chain_runs_on_one_blas_thread_in_this_process_and_in_the_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """What the library reports inside a chain, whatever the machine shows of it in the cells: one thread, in this
+    process and in the run that follows a failed parallel one. With the limit taken out of this process and of the
+    workers together, their cells would agree again, on as many threads as the machine has cores."""
+    import biostats.mi.parallel as parallel
+    from biostats.mi.engine import blas_threads
+
+    seen: list[list[int]] = []
+    drawn = fcs.norm
+
+    def noting(*args, **kwargs):
+        seen.append(blas_threads())
+        return drawn(*args, **kwargs)
+
+    def refuse(*args, **kwargs):
+        raise RuntimeError("the parallel imputation failed: exit code 3")
+
+    monkeypatch.setattr(fcs, "norm", noting)
+    df = _long(n=400)
+    several = _on_its_own_threads()
+    impute(df, LONG)
+    assert len(seen) == 12 and all(
+        set(threads) <= {1} for threads in seen
+    )  # 2 variables, 2 chains, 3 passes
+    seen.clear()
+    assert _on_its_own_threads() == several
+    monkeypatch.setattr(parallel, "run_in_subprocess", refuse)
+    fallback = impute(df, LONG, workers=2)
+    assert any("the parallel run failed" in w for w in fallback.warnings)
+    assert len(seen) == 12 and all(set(threads) <= {1} for threads in seen)
+
+
+def test_one_blas_thread_is_set_once_and_never_given_back() -> None:
+    from biostats.mi.engine import blas_threads, one_blas_thread
+
+    _on_its_own_threads()
+    one_blas_thread()
+    assert set(blas_threads()) <= {1}
+    one_blas_thread()
+    assert set(blas_threads()) <= {1}
+
+
+class _HeldLimit:
+    """Another session's thread that sets one BLAS thread and later restores what it found, as scikit-learn does
+    around every run of KMeans."""
+
+    def __init__(self) -> None:
+        import threading
+
+        self.held, self.leave = threading.Event(), threading.Event()
+        self.thread = threading.Thread(target=self._run)
+
+    def _run(self) -> None:
+        from threadpoolctl import threadpool_limits
+
+        with threadpool_limits(limits=1, user_api="blas"):
+            self.held.set()
+            self.leave.wait(60)
+
+    def __enter__(self) -> _HeldLimit:
+        self.thread.start()
+        assert self.held.wait(60)
+        return self
+
+    def release(self, *_: object) -> None:
+        """Called from the draw's progress: the other thread restores the threads it found, mid-draw."""
+        self.leave.set()
+        self.thread.join(60)
+
+    def __exit__(self, *_: object) -> None:
+        self.release()
+
+
+def test_another_sessions_limit_does_not_move_a_draw_on_a_server() -> None:
+    """The server's process is on one BLAS thread from its start: a KMeans of another session that began before a
+    draw saved one thread, and restores one when it returns in the middle of the draw."""
+    from biostats.mi.engine import blas_threads, one_blas_thread
+
+    df = _long()
+    one_blas_thread()  # as the server sets it when it starts
+    alone = impute(df, LONG)
+    with _HeldLimit() as other:
+        beside = impute(df, LONG, progress=other.release)
+    assert set(blas_threads()) <= {1} and beside.blas_threads == 1
+    assert not any("threads" in w for w in beside.warnings)
+    assert beside.mi.fingerprint() == alone.mi.fingerprint()
+
+
+def test_a_draw_whose_threads_were_moved_says_so_and_records_them() -> None:
+    """A process that never set one thread, where another thread's limit began before the draw and restored the
+    process's own threads during it: the draw cannot prevent it, so it says it and the step records the threads."""
+    from biostats.mi.engine import blas_threads, drawn_with, one_blas_thread
+
+    if not _on_its_own_threads():
+        pytest.skip("one processor: the linear algebra has one thread whatever is asked")
+    df = _long()
+    try:
+        with _HeldLimit() as other:  # it found several threads and holds one
+            run = impute(df, LONG, progress=other.release)
+        assert run.blas_threads > 1 and max(blas_threads()) > 1
+        (said,) = [w for w in run.warnings if "threads during the draw" in w]
+        assert f"up to {run.blas_threads} threads" in said
+        recorded = drawn_with(run.blas_threads)["platform"]["blas"]
+        assert recorded and {pool["threads"] for pool in recorded} == {run.blas_threads}
+    finally:
+        one_blas_thread()  # the suite's own state
+
+
+def test_threads_moved_and_put_back_between_two_chains_are_seen() -> None:
+    """The draw reads the threads after each chain, not only as it begins and ends: moved during the first chain
+    and put back during the second, they are one again when the draw ends."""
+    from threadpoolctl import threadpool_limits
+
+    from biostats.mi.engine import blas_threads, one_blas_thread
+
+    if not _on_its_own_threads():
+        pytest.skip("one processor: the linear algebra has one thread whatever is asked")
+    one_blas_thread()
+    df = _long(n=400)
+    passes = 0
+
+    def meanwhile(_: float) -> None:  # LONG: two chains of three passes each
+        nonlocal passes
+        passes += 1
+        if passes == 1:
+            threadpool_limits(limits=max(os.cpu_count() or 1, 2), user_api="blas")
+        elif passes == 5:
+            threadpool_limits(limits=1, user_api="blas")
+
+    run = impute(df, LONG, progress=meanwhile)
+    assert passes == 6 and set(blas_threads()) <= {1}
+    assert run.blas_threads > 1 and any("threads during the draw" in w for w in run.warnings)
+
+
 def test_a_failed_parallel_run_falls_back_to_one_process(monkeypatch: pytest.MonkeyPatch) -> None:
     import biostats.mi.parallel as parallel
 

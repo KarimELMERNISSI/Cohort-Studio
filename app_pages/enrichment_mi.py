@@ -39,9 +39,6 @@ DERIVE_KEY = "mi_derive"
 # above this share of its values computed from imputed ones, a derived variable analysed non-linearly is attenuated
 NONLINEAR_SHARE = 0.05
 METHOD_CHOICES = ["pmm", "norm", "rf", "logreg", "polyreg", DO_NOT_IMPUTE]
-PARALLEL_WORK = (
-    5e7  # rows x variables x m x iterations above which several processes pay for their start-up
-)
 
 STATUS_BADGE = {
     "fresh": (":material/check_circle:", "green", "Fits the analysis population"),
@@ -367,10 +364,11 @@ def render_multiple_imputation() -> None:
                 )
             if time_col and event_col and time_col != event_col:
                 survival = (time_col, event_col)
-        work = len(frame) * len(model) * m * maxit
+        from manage.compute import pays_to_parallel
+
         parallel = st.toggle(
             "Use several processor cores",
-            value=work > PARALLEL_WORK,
+            value=pays_to_parallel(len(frame), len(model), m, maxit),
             key="mi_parallel",
             help="Same result; worth it for large imputations (starting the processes takes several seconds).",
         )

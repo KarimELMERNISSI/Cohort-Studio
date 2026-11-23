@@ -1061,7 +1061,7 @@ class AppState:
                 "cells_fp": stored.cells_fp,
                 "engine": ENGINE,
                 # "versions" and "platform": the libraries, the machine and the BLAS the draws were computed with
-                **drawn_with(),
+                **drawn_with(run.blas_threads),
             }
             if mi.info.get("derived"):
                 params["derived"] = dict(mi.info["derived"])
