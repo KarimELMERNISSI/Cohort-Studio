@@ -6,6 +6,32 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### MissForest no longer prints the imputed table
+
+- **A single imputation with MissForest for one kind of column and another method for the other** (MissForest for
+  the numbers and the most frequent value for the texts, for instance) printed the columns it imputed to the
+  process's standard output: the numbers, or the texts, as many columns as fit on a line of 80 characters, a
+  numeric identifier among them if the table had one, each row with its number; every row up to 60 rows, the first
+  and the last five of a larger table; twice for each imputation. It did so on the Enrich page (a draft later
+  discarded included) and on every replay of such a step (the Reproduce page). It no longer does, and nothing takes
+  its place: no part of the application prints any more (the lint rule T20 keeps it so), but for the message that
+  stops the start on a wrong setting, which holds no value; the command line `manage_users.py`, the development
+  scripts and the tests print.
+- **If you run a server:** since the first version (Cohort Monitoring Package included), wherever MissForest could
+  run (every installation before 2.4.0; since then, wherever LightGBM is installed: the Docker image,
+  `requirements.txt`, the `ml` extra), that output went to the server's log: the system journal,
+  `docker compose logs`, a log service it is shipped to, their archives, a `nohup.out`. A trace's imputation step
+  with MissForest for one kind of column only tells when it happened (a replay printed it again on its own day; a
+  discarded draft left no step).
+  Search the logs and their copies for a line `X data imputation:`: the table follows it, up to a blank line.
+  Delete those entries, or the logs that hold them where single entries cannot be deleted. Whether a copy is a
+  personal-data breach to report is for you and your data protection officer to judge.
+- The other messages that went to the output now go to the log without a file's path or an exception's text, which
+  can name an account or quote a value: the clustering of a correlation matrix (on every heatmap), the comparison
+  of two tables, the export of correlations to a workbook, a merge or a comparison that was not asked for. The
+  imputation's debug lines, which no screen turns on, no longer list the columns after one-hot encoding: they count
+  them (an encoded column's name holds a category).
+
 ### The study definition can hold a study's privacy choices
 
 - **A section `privacy` of the study definition** holds what a study asks for the documents made from it: the

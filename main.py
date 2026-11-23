@@ -18,7 +18,7 @@ except SettingsError as exc:  # stopped before a module reads the wrong value; t
 
     # .env is read once per server process: a correction applies after a restart
     message = f"CohortStudio cannot start: {exc} Correct the environment or .env, then restart the application."
-    print(message, file=sys.stderr)  # the server log (docker compose logs), where the page is not seen
+    print(message, file=sys.stderr)  # noqa: T201 (the server log, docker compose logs, where the page is not seen)
     st.error(message, icon=":material/gpp_bad:")
     st.stop()
 

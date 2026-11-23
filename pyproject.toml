@@ -263,7 +263,9 @@ exclude = [
 
 [tool.ruff.lint]
 # Strict on the packages written under the 2026 audit; the legacy pages/helpers keep their style until they are split.
-select = ["E4", "E7", "E9", "F", "W", "I", "B", "UP", "SIM", "RUF100", "PLR0124"]
+# T20: no print in the application: what it says goes to the log, where no line may hold a value or a path (the
+# command line manage_users.py, the development scripts and the tests print; main.py's one print is marked)
+select = ["E4", "E7", "E9", "F", "W", "I", "B", "UP", "SIM", "RUF100", "PLR0124", "T20"]
 ignore = ["E731", "E741", "B008", "B904", "B905", "SIM108", "SIM117", "UP015"]
 
 [tool.ruff.lint.per-file-ignores]
@@ -274,9 +276,10 @@ ignore = ["E731", "E741", "B008", "B904", "B905", "SIM108", "SIM117", "UP015"]
 "explore/**" = ["B", "SIM", "UP", "E7", "E402", "F841", "W291", "W293"]
 "monitor/**" = ["B", "SIM", "UP", "E7", "F841", "W291", "W293"]
 "prompts/**" = ["E", "W"]
-"dev_scripts/**" = ["B", "SIM", "UP", "E7", "F841", "W291", "W293"]
-"tests/**" = ["B", "SIM", "E7", "E402", "F841", "W291", "W293"]
+"dev_scripts/**" = ["B", "SIM", "UP", "E7", "F841", "W291", "W293", "T20"]
+"tests/**" = ["B", "SIM", "E7", "E402", "F841", "W291", "W293", "T20"]
 "main.py" = ["E402"]
+"manage_users.py" = ["T20"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app_pages", "biostats", "core", "enrich", "explore", "graph", "ingest", "manage", "monitor", "prompts", "ui", "utils"]

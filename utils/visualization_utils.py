@@ -257,7 +257,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
                         max_d = max(max_d, max(trace['x']))
                 row_dendro_range = [0, max_d]
         except Exception as e:
-            logger.warning(f"Row clustering failed: {e}")
+            logger.warning("Row clustering failed (%s)", type(e).__name__)
 
     # 2. Column Clustering (Samples)
     if cluster_cols and df_to_plot.shape[1] > 1:
@@ -279,7 +279,7 @@ def create_clustermap_streamlit(df, value_cols, sample_col=None, group_col=None,
                         max_d = max(max_d, max(trace['y']))
                 col_dendro_range = [0, max_d]
         except Exception as e:
-            logger.warning(f"Column clustering failed: {e}")
+            logger.warning("Column clustering failed (%s)", type(e).__name__)
 
     # Grouping (if not clustered, sort by group)
     groups = None
@@ -976,7 +976,7 @@ def create_correlation_matrix_streamlit(
                         max_d = max(max_d, max(trace['x']))
                 row_dendro_range = [0, max_d]
         except Exception as e:
-            print(f"Row clustering failed: {e}")
+            logger.warning("Row clustering failed (%s)", type(e).__name__)
 
     # 2. Column Clustering
     if cluster_cols and len(col_order) > 1:
@@ -995,7 +995,7 @@ def create_correlation_matrix_streamlit(
                         max_d = max(max_d, max(trace['y']))
                 col_dendro_range = [0, max_d]
         except Exception as e:
-            print(f"Column clustering failed: {e}")
+            logger.warning("Column clustering failed (%s)", type(e).__name__)
 
     # Reorder Heatmap Data
     X_ordered = corr_matrix.loc[row_order, col_order]
@@ -1164,7 +1164,7 @@ def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=
             if show_dendrograms:
                 col_dendro_traces = dendro_top['data']
         except Exception as e:
-            logger.warning(f"Column clustering failed: {e}")
+            logger.warning("Column clustering failed (%s)", type(e).__name__)
 
     # 2. Row Clustering (Samples)
     if cluster_rows and len(row_order) > 1:
@@ -1176,7 +1176,7 @@ def plot_nullity_matrix(df, row_id_col="Index", cluster_cols=True, cluster_rows=
             if show_dendrograms:
                 row_dendro_traces = dendro_side['data']
         except Exception as e:
-            logger.warning(f"Row clustering failed: {e}")
+            logger.warning("Row clustering failed (%s)", type(e).__name__)
 
     # Reorder DataFrame
     nullity_df = nullity_df.iloc[row_order]

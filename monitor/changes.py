@@ -232,7 +232,7 @@ def process_comparisons_from_config(config, exclude_cols_stats):
             
             logging.info(f"Comparison {comparison} has been successfully processed!")
     else:
-        print("No comparison request")
+        logger.debug("No comparison request")
 
 
 def process_comparison_st(comparison_name, df1, df2, common_id=None, common_cols=None, output_file="comparison.xlsx"):
@@ -277,8 +277,9 @@ def process_comparison_st(comparison_name, df1, df2, common_id=None, common_cols
         rows_only_in_df2 = list(common_id_df2.difference(common_id_df1))
 
 
-        print(f"\nRows only in DataFrame 1: {len(rows_only_in_df1)}")
-        print(f"\nRows only in DataFrame 2: {len(rows_only_in_df2)}")
+        logger.debug(
+            "Rows only in the first table: %d; only in the second: %d", len(rows_only_in_df1), len(rows_only_in_df2)
+        )
 
         # Perform comparison
         comparison_result = compare_dataframes(df1, df2, common_id, exclude_cols)
@@ -306,7 +307,7 @@ def process_comparison_st(comparison_name, df1, df2, common_id=None, common_cols
         comparison_result_filtered['addition'] = comparison_result_filtered[common_id].apply(lambda row: tuple(row) in rows_only_in_df2, axis=1)
 
         # Return all relevant results
-        print(f"Comparison for '{comparison_name}' successfully processed.")
+        logger.debug("Comparison processed")
         return df1, df2, common_id, comparison_result_filtered, rows_only_in_df1, rows_only_in_df2, modified_common_ids, output_file
 
     except FileNotFoundError as fnf_error:

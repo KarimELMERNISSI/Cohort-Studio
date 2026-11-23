@@ -128,8 +128,7 @@ def apply_imputer(data, numerical_imputation_method='mean', categorical_imputati
         for col in df_imputed.columns:
             if df_imputed[col].dtype == 'object':
                 original_na_count = df_imputed[col].isna().sum()
-                debug_print(f"Processing column: '{col}'", debug=debug)
-                debug_print(f"Original NA count: {original_na_count}", debug=debug)
+                debug_print(f"Processing a text column; original NA count: {original_na_count}", debug=debug)
                 
                 try:
                     # Attempt to convert to numeric, replacing ',' with '.' for floats
@@ -142,16 +141,16 @@ def apply_imputer(data, numerical_imputation_method='mean', categorical_imputati
                     
                     # Conversion successful
                     df_imputed[col] = converted_col
-                    debug_print(f"Column '{col}' successfully converted to numeric.", debug=debug)
+                    debug_print("Column converted to numeric.", debug=debug)
                 
                 except Exception as e:
                     # Revert to original type
                     df_imputed[col] = df_imputed[col].astype('object')
-                    debug_print(f"Column '{col}' kept as object due to conversion issue: {e}", debug=debug)
+                    # the exception's kind only: its text can quote a value
+                    debug_print(f"Column kept as text ({type(e).__name__}).", debug=debug)
 
-        # Output debug information
-        debug_print(f"Original DataFrame Columns: {data.columns.tolist()}", debug=debug)
-        debug_print(f"Columns After Imputer Processing: {output_cols}", debug=debug)
+        # Output debug information (counts only: a one-hot column's name holds a category's value)
+        debug_print(f"Columns: {data.shape[1]} before the imputer, {len(output_cols)} after", debug=debug)
 
         debug_print("Imputation process completed successfully.", debug=debug)
         

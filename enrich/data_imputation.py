@@ -1,4 +1,6 @@
 ######################################## PACKAGES ########################################
+import logging
+
 import pandas as pd
 from sklearn.base import TransformerMixin
 from sklearn.compose import ColumnTransformer  # split some of our processing to specific columns
@@ -17,6 +19,8 @@ from ingest.analyzer import DataAnalyzer
 
 #from missforest import MissForest # our MissForest adaptation is based on this package
 from utils.miss_forest.missforest import MissForest
+
+logger = logging.getLogger(__name__)
 
 
 ######################################## MISSFOREST IMPUTER CLASS ######################################## 
@@ -64,9 +68,9 @@ class MissForestTransformer(TransformerMixin):
         self.missforest_params = kwargs  # Additional params for MissForest
 
     def debug_print(self, *args):
-        """Helper function for controlled debug printing."""
+        """A debug line in the log when ``debug`` is set: the steps and the columns' names, never a value."""
         if self.debug:
-            print(*args)
+            logger.debug(" ".join(str(arg) for arg in args))
         
     def fit(self, X, y=None):
         """
@@ -166,7 +170,6 @@ class MissForestTransformer(TransformerMixin):
 
         # Fit-transforming data
         X_imputed = self.imputer.fit_transform(X, categorical=self.categorical_cols)
-        self.debug_print(f"X data imputation:\n {X_imputed}\n")
         # Converting back to DataFrame with original column names
         X_imputed_df = pd.DataFrame(X_imputed, columns=X.columns, index=X.index)
         self._is_fitted = True
@@ -226,10 +229,10 @@ def detect_remainder_columns(data, threshold=0.8, date_like_columns=None):
 
 ######################################## "UNIVERSAL" IMPUTER FUNCTIONS DEFINITION ######################################## 
 
-# Helper function for controlled debug printing
+# A debug line in the log, when asked: the steps and the columns' names, never a value
 def debug_print(*args, debug=False):
     if debug:
-        print(*args)
+        logger.debug(" ".join(str(arg) for arg in args))
 
 
 # Helper function for getting feature names after transformation
@@ -292,7 +295,7 @@ def get_feature_names(preprocessor, column_names, num_scaler=False, cat_encoder=
             else:
                 debug_print("IN Pipeline, no change", debug=debug) 
                 
-    debug_print(f"New columns after transformations: {new_cols}", debug=debug)
+    debug_print(f"New columns after transformations: {len(new_cols)}", debug=debug)  # a one-hot name holds a value
 
     return new_cols
 
@@ -442,9 +445,8 @@ def get_imputer(numerical_imputation_method='mean',
         else:
             all_output_columns = list(new_num_cols) + list(new_cat_cols) + list(remainder_columns)
 
-        debug_print("Final new_num_cols", new_num_cols, debug=debug)
-        debug_print("Final new_cat_cols", new_cat_cols, debug=debug)
-        debug_print("All output columns", all_output_columns, debug=debug)
+        # counts only: a one-hot column's name holds a category's value
+        debug_print("Output columns:", len(new_num_cols), "numerical,", len(new_cat_cols), "categorical,", len(all_output_columns), "in all", debug=debug)
 
         return preprocessor, all_output_columns
 
@@ -461,14 +463,14 @@ def get_imputer(numerical_imputation_method='mean',
 
         num_imputer = IterativeImputer(random_state=RANDOM_STATE)
     elif numerical_imputation_method == 'missforest':
-        num_imputer = MissForestTransformer(categorical_cols=None, debug=True, progress_bar=progress_placeholder, total_steps=total_steps, random_state=random_state)
+        num_imputer = MissForestTransformer(categorical_cols=None, debug=debug, progress_bar=progress_placeholder, total_steps=total_steps, random_state=random_state)
     else:
         raise ValueError("Unsupported numerical imputation method. Choose 'mean', 'median', 'knn', 'mice', or 'missforest'.")
 
     if categorical_imputation_method == 'most_frequent':
         cat_imputer = SimpleImputer(strategy='most_frequent')
     elif categorical_imputation_method == 'missforest':
-        cat_imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=True, progress_bar=progress_placeholder, total_steps=total_steps, random_state=random_state)
+        cat_imputer = MissForestTransformer(categorical_cols=categorical_cols, debug=debug, progress_bar=progress_placeholder, total_steps=total_steps, random_state=random_state)
     else:
         raise ValueError("Unsupported categorical imputation method. Choose 'most_frequent' or 'missforest'.")
 
@@ -495,8 +497,7 @@ def get_imputer(numerical_imputation_method='mean',
     else:
         all_output_columns = list(new_num_cols) + list(new_cat_cols) + list(remainder_columns)
 
-    debug_print("Final new_num_cols", new_num_cols, debug=debug)
-    debug_print("Final new_cat_cols", new_cat_cols, debug=debug)
-    debug_print("All output columns", all_output_columns, debug=debug)
+    # counts only: a one-hot column's name holds a category's value
+    debug_print("Output columns:", len(new_num_cols), "numerical,", len(new_cat_cols), "categorical,", len(all_output_columns), "in all", debug=debug)
 
     return preprocessor, all_output_columns

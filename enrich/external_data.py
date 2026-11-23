@@ -454,7 +454,7 @@ def process_data_enrichment(df, additional_data_info):
             return enriched_df
 
         else:
-            print("No enrichment request")
+            logger.debug("No enrichment request")
             return df  # unchanged: the caller goes on with it
     except FileNotFoundError:
         logging.error(f"File not found: {input_file}")
@@ -491,5 +491,5 @@ def process_data_enrichments_from_config(df, data_file_name, config):
         df.to_excel(os.path.join(directory, filename))
         return df
     else:
-        print("No enrichment request")
+        logger.debug("No enrichment request")
         return df

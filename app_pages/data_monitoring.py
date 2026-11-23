@@ -1050,7 +1050,6 @@ def display_results(df: pd.DataFrame, bool_column: str, title: str, key_base: st
         prefix = '_'.join(bool_column.split('_')[:-1])
         # Select columns that start with the same prefix
         matching_columns = [col for col in df.columns if col.startswith(prefix)]
-        print(matching_columns)
         styled_df = df[mask].style.apply(color_columns, axis=0,columns_to_highlight=matching_columns)
     else:
         styled_df = df

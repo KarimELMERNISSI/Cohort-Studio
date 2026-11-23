@@ -1,3 +1,4 @@
+import logging
 import re
 import warnings
 
@@ -7,6 +8,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
+
+logger = logging.getLogger(__name__)
 import seaborn as sns
 from matplotlib.colors import to_hex
 from openpyxl.styles import Font, PatternFill
@@ -97,7 +100,7 @@ def plotly_corr_mat(
                         max_d = max(max_d, max(trace['x']))
                 row_dendro_range = [0, max_d]
         except Exception as e:
-            print(f"Row clustering failed: {e}")
+            logger.warning("Row clustering failed (%s)", type(e).__name__)
 
     # 2. Column Clustering
     if cluster_cols and len(col_order) > 1:
@@ -117,7 +120,7 @@ def plotly_corr_mat(
                         max_d = max(max_d, max(trace['y']))
                 col_dendro_range = [0, max_d]
         except Exception as e:
-            print(f"Column clustering failed: {e}")
+            logger.warning("Column clustering failed (%s)", type(e).__name__)
 
     # Reorder Heatmap Data
     X_ordered = corr_matrix.loc[row_order, col_order]
@@ -333,7 +336,7 @@ def add_correlation_strength_table(writer, method, sheet_name='Correlation Stren
         adjusted_width = (max_length + 2) * 1.2  # Add extra space and adjust
         worksheet.column_dimensions[column].width = adjusted_width
 
-    print(f"Correlation strength information with bolded {method} column added to {sheet_name} sheet.")
+    logger.debug("Correlation strength information added to the workbook")
 
 
 def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Correlation Summary', threshold='Strong', top_n=None):
@@ -408,7 +411,7 @@ def add_correlation_chart_openpyxl(writer, correlations, method, sheet_name='Cor
     # Write the filtered correlation pairs and their strength categories to a new sheet
     corr_flat_filtered.to_excel(writer, sheet_name=sheet_name, index=False)
 
-    print(f"Filtered correlations (threshold: {threshold}, top {top_n}) added to {sheet_name} sheet.")
+    logger.debug("Filtered correlations (threshold %s, top %s) added to the workbook", threshold, top_n)
 
 
 from functools import cache
@@ -568,7 +571,7 @@ def _write_corr_to_sheet(
         adjusted_width = (max_length + 2) * 1.2  # Add extra space and adjust
         worksheet.column_dimensions[column].width = adjusted_width
 
-    print(f'Correlation matrix with custom formatting saved to {sheet_name}')
+    logger.debug("Correlation matrix with custom formatting added to the workbook")
 
 
 def custom_corr_mat_to_excel(
@@ -640,7 +643,7 @@ def custom_corr_mat_to_excel(
         # Add the correlation strength information
         add_correlation_strength_table(writer, method=method_clean)
     
-    print(f'Correlation matrix saved to {target_file}')
+    logger.debug("Correlation matrix saved")
 
 
 MIN_PERIODS = 10  # pairwise correlations need at least this many complete pairs (audit S13)
