@@ -403,12 +403,10 @@ def test_an_older_version_refuses_a_study_that_holds_the_section(
 ) -> None:
     """A version that does not know the section reads the file as written by a later one, counted and never named:
     it does not open the study without the k it asked for."""
-    import core.protocol as protocol
-
     data = json.loads(
         json.dumps(StudyProtocol(_body(K_ONLY), ProtocolMeta("cohort", revision=1)).to_file())
     )
-    monkeypatch.setattr(protocol, "BODY_KEYS", tuple(k for k in BODY_KEYS if k != PRIVACY_KEY))
+    monkeypatch.setattr("core.protocol.BODY_KEYS", tuple(k for k in BODY_KEYS if k != PRIVACY_KEY))
     assert StudyProtocol.from_file(data) == (
         None,
         ["written by a later version: it holds 1 section this version does not read"],

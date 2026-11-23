@@ -684,7 +684,7 @@ def test_a_table_typed_that_copies_a_table_the_dossier_holds_back_is_not_written
     """The plain copy: the four counts of a cut-off found on the data that calls one participant positive, typed
     into the calculator, wrote the positive predictive value "1 of 1" that the dossier holds back with the
     cut-off. In any order: the rows or the columns swapped are the same four counts."""
-    import app_pages.study_dossier as page
+    from app_pages import study_dossier as page
     from biostats.diagnostic import FOUND_CUTOFF, diagnostic_accuracy
     from manage.report_tables import TABLE_OF_A_RESULT_HELD_BACK, table_held_back
 
@@ -755,7 +755,7 @@ def test_the_table_of_a_result_is_kept_once_the_next_run_has_replaced_it() -> No
     value "1 of 1" the dossier holds back. Its counts are kept for the dataset, sorted and without a name."""
     import streamlit as st
 
-    import app_pages.study_dossier as page
+    from app_pages import study_dossier as page
     from biostats.diagnostic import FOUND_CUTOFF, diagnostic_accuracy
     from ui import results
 

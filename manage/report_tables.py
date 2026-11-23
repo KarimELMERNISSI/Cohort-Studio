@@ -1503,6 +1503,7 @@ def result_blocks(value: Any) -> ResultBlocks:
 
 __all__ = [
     "CALCULATION",
+    "CALCULATION_KINDS",
     "DOSSIER_MIN_N",
     "RATES_NOTE",
     "RECORD_BLOCKS",

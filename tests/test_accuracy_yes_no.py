@@ -1087,8 +1087,8 @@ def test_one_result_that_fails_does_not_stop_the_dossier(
 ) -> None:
     """A defect in one result's block, or in its writing, stopped the download of every section. The fixed line
     stands in its place; the log holds the stored key and the exception's type, never its message."""
-    import manage.report_tables as report_tables
     from app_pages import study_dossier
+    from manage import report_tables
     from manage.dossier import NOT_WRITTEN, build_dossier
     from manage.report_tables import ResultBlocks
 

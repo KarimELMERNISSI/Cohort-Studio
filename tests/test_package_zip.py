@@ -518,7 +518,8 @@ def test_the_writer_puts_in_clear_only_a_notice_of_the_formats(tmp_path: Path) -
     # what was checked is what is written
     sums = {name: pk.checksum(member) for name, member in _members().items()}
     out = io.BytesIO()
-    assert pz.write(out, _members(), tier, password=PASSWORD, expected=sums) == _write()[1]
+    written = pz.write(out, _members(), tier, password=PASSWORD, expected=sums)
+    assert written == _write()[1]
 
 
 def test_the_index_the_notice_and_the_anchor_agree_with_what_the_zip_holds(
