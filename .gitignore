@@ -73,6 +73,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# The architecture explorer: built by the Pages workflow (dev_scripts/architecture_explorer), never committed
+docs/architecture/
+
 # PyBuilder
 target/
 

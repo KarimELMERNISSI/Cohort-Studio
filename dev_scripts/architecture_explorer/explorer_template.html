@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- one file: it may run its own script and styles, and fetches nothing (the empty icon spares a request) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'" />
+  <link rel="icon" href="data:," />
+  <title>CohortStudio architecture explorer</title>
+  <style>
+    :root {
+      --bg: #F3F8F9; --card: #FFFFFF; --border: #DCE8EB; --fg: #0B2B36; --text: #2F4A56; --muted: #5B7480;
+      --primary: #0E7C86; --primary-strong: #0A646C; --on-primary: #FFFFFF; --soft: #ECF6F7; --accent: #D2EAEC;
+      --code: #0A646C; --ok: #1E7A4D; --warn: #8A5300; --bad: #B42318;
+      --g-entry: #0B2B36; --g-interface: #0A646C; --g-services: #2563A8; --g-data: #6B4FA3;
+      --g-engine: #8F4206; --g-foundation: #44606B; --g-storage: #44606B; --g-tests: #5B7480;
+      --edge-down: #0E7C86; --edge-up: #A8326B;
+      --p-server: #0E7C86; --p-network: #2563A8; --p-outside: #B45309;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0D1117; --card: #121C23; --border: #263943; --fg: #E8F2F4; --text: #B9CBD1; --muted: #8CA4AD;
+        --primary: #56C5CE; --primary-strong: #7ADCE3; --on-primary: #06242A; --soft: #131F27; --accent: #11303A;
+        --code: #7ADCE3; --ok: #5BD08F; --warn: #E5AC5C; --bad: #F2857A;
+        --g-entry: #E8F2F4; --g-interface: #56C5CE; --g-services: #7FB2F0; --g-data: #B9A2E8;
+        --g-engine: #F0B35A; --g-foundation: #9FB4BD; --g-storage: #9FB4BD; --g-tests: #8CA4AD;
+        --edge-down: #56C5CE; --edge-up: #F08BB8;
+        --p-server: #56C5CE; --p-network: #7FB2F0; --p-outside: #F0B35A;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0D1117; --card: #121C23; --border: #263943; --fg: #E8F2F4; --text: #B9CBD1; --muted: #8CA4AD;
+      --primary: #56C5CE; --primary-strong: #7ADCE3; --on-primary: #06242A; --soft: #131F27; --accent: #11303A;
+      --code: #7ADCE3; --ok: #5BD08F; --warn: #E5AC5C; --bad: #F2857A;
+      --g-entry: #E8F2F4; --g-interface: #56C5CE; --g-services: #7FB2F0; --g-data: #B9A2E8;
+      --g-engine: #F0B35A; --g-foundation: #9FB4BD; --g-storage: #9FB4BD; --g-tests: #8CA4AD;
+      --edge-down: #56C5CE; --edge-up: #F08BB8;
+      --p-server: #56C5CE; --p-network: #7FB2F0; --p-outside: #F0B35A;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Helvetica, Arial, sans-serif;
+      font-size: 14px; line-height: 1.45;
+    }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+    code { color: var(--code); font-size: 0.92em; }
+    a { color: var(--primary-strong); }
+    button, input, select { font-family: inherit; color: inherit; }
+    h1, h2, h3, strong { color: var(--fg); }
+    h1 { margin: 4px 0; font-size: 22px; }
+    h2 { margin: 0; font-size: 15px; }
+    h3 { margin: 0; font-size: 15px; }
+    p { margin: 4px 0 0 0; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .wrap { max-width: 1680px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .subcard { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .between { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; }
+    .head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+    .muted { color: var(--muted); font-size: 12.5px; }
+    .small { font-size: 11.5px; }
+    .wrap-any { overflow-wrap: anywhere; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px;
+      border: 1px solid var(--border); background: var(--soft); color: var(--text);
+    }
+    .pill b { color: var(--fg); font-weight: 600; }
+    .pill-strong { background: var(--accent); color: var(--fg); font-weight: 600; }
+    .kpis { display: grid; grid-template-columns: repeat(5, minmax(78px, 1fr)); gap: 8px; text-align: center; }
+    .kpis-4 { grid-template-columns: repeat(4, 1fr); }
+    .kpis-3 { grid-template-columns: repeat(3, 1fr); }
+    .kpis-2 { grid-template-columns: repeat(2, 1fr); }
+    .kpi { padding: 8px 6px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); }
+    .kpi-v { font-size: 17px; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; }
+    .kpi-l { font-size: 12px; color: var(--muted); }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); margin-top: 12px; }
+    .btn {
+      padding: 7px 13px; border-radius: 8px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--border);
+      background: var(--bg); color: var(--fg); cursor: pointer; transition: border-color 150ms ease;
+    }
+    .btn:hover { border-color: var(--primary); }
+    .btn:focus-visible, .level:focus-visible, .node-card:focus-visible, tr.click:focus-visible, select:focus-visible,
+    input:focus-visible, .link:focus-visible, th button:focus-visible, .heading:focus-visible {
+      outline: 2px solid var(--primary); outline-offset: 2px;
+    }
+    svg [tabindex]:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .btn-sm { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+    .btn-on { background: var(--primary) !important; color: var(--on-primary) !important; border-color: var(--primary) !important; }
+    .hidden { display: none !important; }
+    .grid-arch { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+    .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+    @media (max-width: 1300px) { .grid-arch { grid-template-columns: minmax(0, 1fr) 320px; } }
+    /* below 1200 px the diagram takes the whole width, and the details come under it */
+    @media (max-width: 1200px) {
+      .grid-arch { grid-template-columns: 1fr; }
+      .inspector { position: static !important; max-height: none !important; }
+    }
+    @media (max-width: 980px) {
+      .grid-2, .head { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: repeat(3, 1fr); }
+      .kpis-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+    .place-any { color: var(--muted); border-style: dotted; }
+    .chain-line { display: block; }
+    .sec { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 6px; }
+    .inspector { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 32px); overflow-y: auto; }
+    .file {
+      display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 5px 9px; border-radius: 6px;
+      background: var(--bg); border: 1px solid var(--border); margin-bottom: 4px;
+    }
+    .file span:first-child { color: var(--code); overflow-wrap: anywhere; }
+    .file span:last-child { color: var(--muted); white-space: nowrap; }
+    button.file { width: 100%; cursor: pointer; text-align: left; font: inherit; font-size: 12px; }
+    button.file:hover { border-color: var(--primary); }
+    ul.plain { margin: 0; padding-left: 18px; font-size: 12.5px; display: flex; flex-direction: column; gap: 5px; }
+    ol.plain { margin: 0; padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+    details > summary { cursor: pointer; list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: "\25B8"; display: inline-block; width: 14px; color: var(--muted); }
+    details[open] > summary::before { content: "\25BE"; }
+    /* the levels of detail */
+    .levels { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .level { flex: 1 1 170px; padding: 9px 12px; border: 0; border-right: 1px solid var(--border); background: var(--bg); text-align: left; cursor: pointer; }
+    .level:last-child { border-right: 0; }
+    .level .n { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
+    .level .t { font-size: 13.5px; font-weight: 700; color: var(--fg); }
+    .level .c { font-size: 12px; color: var(--muted); }
+    .level:hover { background: var(--soft); }
+    .level.on { background: var(--primary); }
+    .level.on .n, .level.on .t, .level.on .c { color: var(--on-primary); }
+    .level:focus-visible { outline-offset: -3px; }
+    .layer-box { border: 1px solid var(--border); border-radius: 10px; padding: 11px; margin-bottom: 10px; }
+    .layer-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+    .cards { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+    .node-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; cursor: pointer; text-align: left; width: 100%; }
+    .node-card:hover { border-color: var(--primary); }
+    .node-sel { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .node-rel { outline: 1.5px dashed var(--muted); outline-offset: 1px; }
+    .dim { opacity: 0.35; }
+    .tag { display: inline-block; padding: 1px 7px; border-radius: 5px; font-size: 11px; background: var(--accent); color: var(--fg); white-space: nowrap; }
+    .tag-down { background: var(--edge-down); color: var(--on-primary); }
+    .tag-up { background: var(--edge-up); color: var(--on-primary); }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table.fixed { table-layout: fixed; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--bg); color: var(--muted); font-weight: 600; position: sticky; top: 0; }
+    th button { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit; cursor: pointer; }
+    th[aria-sort="ascending"] button::after { content: " \25B4"; }
+    th[aria-sort="descending"] button::after { content: " \25BE"; }
+    tr.click { cursor: pointer; }
+    tr.click:hover { background: var(--soft); }
+    tr.picked, tr.picked:hover { background: var(--accent); box-shadow: inset 3px 0 0 var(--primary); }
+    .doc { color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .scroll { overflow: auto; max-height: 1040px; border: 1px solid var(--border); border-radius: 10px; }
+    input[type="search"], select {
+      padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); font-size: 12.5px;
+    }
+    input[type="search"] { min-width: 260px; }
+    @keyframes flow { to { stroke-dashoffset: -20; } }
+    .edge-anim { stroke-dasharray: 6 4; animation: flow 1s linear infinite; }
+    @media (prefers-reduced-motion: reduce) { .edge-anim { animation: none; } }
+    .svg-node { cursor: pointer; }
+    .svg-node:hover { stroke: var(--primary); stroke-width: 2.2; }
+    .svg-link { cursor: pointer; }
+    .svg-link:hover rect { stroke: var(--primary); stroke-opacity: 1; }
+    .svg-step { cursor: pointer; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; color: var(--muted); padding-top: 10px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+    .verdict { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; }
+    .link { background: none; border: 0; padding: 0; color: var(--primary-strong); cursor: pointer; font: inherit; text-decoration: underline; text-underline-offset: 2px; text-align: left; }
+    /* connectors and catalogues */
+    .families { display: grid; grid-template-columns: repeat(auto-fit, minmax(560px, 1fr)); gap: 16px; }
+    .catalogues { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+    @media (max-width: 640px) { .families, .catalogues { grid-template-columns: 1fr; } }
+    .flash { box-shadow: 0 0 0 3px var(--primary); transition: box-shadow 300ms ease; }
+    tr.flash td { background: var(--accent); }
+    .place { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+    .place::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .place-server { color: var(--p-server); }
+    .place-network { color: var(--p-network); }
+    .place-outside { color: var(--p-outside); border-style: dashed; }
+    .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
+    .chain .step { padding: 2px 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); }
+    .kinds { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; font-size: 12px; }
+    .kinds .legacy code { text-decoration: line-through; }
+    .kinds .legacy { opacity: 0.7; }
+    .lead { font-size: 14px; max-width: 900px; color: var(--text); }
+    footer { font-size: 12px; color: var(--muted); text-align: center; padding: 4px 0 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="card">
+      <div class="head">
+        <div>
+          <nav class="muted" aria-label="Where you are" style="margin-bottom:8px;"><a href="../">CohortStudio</a> <span aria-hidden="true">&rsaquo;</span> Architecture explorer</nav>
+          <div class="row" style="margin-bottom:6px;">
+            <span class="pill pill-strong" id="pill-version"></span>
+            <span class="pill" id="pill-source"></span>
+          </div>
+          <h1>CohortStudio architecture explorer</h1>
+          <p class="muted" style="max-width:800px;">
+            The architecture at the level of detail you need: the README's five groups, the developer guide's layers,
+            the bricks of each package, or every module. Choose a box to see what it does, the rule it keeps and what
+            it imports; open the connectors and catalogues, the two ways CohortStudio is extended; follow a call step
+            by step.
+          </p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+          <button id="theme" class="btn btn-sm" title="Light, dark or the system's choice">Theme: system</button>
+          <div class="kpis" id="kpis"></div>
+        </div>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Views" id="tabs">
+        <button role="tab" id="tab-arch" data-tab="arch" aria-controls="panel-arch" class="btn">Architecture</button>
+        <button role="tab" id="tab-ext" data-tab="ext" aria-controls="panel-ext" class="btn">Connectors &amp; catalogues</button>
+        <button role="tab" id="tab-flow" data-tab="flow" aria-controls="panel-flow" class="btn">Journeys</button>
+        <button role="tab" id="tab-rules" data-tab="rules" aria-controls="panel-rules" class="btn">Rules &amp; recipes</button>
+        <button role="tab" id="tab-matrix" data-tab="matrix" aria-controls="panel-matrix" class="btn">Features &amp; libraries</button>
+      </div>
+    </header>
+    <p id="status" role="status" class="sr-only"></p>
+
+    <section id="panel-arch" role="tabpanel" aria-labelledby="tab-arch" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+        <span class="sec" style="margin:0;" id="levels-label">Level of detail</span>
+        <div id="levels" class="levels" role="tablist" aria-labelledby="levels-label"></div>
+        <p id="zoomed" class="muted hidden" style="margin:0;"></p>
+        <div class="row" style="gap:6px;">
+          <span class="sec" style="margin:0 4px 0 0;" id="chips-label">Highlight a feature:</span>
+          <span id="chips" class="row" style="gap:6px;" role="group" aria-labelledby="chips-label"></span>
+        </div>
+        <p id="path" class="muted hidden" style="margin:0;"></p>
+      </div>
+      <div class="grid-arch">
+        <div class="card" id="arch-panel" role="tabpanel" aria-label="The architecture at the level of detail chosen">
+          <div class="between" style="padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:12px;">
+            <div>
+              <h2 id="arch-title"></h2>
+              <p class="muted" id="arch-says"></p>
+              <p class="muted" id="arch-also"></p>
+            </div>
+            <div class="row" style="gap:6px;" id="arch-tools">
+              <button data-view="svg" class="btn btn-sm">Diagram</button>
+              <button data-view="cards" class="btn btn-sm">Cards</button>
+              <button id="all-imports" class="btn btn-sm" aria-pressed="false">Every import</button>
+            </div>
+            <div class="row hidden" style="gap:6px;" id="module-tools">
+              <span id="module-scope"></span>
+              <input id="module-search" type="search" placeholder="Search a module, a word of its docstring..." aria-label="Search the modules" />
+            </div>
+          </div>
+          <div id="svg-arch"></div>
+          <div id="cards-arch" class="hidden"></div>
+          <div id="modules-arch" class="hidden"></div>
+          <div class="muted" style="padding-top:10px;margin-top:8px;border-top:1px solid var(--border);">
+            <strong>Checked by a test:</strong> <code>tests/test_layering.py</code> reads the import graph from the
+            source and fails on an import that goes up, a cycle, or Streamlit below <code>ui</code>. The arrows here
+            are read as its rules R1 and R2 read them.
+          </div>
+        </div>
+        <aside id="inspector" class="card inspector" aria-label="The box in focus"></aside>
+      </div>
+    </section>
+
+    <section id="panel-ext" role="tabpanel" aria-labelledby="tab-ext" class="hidden" style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card">
+        <h2 style="margin-bottom:8px;">What a connector is</h2>
+        <div id="lead"></div>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:10px;">
+          <h2>The four connector families: what runs where</h2>
+          <p class="muted">One implementation at a time, loaded when it is used. Choose a connector for its row below.</p>
+        </div>
+        <div id="sockets" class="subcard" style="padding:10px;"></div>
+      </div>
+      <div id="families" class="families"></div>
+      <div class="card">
+        <h2 style="margin-bottom:8px;">The contract every connector keeps</h2>
+        <ul class="plain" id="contract" style="font-size:13px;"></ul>
+        <p style="margin-top:10px;font-size:13px;"><button class="link" data-go="rules">Add a connector: the recipe &rsaquo;</button></p>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:12px;">
+          <h2>Connector family or catalogue?</h2>
+          <p class="muted" style="max-width:860px;">Every extension point is one or the other. The four families and
+            four of the five catalogues are built on one kit, <code>core/registry.py</code> (the standard library
+            only); the analysis kinds are a plain dict, since <code>biostats</code> imports nothing of the project.
+            Names and kinds are read from the registries; where each connector runs is written for this page, and
+            checked against what its class declares.</p>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;">
+          <table id="mechanisms"></table>
+        </div>
+      </div>
+      <div class="card">
+        <div style="margin-bottom:12px;">
+          <h2>Catalogues: the kinds that stored data name</h2>
+          <p class="muted">A trace, a rule or a result names its kind by an id that is never renamed; a kind nothing
+            records any more stays, marked legacy (struck through), so that what was stored still reads.</p>
+        </div>
+        <div id="catalogues" class="catalogues"></div>
+      </div>
+    </section>
+
+    <section id="panel-flow" role="tabpanel" aria-labelledby="tab-flow" class="hidden">
+      <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="between" style="padding-bottom:10px;border-bottom:1px solid var(--border);">
+          <div>
+            <h2>What happens, step by step</h2>
+            <p class="muted">Follow a call from the browser or the terminal down to the engine, the workers and the files. Choose a step, or use the controls.</p>
+          </div>
+          <div id="scenarios" class="row" style="gap:6px;" role="group" aria-label="Journeys"></div>
+        </div>
+        <div id="flow-svg" class="subcard" style="padding:10px;"></div>
+        <div id="flow-card" class="subcard"></div>
+        <div class="between" style="padding-top:10px;border-top:1px solid var(--border);align-items:center;">
+          <div class="row">
+            <button id="flow-prev" class="btn">&larr; Previous</button>
+            <button id="flow-play" class="btn btn-on">&#9654; Play</button>
+            <button id="flow-next" class="btn">Next &rarr;</button>
+          </div>
+          <div id="flow-dots" class="row" style="gap:6px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-rules" role="tabpanel" aria-labelledby="tab-rules" class="hidden">
+      <div class="grid-2">
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <h2>May one import the other?</h2>
+            <p class="muted">Choose who imports and what is imported: the rule that answers, and the test that holds it when there is one.</p>
+          </div>
+          <div class="grid-2" style="gap:12px;">
+            <label><div class="sec">Who imports</div><select id="lab-from" style="width:100%;"></select></label>
+            <label><div class="sec">What is imported</div><select id="lab-to" style="width:100%;"></select></label>
+          </div>
+          <div id="lab-verdict" class="verdict" role="status"></div>
+          <div>
+            <div class="sec">The five rules</div>
+            <div id="rules-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <h2>Where does a new thing go?</h2>
+            <p class="muted">The recipes of the developer guide, in short. Each highlights the bricks it touches.</p>
+          </div>
+          <div id="recipe-btns" class="row" style="gap:6px;" role="group" aria-label="Recipes"></div>
+          <div id="recipe-box" class="subcard"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-matrix" role="tabpanel" aria-labelledby="tab-matrix" class="hidden">
+      <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="between" style="align-items:center;">
+          <div>
+            <h2>Features, the files that carry them, their methods and libraries</h2>
+            <p class="muted">The libraries of a row are those its files import. Filter by library or by word; choose a row to see its brick.</p>
+          </div>
+          <input id="matrix-search" type="search" placeholder="Search (Welch, trace, password, Kaplan...)" aria-label="Search the features" />
+        </div>
+        <div id="lib-filters" class="row" style="gap:6px;" role="group" aria-label="Libraries"></div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;">
+          <table>
+            <thead><tr><th>Feature</th><th>Files</th><th>Methods</th><th>Libraries</th></tr></thead>
+            <tbody id="matrix-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer id="footer"></footer>
+  </div>
+
+  <script>
+    const DATA = "__EXPLORER_DATA__";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const fmt = new Intl.NumberFormat("en-GB");
+    const SANS = "system-ui,sans-serif", MONO = "ui-monospace,monospace";
+    const M = DATA.meta, MOD = DATA.modules;
+    const LEVEL = Object.fromEntries(DATA.levels.map((l) => [l.id, l]));
+    const LEVEL_IDS = DATA.levels.map((l) => l.id);
+    const NUMBER = Object.fromEntries(LEVEL_IDS.map((id, i) => [id, i + 1]));
+    const DIAGRAMS = ["overview", "packages", "bricks"];
+    const BRICKS = DATA.views.bricks.nodes;
+    const TAB_WORDS = { arch: "architecture", ext: "connectors", flow: "journeys", rules: "rules", matrix: "features" };
+    const TABS = Object.keys(TAB_WORDS);
+
+    // ------------------------------------------------------------------ what is shown
+    let tab = "arch", level = "overview";
+    const picked = { overview: "o_manage", packages: "p_core", bricks: "core_data" };
+    let module = "core.population";
+    let scope = null;        // the box whose modules the table of level 4 is limited to: { level, id }
+    let arriving = false;    // level 4 was just opened: bring the chosen row into view
+    let feature = "all", spot = null, view = "svg", everyImport = false;
+    let sortKey = "layer", sortDown = false;
+    let opened = "";         // the family or catalogue open in the connectors view (its slug)
+    let pushNext = false;    // the next address is a new step of the browser's history
+    let V, N, BAND, BAND_AT, CORRIDORS;
+    function useView(id) {
+      V = DATA.views[id];
+      N = V.nodes;
+      BAND = Object.fromEntries(V.bands.map((b) => [b.id, b]));
+      BAND_AT = Object.fromEntries(V.bands.map((b, i) => [b.id, i]));
+      CORRIDORS = corridorsOf(V);
+    }
+    const diagramLevel = () => (level === "modules" ? "bricks" : level);
+    const selected = () => picked[diagramLevel()];
+    const colorOf = (id) => `var(--g-${BAND[N[id].band].group})`;
+    const nodesOf = (lvl) => DATA.views[lvl].nodes;
+    // the box of a level that holds a brick
+    const holderOf = (lvl, brick) => (lvl === "bricks" ? brick : (BRICKS[brick].parents || {})[lvl]?.[0] || "tests");
+    const firstBrick = (lvl, id) => nodesOf(lvl)[id].bricks?.[0] || "tests";
+    const plural = (n, word) => `${fmt.format(n)} ${word}${n === 1 ? "" : word.endsWith("x") ? "es" : "s"}`;
+    const say = (words) => { $("status").textContent = words; };
+
+    function setLevel(next) {
+      if (next === level) return;
+      const from = diagramLevel(), origin = nodesOf(from)[picked[from]];
+      const deeper = NUMBER[next] > NUMBER[level];
+      spot = null;
+      if (next === "modules") {
+        scope = level === "modules" ? scope : { level: from, id: picked[from] };
+        if (origin.members.length && !origin.members.includes(module)) module = origin.members[0];
+        picked.bricks = MOD[module].brick;
+        arriving = true;
+      } else {
+        const brick = level === "modules" ? MOD[module].brick : firstBrick(from, picked[from]);
+        picked[next] = holderOf(next, brick);
+        // zooming in: the boxes that make up the box left behind stay bright, the others step back
+        if (deeper && level !== "modules" && origin.bricks.length) {
+          spot = { label: `Inside ${origin.short}`, nodes: origin.bricks, quiet: true, from: origin.short };
+        }
+      }
+      level = next;
+      pushNext = true;
+      useView(diagramLevel());
+      refresh();
+    }
+
+    // ------------------------------------------------------------------ header
+    function renderHeader() {
+      $("pill-version").textContent = `CohortStudio ${M.version} · Python ${M.python}`;
+      $("pill-source").innerHTML = `<span>Read from the code at commit <b class="mono">${esc(M.commit)}</b>, ${esc(M.date)}</span>`;
+      const kpi = (v, l, c) => `<div class="kpi"><div class="kpi-v" style="color:${c}">${v}</div><div class="kpi-l">${l}</div></div>`;
+      const connectors = DATA.connectors.families.reduce((s, f) => s + f.implementations.length, 0);
+      $("kpis").innerHTML =
+        kpi(M.layers, "Layers", "var(--g-interface)") +
+        kpi(M.packages, "Packages", "var(--g-services)") +
+        kpi(fmt.format(M.modules), "Modules", "var(--g-data)") +
+        kpi(connectors, "Connectors", "var(--g-engine)") +
+        kpi(fmt.format(M.testFiles), "Test files", "var(--g-foundation)");
+      $("footer").innerHTML =
+        `One file, no library, no network. Built by <code>build_explorer.py</code> from the code at commit <code>${esc(M.commit)}</code> on ${esc(M.date)}. ` +
+        `Sizes, arrows, libraries, connectors and kinds are read from the code; each file, module, class and setting the words name is looked up in it.`;
+    }
+
+    // ------------------------------------------------------------------ the levels
+    function renderLevels() {
+      const ov = DATA.views.overview, inGroups = (band) => !["E", "S", "T"].includes(band);
+      const count = {
+        overview: `${ov.bands.filter((b) => inGroups(b.id)).length} groups, 2 ways in`,
+        packages: `${M.layers} layers, ${M.packages} packages`,
+        bricks: `${M.bricks} parts, one job each`,
+        modules: `${fmt.format(M.modules)} modules`,
+      };
+      $("levels").innerHTML = DATA.levels.map((l) => `
+        <button class="level ${l.id === level ? "on" : ""}" data-level="${l.id}" role="tab" aria-selected="${l.id === level}"
+          aria-controls="arch-panel" tabindex="${l.id === level ? 0 : -1}">
+          <div class="n">LEVEL ${NUMBER[l.id]} · ${esc(l.home)}</div><div class="t">${esc(l.label)}</div><div class="c">${count[l.id]}</div>
+        </button>`).join("");
+      $("levels").querySelectorAll("[data-level]").forEach((b) => b.addEventListener("click", () => setLevel(b.dataset.level)));
+      const l = LEVEL[level];
+      $("arch-title").textContent = l.title;
+      $("arch-says").textContent = l.says + (level === "modules" ? "" : view === "cards" ? " Choose a card for what it does and what it imports." : " Choose a box for its imports: an arrow goes from what imports to what is imported, and one that skips a band runs down the right-hand side.");
+      $("arch-also").innerHTML = l.href ? `<a href="${esc(l.href)}" target="_blank" rel="noopener">${esc(l.also)} &#8599;</a>` : "";
+      const zoomed = $("zoomed");
+      zoomed.classList.toggle("hidden", !(spot && spot.from) || level === "modules");
+      if (spot && spot.from) {
+        const lit = litSet(), n = lit ? lit.size : 0;
+        zoomed.textContent = `Zoomed in from ${spot.from}: its ${plural(n, level === "bricks" ? "brick" : "package")} ${n === 1 ? "is" : "are"} highlighted; ${N[selected()].title} is in focus.`;
+      }
+    }
+
+    // ------------------------------------------------------------------ highlighting a feature
+    function litBricks() {
+      if (spot) return new Set(spot.nodes);
+      return feature === "all" ? null : new Set(DATA.features.find((x) => x.id === feature).nodes);
+    }
+    function litSet() {
+      const bricks = litBricks();
+      if (!bricks) return null;
+      if (diagramLevel() === "bricks") return bricks;
+      return new Set(V.order.filter((id) => (N[id].bricks || []).some((b) => bricks.has(b))));
+    }
+    function clearHighlight() { feature = "all"; spot = null; refresh(); }
+    function renderChips() {
+      const chips = DATA.features.map((f) =>
+        `<button data-feat="${f.id}" class="btn btn-sm ${!spot && f.id === feature ? "btn-on" : ""}" aria-pressed="${!spot && f.id === feature}">${esc(f.label)}</button>`);
+      if (spot) chips.push(`<span class="pill pill-strong">${esc(spot.label)}</span>`);
+      if (spot || feature !== "all") chips.push(`<button id="clear" class="btn btn-sm">Clear</button>`);
+      $("chips").innerHTML = chips.join("");
+      $("chips").querySelectorAll("[data-feat]").forEach((b) => b.addEventListener("click", () => {
+        spot = null;
+        feature = b.dataset.feat;
+        const f = DATA.features.find((x) => x.id === feature);
+        if (f.focus && level !== "modules") picked[diagramLevel()] = holderOf(diagramLevel(), f.focus);
+        refresh();
+      }));
+      if ($("clear")) $("clear").addEventListener("click", clearHighlight);
+      // the highlighted path, in words
+      const set = spot && spot.from ? null : litSet(), path = $("path");
+      path.classList.toggle("hidden", !set || level === "modules");
+      if (set) {
+        const name = spot ? spot.label : DATA.features.find((x) => x.id === feature).label;
+        path.textContent = `${name}, its ${level === "bricks" ? "bricks" : "boxes"}: ` + V.order.filter((id) => set.has(id)).map((id) => N[id].short).join(" · ");
+      }
+    }
+
+    // ------------------------------------------------------------------ orthogonal arrows
+    // A polyline of horizontal and vertical segments, drawn with small rounded corners. Repeated and collinear
+    // points are dropped, so that an arrow with no sideways step is one straight segment.
+    function orthogonal(points, radius = 5) {
+      const near = (a, b) => Math.abs(a - b) < 0.01;
+      const p = points.filter((q, i) => i === 0 || !(near(q[0], points[i - 1][0]) && near(q[1], points[i - 1][1])));
+      const s = [p[0]];
+      for (let i = 1; i < p.length - 1; i++) {
+        const a = s[s.length - 1], b = p[i], c = p[i + 1];
+        const straight = (near(a[0], b[0]) && near(b[0], c[0])) || (near(a[1], b[1]) && near(b[1], c[1]));
+        if (!straight) s.push(b);
+      }
+      if (p.length > 1) s.push(p[p.length - 1]);
+      let d = `M${s[0][0].toFixed(1)},${s[0][1].toFixed(1)}`;
+      for (let i = 1; i < s.length - 1; i++) {
+        const a = s[i - 1], b = s[i], c = s[i + 1];
+        const r = Math.min(radius, Math.hypot(b[0] - a[0], b[1] - a[1]) / 2, Math.hypot(c[0] - b[0], c[1] - b[1]) / 2);
+        const [ux, uy] = [Math.sign(b[0] - a[0]), Math.sign(b[1] - a[1])], [vx, vy] = [Math.sign(c[0] - b[0]), Math.sign(c[1] - b[1])];
+        d += ` L${(b[0] - ux * r).toFixed(1)},${(b[1] - uy * r).toFixed(1)} Q${b[0].toFixed(1)},${b[1].toFixed(1)} ${(b[0] + vx * r).toFixed(1)},${(b[1] + vy * r).toFixed(1)}`;
+      }
+      const last = s[s.length - 1];
+      return d + ` L${last[0].toFixed(1)},${last[1].toFixed(1)}`;
+    }
+    // words in lines of at most `most` characters, cut between words
+    function inLines(text, most) {
+      const lines = [];
+      String(text).split(" ").forEach((word) => {
+        const last = lines[lines.length - 1];
+        if (last !== undefined && (last + " " + word).length <= most) lines[lines.length - 1] = last + " " + word;
+        else lines.push(word);
+      });
+      return lines.filter(Boolean);
+    }
+
+    // ------------------------------------------------------------------ the diagram
+    // An arrow leaves the bottom of the box that imports and runs along a track of the corridor under its band.
+    // The arrows of the box in focus never pass behind a box: to the next band they drop straight into their box;
+    // to a band further down they run along the spine at the right, then along the corridor above their band.
+    // A highlighted feature's other imports, and every import, drop straight from their corridor, behind the boxes
+    // between.
+    const widthOf = (e) => (1.3 + Math.min(1.1, Math.log2(e.n + 1) * 0.3)).toFixed(2);
+    const cx = (id) => N[id].box.x + N[id].box.w / 2;
+    const bottomOf = (id) => N[id].box.y + N[id].box.h;
+    function corridorsOf(v) {
+      return v.bands.map((b, i) => {
+        const next = v.bands[i + 1];
+        if (!next) return [];
+        const top = b.inner.y + b.inner.h + 6, bottom = next.inner.y - 14;
+        const by = v.boundary;
+        let spans = [[top, bottom]];
+        if (by && by.y < bottom && by.y + by.h > top) spans = [[top, by.y - 3], [by.y + by.h + 3, bottom]];
+        return spans.filter(([a, z]) => z - a >= 6);
+      });
+    }
+    function trackY(i, k, n) {
+      const spans = CORRIDORS[i];
+      const total = spans.reduce((sum, [a, z]) => sum + z - a, 0);
+      let t = (total * (k + 1)) / (n + 1);
+      for (const [a, z] of spans) {
+        if (t <= z - a) return a + t;
+        t -= z - a;
+      }
+      return spans[spans.length - 1][1];
+    }
+    // Each arrow is a list of legs, one per corridor it runs along, and its corner points once each leg has a track.
+    // The arrows of one bus share a track: every import of the focus leaves it at one point, every import of it
+    // arrives at one point.
+    // the badge each box wears (FOCUS, IMPORTED, IMPORTS IT), set before the arrows are planned: an arrow that
+    // enters a box from above never ends inside its badge
+    let BADGES = {};
+    const badgeWidth = (word) => word.length * 6.3 + 14;
+    const topX = (id) => (BADGES[id] ? Math.min(cx(id), N[id].box.x + N[id].box.w - badgeWidth(BADGES[id]) - 14) : cx(id));
+    function focusPlan(chosen, shown) {
+      const plan = [], sel = N[chosen], fi = BAND_AT[sel.band], fx = cx(chosen), SP = M.spineX;
+      const top = sel.box.y - 1, under = bottomOf(chosen), fxTop = topX(chosen);
+      V.edges.filter((e) => (e.u === chosen || e.v === chosen) && shown(e)).forEach((e) => {
+        if (e.u === chosen) {
+          const ti = BAND_AT[N[e.v].band], tx = ti === fi ? cx(e.v) : topX(e.v), end = ti === fi ? bottomOf(e.v) + 1 : N[e.v].box.y - 1;
+          const out = { i: fi, key: "out", rank: [2, 0] };
+          if (ti <= fi + 1) plan.push({ e, kind: "out", within: ti === fi, legs: [out], pts: ([y]) => [[fx, under], [fx, y], [tx, y], [tx, end]] });
+          else plan.push({
+            e, kind: "out", legs: [out, { i: ti - 1, key: "branch", rank: [2, 0] }],
+            pts: ([y, y2]) => [[fx, under], [fx, y], [SP, y], [SP, y2], [tx, y2], [tx, end]],
+          });
+          return;
+        }
+        const si = BAND_AT[N[e.u].band], sx = cx(e.u), start = bottomOf(e.u);
+        if (si === fi) {
+          // a box of the same band: from its bottom, left of its middle (its middle may receive the focus's arrow),
+          // into the focus from below, on its own side
+          const from = N[e.u].box.x + N[e.u].box.w * 0.35, tx = sel.box.x + sel.box.w * (sx < fx ? 0.25 : 0.75);
+          plan.push({ e, kind: "in", within: true, legs: [{ i: fi, key: "in-side", rank: [0, 0] }], pts: ([y]) => [[from, start], [from, y], [tx, y], [tx, under + 1]] });
+        } else if (si === fi - 1) {
+          plan.push({ e, kind: "in", legs: [{ i: si, key: "in", rank: [2, 0] }], pts: ([y]) => [[sx, start], [sx, y], [fxTop, y], [fxTop, top]] });
+        } else {
+          plan.push({
+            e, kind: "in", legs: [{ i: si, key: "collect", rank: [2, 0] }, { i: fi - 1, key: "in", rank: [2, 0] }],
+            pts: ([y, y2]) => [[sx, start], [sx, y], [SP, y], [SP, y2], [fxTop, y2], [fxTop, top]],
+          });
+        }
+      });
+      return plan;
+    }
+    // an arrow straight from its corridor: a highlighted feature's, or every import
+    function directPlan(e, kind, n) {
+      const same = N[e.u].band === N[e.v].band, sx = cx(e.u), tx = same ? cx(e.v) : topX(e.v);
+      const end = same ? bottomOf(e.v) + 1 : N[e.v].box.y - 1;
+      // tracks in an order that spares crossings: arrows within the band nearest the boxes, then those going right
+      // (the farthest first), then those going left; the arrows of one box share its track
+      const rank = same ? [1, Math.abs(tx - sx)] : tx > sx ? [3, -tx] : [4, tx];
+      const straight = kind === "all" || (!same && Math.abs(tx - sx) < 0.5);
+      const leg = { i: BAND_AT[N[e.u].band], key: straight ? null : `lit:${e.u}:${same ? "in" : "down"}`, rank };
+      return { e, kind, within: same, legs: [leg], pts: ([y]) => [[sx, bottomOf(e.u)], [sx, y], [tx, y], [tx, end]] };
+    }
+    // where a bus branches: the corners at which three directions or more of the drawn lines meet
+    function junctions(paths) {
+      const close = (a, b) => Math.abs(a - b) < 0.6;
+      const segments = [];
+      paths.forEach((pts) => pts.forEach((q, k) => {
+        if (k && !(close(q[0], pts[k - 1][0]) && close(q[1], pts[k - 1][1]))) segments.push([pts[k - 1], q]);
+      }));
+      const found = new Map();
+      paths.forEach((pts) => pts.forEach(([x, y]) => {
+        const key = `${Math.round(x * 2)},${Math.round(y * 2)}`;
+        if (found.has(key)) return;
+        const directions = new Set();
+        segments.forEach(([[x1, y1], [x2, y2]]) => {
+          if (close(x1, x2) && close(x, x1) && y > Math.min(y1, y2) - 0.6 && y < Math.max(y1, y2) + 0.6) {
+            if (Math.max(y1, y2) > y + 0.6) directions.add("S");
+            if (Math.min(y1, y2) < y - 0.6) directions.add("N");
+          } else if (close(y1, y2) && close(y, y1) && x > Math.min(x1, x2) - 0.6 && x < Math.max(x1, x2) + 0.6) {
+            if (Math.max(x1, x2) > x + 0.6) directions.add("E");
+            if (Math.min(x1, x2) < x - 0.6) directions.add("W");
+          }
+        });
+        found.set(key, directions.size >= 3 ? [x, y] : null);
+      }));
+      return [...found.values()].filter(Boolean);
+    }
+    function placeTracks(plan) {
+      const corridors = new Map();
+      plan.forEach((p) => {
+        p.ys = [];
+        p.legs.forEach((leg, j) => {
+          if (!leg.key) { p.ys[j] = trackY(leg.i, 0, 1); return; }
+          if (!corridors.has(leg.i)) corridors.set(leg.i, new Map());
+          const tracks = corridors.get(leg.i);
+          if (!tracks.has(leg.key)) tracks.set(leg.key, { rank: leg.rank, items: [] });
+          tracks.get(leg.key).items.push([p, j]);
+        });
+      });
+      corridors.forEach((tracks, i) => {
+        const ordered = [...tracks.values()].sort((a, b) => a.rank[0] - b.rank[0] || a.rank[1] - b.rank[1]);
+        ordered.forEach((track, k) => track.items.forEach(([p, j]) => { p.ys[j] = trackY(i, k, ordered.length); }));
+      });
+      plan.forEach((p) => { p.points = p.pts(p.ys); });
+    }
+    const relationOf = (id, chosen, uses, usedBy) =>
+      (id === chosen ? "in focus" : uses.has(id) ? "imported by the focus" : usedBy.has(id) ? "imports the focus" : "");
+
+    function renderSvg() {
+      const chosen = selected(), sel = N[chosen], set = litSet(), overview = level === "overview";
+      const quiet = !!(spot && spot.quiet), every = everyImport && (!set || quiet);
+      const uses = new Set(sel.imports), usedBy = new Set(sel.importedBy);
+      const halo = `paint-order="stroke" stroke="var(--card)" stroke-width="3.4" stroke-linejoin="round"`;
+
+      const bands = V.bands.map((b) => {
+        const c = `var(--g-${b.group})`, k = b.box;
+        const labels = inLines(b.label, 17), titles = inLines(b.title, overview ? 21 : 15);
+        let y = k.y + 16;
+        const words = labels.map((line) => {
+          const out = `<text x="${k.x + 10}" y="${y}" font-size="10.5" font-weight="700" fill="${c}" font-family="${SANS}">${esc(line)}</text>`;
+          y += 12;
+          return out;
+        });
+        y += overview ? 2 : 5;
+        titles.forEach((line) => {
+          words.push(overview
+            ? `<text x="${k.x + 10}" y="${y}" font-size="10.5" fill="var(--text)" font-family="${SANS}">${esc(line)}</text>`
+            : `<text x="${k.x + 10}" y="${y}" font-size="13" font-weight="700" fill="var(--fg)" font-family="${SANS}">${esc(line)}</text>`);
+          y += overview ? 12 : 15;
+        });
+        return `<g>
+          <rect x="${k.x}" y="${k.y}" width="${k.w}" height="${k.h}" rx="8" fill="${c}" fill-opacity="0.06" stroke="${c}" stroke-opacity="0.32"/>
+          <rect x="${k.x}" y="${k.y}" width="${M.labelW}" height="${k.h}" rx="8" fill="${c}" fill-opacity="0.12"/>
+          ${words.join("")}
+          <text x="${k.x + 10}" y="${k.y + k.h - 8}" font-size="9.5" fill="var(--muted)" font-family="${MONO}">${esc(b.path)}</text>
+        </g>`;
+      }).join("");
+
+      const by = V.boundary, mid = (M.nodesX + M.nodesRight) / 2;
+      const boundaryLine = by.h ? `<line x1="${M.nodesX}" y1="${by.y + by.h / 2}" x2="${M.bandRight - 4}" y2="${by.y + by.h / 2}" stroke="var(--bad)" stroke-width="1.3" stroke-dasharray="6 4"/>` : "";
+      const boundaryLabel = by.h ? `<text x="${mid}" y="${by.y + by.h / 2 + 3.8}" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--bad)" font-family="${SANS}" paint-order="stroke" stroke="var(--card)" stroke-width="5" stroke-linejoin="round">R3 · BELOW THIS LINE, STREAMLIT ONLY IN A GRAPH ENGINE'S DRAWING METHODS (CHECKED BY A TEST)</text>` : "";
+
+      const graphBands = V.bands.filter((b) => !["S", "T"].includes(b.id));
+      const lowest = graphBands[graphBands.length - 1].box;
+      const top = V.bands[0].box.y + 8, bottom = lowest.y + lowest.h - 8, ax = M.width - 9;
+      const downArrow = `<g>
+        <line x1="${ax}" y1="${top}" x2="${ax}" y2="${bottom}" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#a-muted)"/>
+        <text transform="translate(${ax - 6},${(top + bottom) / 2}) rotate(-90)" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--muted)" font-family="${SANS}" letter-spacing="0.6">BETWEEN BANDS, IMPORTS GO DOWN ONLY</text>
+      </g>`;
+
+      // which arrows: every import, or the focus's own (as buses) with a highlighted feature's (between its boxes)
+      const filter = quiet ? null : set;
+      const shown = (e) => !filter || (filter.has(e.u) && filter.has(e.v));
+      BADGES = {};
+      if (!every) {
+        sel.importedBy.forEach((id) => { if (shown({ u: id, v: chosen })) BADGES[id] = "IMPORTS IT"; });
+        sel.imports.forEach((id) => { if (shown({ u: chosen, v: id })) BADGES[id] = "IMPORTED"; });
+        BADGES[chosen] = "FOCUS";
+      }
+      let plan = [];
+      if (every) plan = V.edges.map((e, n) => directPlan(e, "all", n));
+      else {
+        plan = chosen in { tests: 1, storage: 1 } ? [] : focusPlan(chosen, shown);
+        const planned = new Set(plan.map((p) => p.e.u + ">" + p.e.v));
+        if (filter) V.edges.forEach((e, n) => { if (!planned.has(e.u + ">" + e.v) && shown(e)) plan.push(directPlan(e, "lit", n)); });
+      }
+      placeTracks(plan);
+      // a dot where a bus branches, in the colour of its arrows
+      const DOT = { in: "var(--edge-up)", out: "var(--edge-down)", lit: "var(--muted)" };
+      const dots = Object.entries(DOT).map(([kind, fill]) =>
+        junctions(plan.filter((p) => p.kind === kind).map((p) => p.points))
+          .map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.7" fill="${fill}"/>`).join("")
+      ).join("");
+      const tip = (e) => `<title>${esc(N[e.u].short)} imports ${esc(N[e.v].short)}: ${e.n} module${e.n > 1 ? "s" : ""}</title>`;
+      const STYLE = {
+        all: { stroke: "var(--muted)", marker: "a-muted", opacity: 0.5, cls: "" },
+        lit: { stroke: "var(--muted)", marker: "a-muted", opacity: 0.85, cls: "edge-anim" },
+        out: { stroke: "var(--edge-down)", marker: "a-down", opacity: 0.95, cls: "" },
+        in: { stroke: "var(--edge-up)", marker: "a-up", opacity: 0.95, cls: "" },
+      };
+      const LAYER = { all: 0, lit: 1, out: 2, in: 2 };
+      const arrows = [...plan].sort((a, b) => LAYER[a.kind] - LAYER[b.kind]).map((p) => {
+        const s = STYLE[p.kind];
+        const width = p.kind === "all" ? 1 : p.kind === "lit" ? 1.5 : widthOf(p.e);
+        return `<path d="${orthogonal(p.points)}" fill="none" stroke="${s.stroke}" stroke-opacity="${s.opacity}" stroke-width="${width}" stroke-linejoin="round" class="${s.cls}" marker-end="url(#${s.marker})">${p.kind === "all" ? "" : tip(p.e)}</path>`;
+      }).join("");
+
+      // the arrows first, then the boxes over them, then the words; a clear rectangle on top takes the clicks
+      const boxes = [], words = [], hits = [], badges = [];
+      V.order.forEach((id) => {
+        const n = N[id], p = n.box, c = colorOf(id);
+        const isSel = id === chosen, isUse = !every && uses.has(id) && shown({ u: chosen, v: id }), isUsedBy = !every && usedBy.has(id) && shown({ u: id, v: chosen });
+        // a box the focus's arrows reach keeps its full strength, even outside the highlighted boxes of a zoom
+        const dimmed = !!set && !set.has(id) && !(quiet && (isSel || isUse || isUsedBy));
+        const soft = !set && !every && !isSel && !isUse && !isUsedBy && !(chosen in { tests: 1, storage: 1 });
+        const o = dimmed ? 0.35 : soft ? 0.9 : 1;
+        const stroke = isSel ? "var(--primary)" : isUse ? "var(--edge-down)" : isUsedBy ? "var(--edge-up)" : "var(--border)";
+        const sw = isSel ? 2.4 : isUse || isUsedBy ? 1.8 : 1.2;
+        const dash = !isSel && (isUse || isUsedBy) ? `stroke-dasharray="4 3"` : "";
+        const badge = isSel ? "FOCUS" : isUse ? "IMPORTED" : isUsedBy ? "IMPORTS IT" : "";
+        const badgeBg = isSel ? "var(--primary)" : isUse ? "var(--edge-down)" : "var(--edge-up)";
+        const bw = badge.length * 6.3 + 14, tx = p.x + p.w / 2;
+        boxes.push(`<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="7" fill="var(--card)" stroke="${stroke}" stroke-opacity="${dimmed ? 0.5 : 1}" stroke-width="${sw}" ${dash}/>
+          <rect x="${p.x}" y="${p.y}" width="4.5" height="${p.h}" rx="2" fill="${c}" opacity="${o}"/>`);
+        // the badge sits astride the top edge, at the right, over everything: the title keeps the whole width
+        if (badge) badges.push(`<g pointer-events="none"><rect x="${p.x + p.w - bw - 6}" y="${p.y - 8}" width="${bw}" height="15" rx="7.5" fill="${badgeBg}"/>
+            <text x="${p.x + p.w - bw / 2 - 6}" y="${p.y + 3}" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--on-primary)" font-family="${SANS}">${badge}</text></g>`);
+        words.push(`<g data-words="${id}" opacity="${o}">
+          ${n.layer ? `<text x="${p.x + 10}" y="${p.y + 13}" font-size="9.5" font-weight="700" fill="var(--muted)" font-family="${MONO}">${esc(n.layer)}</text>` : ""}
+          <text data-fit x="${tx}" y="${p.y + M.titleY}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--fg)" font-family="${SANS}" ${halo}>${esc(n.short)}</text>
+          ${n.subLines.map((line, i) => `<text data-fit x="${tx}" y="${p.y + M.lineY + i * M.lineH}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="${SANS}" ${halo}>${esc(line)}</text>`).join("")}
+        </g>`);
+        const relation = relationOf(id, chosen, isUse ? uses : new Set(), isUsedBy ? usedBy : new Set());
+        const name = [n.title, BAND[n.band].label.toLowerCase(), relation].filter(Boolean).join(", ");
+        hits.push(`<rect class="svg-node" data-node="${id}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="7" fill="transparent" tabindex="0" role="button" aria-pressed="${isSel}" aria-label="${esc(name)}"><title>${esc(n.title)}</title></rect>`);
+      });
+      // what the README's scheme draws beside its cards: the connector sockets and the catalogues, as links
+      const extras = V.extras.map((x) => {
+        if (x.kind === "caption") return `<text x="${x.x}" y="${x.y}" font-size="9.5" font-weight="700" fill="var(--g-services)" font-family="${SANS}" letter-spacing="0.4">${esc(x.label)}<title>${esc(x.says)}</title></text>`;
+        const b = x.box, c = x.kind === "socket" ? "var(--g-services)" : "var(--g-engine)";
+        const text = x.kind === "socket"
+          ? `<text data-fit x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + 3.6}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--fg)" font-family="${SANS}">${esc(x.label)}</text>`
+          : `<text x="${b.x + 10}" y="${b.y + 15}" font-size="9.5" font-weight="700" fill="${c}" font-family="${SANS}" letter-spacing="0.4">${esc(x.label)}</text>` +
+            x.lines.map((line, i) => `<text data-fit x="${b.x + 10}" y="${b.y + 31 + i * 13}" font-size="10.5" fill="var(--text)" font-family="${SANS}">${esc(line)}</text>`).join("");
+        return `<g class="svg-link" data-go="${x.to}" tabindex="0" role="link" aria-label="${esc(x.label)}: ${esc(x.says)}" data-extra>
+          <title>${esc(x.label)}: ${esc(x.says)}</title>
+          <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6" fill="var(--card)" stroke="${c}" stroke-opacity="0.75" stroke-dasharray="4 3"/>${text}
+        </g>`;
+      }).join("");
+
+      const marker = (id, fill) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M1,1.2 L9.5,5 L1,8.8 z" fill="${fill}"/></marker>`;
+      // the legend says only what is drawn
+      const legend = [];
+      if (plan.some((p) => p.kind === "out")) legend.push(`<span><i class="swatch" style="background:var(--edge-down)"></i>the focus imports it</span>`);
+      if (plan.some((p) => p.kind === "in")) legend.push(`<span><i class="swatch" style="background:var(--edge-up)"></i>it imports the focus</span>`);
+      if (plan.some((p) => p.within)) legend.push(`<span><svg width="20" height="12" viewBox="0 0 20 12" aria-hidden="true"><path d="M3,1 V9 H16 V2" fill="none" stroke="var(--muted)" stroke-width="1.5"/><path d="M13,5 L16,1 L19,5 z" fill="var(--muted)"/></svg>within a band: under it, then up into the box imported (${overview ? "a lower layer of the group" : "the same package"})</span>`);
+      if (plan.some((p) => p.kind === "lit")) legend.push(`<span><i style="width:16px;border-top:2px dashed var(--muted);display:inline-block;"></i>the highlighted feature's other imports (behind the boxes between)</span>`);
+      if (every) legend.push(`<span><i class="swatch" style="background:var(--muted)"></i>every import (behind the boxes between)</span>`);
+      else if (plan.length) legend.push(`<span><i class="swatch" style="background:var(--muted);height:4px;"></i>thicker: more modules import</span>`);
+      if (by.h) legend.push(`<span><i style="width:16px;border-top:2px dashed var(--bad);display:inline-block;"></i>rule R3</span>`);
+      if (V.extras.length) legend.push(`<span><i style="width:14px;height:10px;border:1.5px dashed var(--g-services);border-radius:3px;display:inline-block;"></i>a link to the connectors and catalogues</span>`);
+
+      $("svg-arch").innerHTML = `
+        <svg viewBox="0 0 ${M.width} ${V.height}" width="100%" role="group" aria-roledescription="diagram" aria-label="${esc(LEVEL[level].title)}: the boxes of each band; the arrows are the imports of the box in focus">
+          <defs>${marker("a-muted", "var(--muted)")}${marker("a-down", "var(--edge-down)")}${marker("a-up", "var(--edge-up)")}</defs>
+          ${bands}${downArrow}${boundaryLine}${arrows}${dots}${boxes.join("")}${words.join("")}${boundaryLabel}${hits.join("")}${extras}${badges.join("")}
+        </svg>
+        <div class="legend">${legend.join("")}</div>`;
+      $("svg-arch").querySelectorAll("[data-node]").forEach((g) => {
+        const go = () => choose(g.dataset.node);
+        g.addEventListener("click", go);
+        g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+      });
+      bindGo($("svg-arch"));
+    }
+    // a box is chosen: it comes in focus; on a narrow screen the details are below the diagram
+    function choose(id) {
+      picked[diagramLevel()] = id;
+      refresh();
+      if (matchMedia("(max-width: 1200px)").matches) $("inspector").scrollIntoView({ block: "start", behavior: calm() });
+    }
+    const calm = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
+
+    function renderCards() {
+      const chosen = selected(), sel = N[chosen], set = litSet();
+      const uses = new Set(sel.imports), usedBy = new Set(sel.importedBy);
+      $("cards-arch").innerHTML = V.bands.map((b) => {
+        const c = `var(--g-${b.group})`;
+        const cards = V.order.filter((id) => N[id].band === b.id).map((id) => {
+          const n = N[id], isSel = id === chosen;
+          const tag = isSel ? `<span class="tag">focus</span>` : uses.has(id) ? `<span class="tag tag-down">imported</span>` : usedBy.has(id) ? `<span class="tag tag-up">imports it</span>` : "";
+          const cls = `${isSel ? "node-sel" : uses.has(id) || usedBy.has(id) ? "node-rel" : ""} ${set && !set.has(id) ? "dim" : ""}`;
+          return `<button data-node="${id}" class="node-card ${cls}" aria-pressed="${isSel}">
+            <div class="between" style="gap:6px;margin-bottom:3px;"><strong style="font-size:13px;">${esc(n.short)}</strong>${tag}</div>
+            <div class="muted" style="font-size:12px;">${esc(n.sub)}</div>
+          </button>`;
+        }).join("");
+        return `<div class="layer-box" style="border-left:4px solid ${c};">
+          <div class="layer-head"><div><strong style="color:${c};margin-right:8px;">${esc(b.label)}</strong><strong>${esc(b.title)}</strong></div><code class="muted">${esc(b.path)}</code></div>
+          <div class="cards">${cards}</div>
+        </div>`;
+      }).join("") + (V.extras.length ? `<div class="layer-box" style="border-left:4px solid var(--g-services);">
+          <div class="layer-head"><strong>Connectors &amp; catalogues</strong><span class="muted">as the README's scheme draws them</span></div>
+          <div class="cards">${V.extras.filter((x) => x.to).map((x) => `<button class="node-card" data-go="${x.to}" style="border-style:dashed;">
+            <strong style="font-size:13px;">${esc(x.label.charAt(0) + x.label.slice(1).toLowerCase())}</strong><div class="muted" style="font-size:12px;">${esc(x.says)}</div></button>`).join("")}</div>
+        </div>` : "");
+      $("cards-arch").querySelectorAll("[data-node]").forEach((c) => c.addEventListener("click", () => choose(c.dataset.node)));
+      bindGo($("cards-arch"));
+    }
+
+    // ------------------------------------------------------------------ level 4: every module
+    const LAYER_LABEL = Object.fromEntries(DATA.views.bricks.bands.map((b) => [b.id, b.id === "E" ? "entry" : b.id]));
+    const RANK = Object.fromEntries(DATA.moduleOrder.map((name, i) => [name, i]));
+    const SORTS = {
+      layer: (a, b) => RANK[a] - RANK[b],
+      lines: (a, b) => MOD[a].lines - MOD[b].lines,
+      imports: (a, b) => MOD[a].imports.length - MOD[b].imports.length,
+      used: (a, b) => MOD[a].importedBy.length - MOD[b].importedBy.length,
+    };
+    const scopeNode = () => (scope ? nodesOf(scope.level)[scope.id] : null);
+    function renderModules() {
+      const q = ($("module-search").value || "").trim().toLowerCase(), bricks = spot ? null : litBricks();
+      const inside = scopeNode() ? new Set(scopeNode().members) : null;
+      const kind = { overview: "Group", packages: "Package", bricks: "Brick" };
+      $("module-scope").innerHTML = inside
+        ? `<button id="scope-off" class="btn btn-sm btn-on" aria-label="${kind[scope.level]}: ${esc(scopeNode().short)}. Show every module">${kind[scope.level]}: ${esc(scopeNode().short)} &times;</button>` : "";
+      if ($("scope-off")) $("scope-off").addEventListener("click", () => { scope = null; renderModules(); $("module-search").focus(); });
+      const rows = DATA.moduleOrder.filter((name) => {
+        const m = MOD[name];
+        if (inside && !inside.has(name)) return false;
+        if (bricks && !bricks.has(m.brick)) return false;
+        return !q || `${name} ${m.path} ${m.doc} ${BRICKS[m.brick].short}`.toLowerCase().includes(q);
+      }).sort((a, b) => (sortDown ? -1 : 1) * SORTS[sortKey](a, b) || RANK[a] - RANK[b]);
+      const th = (key, label, right) => `<th ${sortKey === key ? `aria-sort="${sortDown ? "descending" : "ascending"}"` : ""} ${right ? 'style="text-align:right;"' : ""}><button data-sort="${key}">${label}</button></th>`;
+      $("modules-arch").innerHTML = `
+        <p class="muted" style="margin:0 0 8px 0;">${rows.length} of ${fmt.format(M.modules)} modules${inside ? `, in ${esc(scopeNode().short)}` : ""}${bricks ? ", in the highlighted feature's bricks" : ""}.</p>
+        <div class="scroll"><table class="fixed" aria-label="Modules">
+          <colgroup><col style="width:33%"><col style="width:8%"><col style="width:8%"><col style="width:9%"><col style="width:10%"><col></colgroup>
+          <thead><tr><th>Module, and its brick</th>${th("layer", "Layer")}${th("lines", "Lines", true)}${th("imports", "Imports", true)}${th("used", "Imported by", true)}<th>Docstring</th></tr></thead>
+          <tbody>${rows.map((name) => {
+            const m = MOD[name];
+            return `<tr class="click ${name === module ? "picked" : ""}" data-module="${esc(name)}" tabindex="0" aria-selected="${name === module}">
+              <td><div class="mono wrap-any" style="color:var(--code);">${esc(m.path)}</div><div class="muted small">${esc(BRICKS[m.brick].short)}</div></td>
+              <td>${LAYER_LABEL[m.band]}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums;">${fmt.format(m.lines)}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums;">${m.imports.length}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums;">${m.importedBy.length}</td>
+              <td><span class="doc">${esc(m.doc || "—")}</span></td>
+            </tr>`;
+          }).join("")}</tbody>
+        </table></div>`;
+      $("modules-arch").querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => {
+        sortDown = sortKey === b.dataset.sort ? !sortDown : b.dataset.sort !== "layer";
+        sortKey = b.dataset.sort;
+        keepFocus(renderModules);
+      }));
+      $("modules-arch").querySelectorAll("[data-module]").forEach((tr) => {
+        const go = () => { module = tr.dataset.module; keepFocus(() => { renderModules(); renderInspector(); writeAddress(); announce(); }); };
+        tr.addEventListener("click", go);
+        tr.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+      });
+      if (arriving) {
+        arriving = false;
+        const row = $("modules-arch").querySelector("tr.picked");
+        if (row) row.scrollIntoView({ block: "nearest" });
+      }
+    }
+
+    function renderArch() {
+      const table = level === "modules";
+      if (!table && view === "svg" && matchMedia("(max-width: 760px)").matches && !renderArch.asked) view = "cards";  // a phone: the cards read better
+      document.querySelectorAll("[data-view]").forEach((b) => { b.classList.toggle("btn-on", b.dataset.view === view); b.setAttribute("aria-pressed", b.dataset.view === view); });
+      $("arch-tools").classList.toggle("hidden", table);
+      $("module-tools").classList.toggle("hidden", !table);
+      $("svg-arch").classList.toggle("hidden", table || view !== "svg");
+      $("cards-arch").classList.toggle("hidden", table || view !== "cards");
+      $("modules-arch").classList.toggle("hidden", !table);
+      $("all-imports").classList.toggle("hidden", view !== "svg");
+      $("all-imports").classList.toggle("btn-on", everyImport);
+      $("all-imports").setAttribute("aria-pressed", everyImport);
+      if (table) renderModules();
+      else if (view === "svg") renderSvg();
+      else renderCards();
+    }
+
+    // ------------------------------------------------------------------ the inspector
+    const chip = (attrs, text) => `<button class="btn btn-sm" ${attrs}>${text}</button>`;
+    const libsOf = (libs, none) => libs.length
+      ? libs.map((l) => `<span class="pill"><b>${esc(l.name)}</b>${l.version ? " " + esc(l.version) : ""}</span>`).join("")
+      : `<span class="muted">${none}</span>`;
+    const zoomChip = (lvl, id) => chip(`data-zoom="${lvl}:${id}"`, `Level ${NUMBER[lvl]} · ${esc(nodesOf(lvl)[id].short)}`);
+    const uniq = (list) => [...new Set(list)];
+    const figures = (items) => `<div class="kpis kpis-${items.length}">${items.map(([v, l]) => `<div class="kpi"><div class="kpi-v">${v}</div><div class="kpi-l">${l}</div></div>`).join("")}</div>`;
+    function bindGo(box) {
+      box.querySelectorAll("[data-go]").forEach((b) => {
+        const go = () => openView(b.dataset.go);
+        b.addEventListener("click", go);
+        if (b.tagName !== "BUTTON") b.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+      });
+    }
+    function bindInspector(box) {
+      box.querySelectorAll("[data-jump]").forEach((b) => b.addEventListener("click", () => choose(b.dataset.jump)));
+      box.querySelectorAll("[data-zoom]").forEach((b) => b.addEventListener("click", () => {
+        const [lvl, id] = b.dataset.zoom.split(":");
+        if (lvl === "modules") { scope = { level: diagramLevel(), id: selected() }; setLevel("modules"); return; }
+        const origin = level === "modules" ? null : N[selected()], deeper = NUMBER[lvl] > NUMBER[level];
+        spot = deeper && origin && origin.bricks.length ? { label: `Inside ${origin.short}`, nodes: origin.bricks, quiet: true, from: origin.short } : null;
+        level = lvl; picked[lvl] = id; pushNext = true; useView(lvl); refresh();
+      }));
+      box.querySelectorAll("[data-module]").forEach((b) => b.addEventListener("click", () => {
+        module = b.dataset.module; picked.bricks = MOD[module].brick;
+        if (level !== "modules") { scope = { level: diagramLevel(), id: selected() }; if (!scopeNode().members.includes(module)) scope = null; level = "modules"; pushNext = true; arriving = true; useView("bricks"); }
+        else if (scope && !scopeNode().members.includes(module)) scope = null;
+        arriving = true;
+        refresh();
+      }));
+      const copy = box.querySelector("#copy-link");
+      if (copy) copy.addEventListener("click", () => {
+        const done = () => { copy.textContent = "Link copied"; setTimeout(() => { copy.textContent = "Copy the link to this view"; }, 1600); };
+        try { navigator.clipboard.writeText(location.href).then(done, () => window.prompt("The link to this view:", location.href)); }
+        catch (refused) { window.prompt("The link to this view:", location.href); }
+      });
+      bindGo(box);
+      box.scrollTop = 0;
+    }
+    function moduleList(members) {
+      return members.map((name) => `<button class="file mono" data-module="${esc(name)}" title="${esc(MOD[name].doc)}"><span>${esc(MOD[name].path)}</span><span>${fmt.format(MOD[name].lines)} lines</span></button>`).join("");
+    }
+    const copyLink = `<p style="margin:0;"><button class="link small" id="copy-link">Copy the link to this view</button></p>`;
+    // a box's own folder: the deepest folder its modules share, or its top folders when they are several
+    function folderOf(n) {
+      const paths = n.members.map((m) => MOD[m].path);
+      if (!paths.length) return "";
+      const tops = uniq(paths.map((p) => (p.includes("/") ? p.split("/")[0] + "/" : p)));
+      if (tops.length > 1) return tops.join(" · ");
+      const parts = paths.map((p) => p.split("/").slice(0, -1));
+      let common = parts[0];
+      parts.forEach((q) => { let k = 0; while (k < common.length && common[k] === q[k]) k++; common = common.slice(0, k); });
+      return common.length ? common.join("/") + "/" : tops[0];
+    }
+    function renderInspector() {
+      const box = $("inspector");
+      if (level === "modules") return renderModuleInspector(box);
+      const lvl = diagramLevel(), id = selected(), n = N[id], b = BAND[n.band], pseudo = id === "tests" || id === "storage";
+      const page = lvl === "packages" ? id === "p_app_pages" : n.band === "L9" || id === "o_app_pages";
+      const jump = (ids, arrow, none) => ids.length ? ids.map((x) => chip(`data-jump="${x}"`, `${arrow} ${esc(N[x].short)}`)).join("") : `<span class="muted">${none}</span>`;
+      // zooming: the coarser levels that hold it, the finer levels it holds
+      const out = [], into = [];
+      if (lvl === "bricks" && n.parents) out.push(...n.parents.packages.map((x) => zoomChip("packages", x)), ...n.parents.overview.map((x) => zoomChip("overview", x)));
+      if (lvl === "packages" && n.members.length) {
+        out.push(...uniq(n.members.map((m) => MOD[m].overview)).map((x) => zoomChip("overview", x)));
+        into.push(...n.bricks.map((x) => zoomChip("bricks", x)));
+      }
+      if (lvl === "overview" && n.members.length) into.push(...uniq(n.members.map((m) => MOD[m].package)).map((x) => zoomChip("packages", x)));
+      if (n.members.length) into.push(chip(`data-zoom="modules:${id}"`, `Level 4 · its ${plural(n.members.length, "module")}`));
+      const eyebrow = lvl === "overview" ? `${b.label} · ${b.path}` : `${b.label.charAt(0) + b.label.slice(1).toLowerCase()} · ${DATA.groups[b.group]}`;
+      box.innerHTML = `
+        <div style="border-bottom:1px solid var(--border);padding-bottom:12px;">
+          <div class="sec" style="color:${colorOf(id)};text-transform:none;font-size:12.5px;">${esc(eyebrow)}</div>
+          <h3 style="margin-bottom:4px;">${esc(n.title)}</h3>
+          ${pseudo ? "" : `<p class="mono small" style="color:var(--code);margin:0 0 6px 0;">${esc(folderOf(n))}</p>`}
+          <p>${n.role}</p>
+          <div class="subcard" style="margin-top:10px;padding:10px;font-size:12.5px;"><strong>Rule:</strong> ${n.rule}</div>
+          ${n.note ? `<p class="muted" style="margin-top:8px;">${esc(n.note)}</p>` : ""}
+        </div>
+        ${pseudo
+          ? figures([[fmt.format(n.modules), id === "tests" ? "Test files" : "Files"], [fmt.format(n.lines), "Lines"]])
+          : figures([[fmt.format(n.modules), "Modules"], [fmt.format(n.lines), "Lines"], [n.imports.length, "Imports"], [n.importedBy.length, "Imported by"]])}
+        ${out.length ? `<div><div class="sec">Zoom out</div><div class="row" style="gap:5px;">${out.join("")}</div></div>` : ""}
+        ${into.length ? `<div><div class="sec">Zoom in</div><div class="row" style="gap:5px;">${into.join("")}</div></div>` : ""}
+        ${n.methods.length ? `<div><div class="sec">How it works</div><ul class="plain">${n.methods.map((x) => `<li>${x}</li>`).join("")}</ul></div>` : ""}
+        ${n.facts.length ? `<div><div class="sec">Counted in the code</div><ul class="plain">${n.facts.map((x) => `<li>${x}</li>`).join("")}</ul></div>` : ""}
+        ${n.links.length ? `<div><div class="sec">Extension points it holds</div><div style="display:flex;flex-direction:column;gap:5px;">${n.links.map((l) => `<button class="link" data-go="${l.to}">${esc(l.label)} &rsaquo;</button>`).join("")}</div></div>` : ""}
+        ${id === "storage" ? "" : `<div><div class="sec">Libraries it imports</div><div class="row" style="gap:6px;">${libsOf(n.libs, "The standard library only.")}</div></div>`}
+        <div><div class="sec">${id === "tests" ? "Where the gates are" : id === "storage" ? "What writes it" : "Its largest files"}</div>
+          ${n.files.map((f) => `<div class="file mono"><span>${esc(f.path)}</span><span>${fmt.format(f.lines)} lines</span></div>`).join("")}
+        </div>
+        ${n.members.length > n.files.length ? `<details><summary class="sec" style="display:inline;">Every module (${n.members.length})</summary><div style="margin-top:6px;">${moduleList(n.members)}</div></details>` : ""}
+        ${pseudo ? "" : `<div class="grid-2" style="gap:10px;border-top:1px solid var(--border);padding-top:10px;">
+          <div><div class="sec">It imports</div><div class="row" style="gap:5px;">${jump(n.imports, "&darr;", "Nothing of the project.")}</div></div>
+          <div><div class="sec">Imported by</div><div class="row" style="gap:5px;">${jump(n.importedBy, "&uarr;", page ? "No import: Streamlit runs each page by its path (ui/nav.py)." : n.band === "E" ? "Nothing: an entry point." : "Nothing of the project.")}</div></div>
+        </div>`}
+        ${copyLink}`;
+      bindInspector(box);
+    }
+    function renderModuleInspector(box) {
+      const m = MOD[module], brick = BRICKS[m.brick];
+      const list = (names, none) => names.length ? names.map((x) => `<button class="btn btn-sm mono" data-module="${esc(x)}" style="font-size:11.5px;">${esc(x)}</button>`).join("") : `<span class="muted">${none}</span>`;
+      const band = DATA.views.bricks.bands.find((b) => b.id === m.band);
+      box.innerHTML = `
+        <div style="border-bottom:1px solid var(--border);padding-bottom:12px;">
+          <div class="sec" style="color:var(--g-${band.group});text-transform:none;font-size:12.5px;">${m.band === "E" ? "Entry point" : "Layer " + m.band.slice(1)} · module</div>
+          <h3 class="mono wrap-any" style="margin-bottom:6px;font-size:14px;">${esc(m.path)}</h3>
+          <p>${esc(m.doc || "No docstring.")}</p>
+        </div>
+        ${figures([[fmt.format(m.lines), "Lines"], [m.imports.length, "Imports"], [m.importedBy.length, "Imported by"]])}
+        <div><div class="sec">Zoom out</div><div class="row" style="gap:5px;">${zoomChip("bricks", m.brick)}${zoomChip("packages", m.package)}${zoomChip("overview", m.overview)}</div></div>
+        <div><div class="sec">Libraries it imports</div><div class="row" style="gap:6px;">${libsOf(m.libs, "None outside the project and the standard library.")}</div></div>
+        <div><div class="sec">It imports (${m.imports.length})</div><div class="row" style="gap:5px;">${list(m.imports, "Nothing of the project.")}</div></div>
+        <div><div class="sec">Imported by (${m.importedBy.length})</div><div class="row" style="gap:5px;">${list(m.importedBy, m.path.startsWith("app_pages/views/") ? "No import: Streamlit runs each page by its path (ui/nav.py)." : "No module of the project.")}</div></div>
+        ${copyLink}`;
+      bindInspector(box);
+    }
+
+    // what a screen reader is told after a choice: one line, not the whole panel
+    function announce() {
+      if (level === "modules") { const m = MOD[module]; say(`In focus: ${m.path}. It imports ${plural(m.imports.length, "module")}; ${plural(m.importedBy.length, "module")} import it.`); return; }
+      const n = N[selected()], unit = level === "bricks" ? "brick" : level === "packages" ? "package" : "box";
+      say(`Level ${NUMBER[level]}, ${LEVEL[level].label}. In focus: ${n.title}. It imports ${plural(n.imports.length, unit)}; ${plural(n.importedBy.length, unit)} import it.`);
+    }
+    // a choice draws the view again: the keyboard's place is kept on the control of the same name
+    function keepFocus(render) {
+      const active = document.activeElement, data = (active && active.dataset) || {};
+      const attr = ["node", "level", "feat", "module", "zoom", "jump", "sort", "view"].find((k) => data[k] !== undefined);
+      const host = attr && active.closest("#svg-arch, #cards-arch, #levels, #chips, #modules-arch, #inspector, #arch-tools");
+      const value = attr && data[attr];
+      render();
+      if (!host) return;
+      const again = [...host.querySelectorAll(`[data-${attr}]`)].find((el) => el.dataset[attr] === value);
+      if (again) { again.focus({ preventScroll: true }); return; }
+      // the control is gone (a zoom, an import followed): the box now in focus takes the keyboard
+      const fallback = level === "modules"
+        ? document.querySelector("#modules-arch tr.picked")
+        : document.querySelector(`#svg-arch:not(.hidden) [data-node="${selected()}"], #cards-arch:not(.hidden) [data-node="${selected()}"]`);
+      (fallback || document.querySelector("#levels .level.on")).focus({ preventScroll: true });
+    }
+    function refresh() { keepFocus(() => { renderLevels(); renderChips(); renderArch(); renderInspector(); writeAddress(); announce(); }); }
+    document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => { view = b.dataset.view; renderArch.asked = true; keepFocus(() => { renderLevels(); renderArch(); }); }));
+    $("all-imports").addEventListener("click", () => { everyImport = !everyImport; renderArch(); });
+    $("module-search").addEventListener("input", renderModules);
+
+    // ------------------------------------------------------------------ connectors and catalogues
+    const PLACE_ORDER = ["server", "network", "outside"];
+    const PLACES = DATA.connectors.places;
+    const placeBadge = (p) => `<span class="place place-${p}">${esc(PLACES[p].label)}</span>`;
+    const familyName = (family) => family.charAt(0).toUpperCase() + family.slice(1) + "s";
+    const ordinal = (n) => n + (n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th");
+    const orderOf = (i) => (i.default ? "default" : i.auto ? ordinal(i.auto) : "");
+    // a class path may break after a dot or a colon, never inside a word
+    const breakable = (path) => esc(path).replace(/([.:])/g, "$1<wbr>");
+    function chooses(f) {
+      const step = (words) => `<span class="step">${words}</span>`, then = `<span aria-hidden="true">&rsaquo;</span>`;
+      if (f.settingOnly) return `<div class="chain">${step(`<code>${esc(f.setting)}</code> only (<code>${esc(f.settingDefault)}</code> by default)`)}<span class="muted">neither a session nor a user can change it</span></div>`;
+      return `<div class="chain">${step("the session's choice")}${then}${step("the user's saved choice")}${then}${step(`<code>${esc(f.setting)}</code>`)}${then}${step(`<code>auto</code>: ${f.auto.map((a) => `<code>${esc(a)}</code>`).join(", ")}`)}</div>`;
+    }
+    function renderExtensions() {
+      $("lead").innerHTML = DATA.connectors.lead.map((p) => `<p class="lead" style="margin-bottom:8px;">${p}</p>`).join("");
+      $("mechanisms").innerHTML = `<thead><tr><th></th><th>Connector family (<code>ConnectorRegistry</code>)</th><th>Catalogue (<code>Catalogue</code>)</th></tr></thead><tbody>${
+        DATA.connectors.mechanisms.map(([what, a, b]) => `<tr><td><strong>${esc(what)}</strong></td><td>${a}</td><td>${b}</td></tr>`).join("")}</tbody>`;
+      $("sockets").innerHTML = matchMedia("(max-width: 760px)").matches ? socketList() : socketSvg();
+      $("sockets").querySelectorAll("[data-impl]").forEach((g) => {
+        const go = () => { const [slug, name] = g.dataset.impl.split(":"); openExtension(slug, name); };
+        g.addEventListener("click", go);
+        g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+      });
+      const where = (p) => `<div>${p.unplaced ? `<span class="place place-any">Where its address points</span> *` : placeBadge(p.place)}${[p.when, p.receives ? `receives ${p.receives}` : "", p.asked].filter(Boolean).map((line) => `<div class="muted small" style="margin-top:2px;">${esc(line)}</div>`).join("")}</div>`;
+      $("families").innerHTML = DATA.connectors.families.map((f) => `
+        <article class="card family" id="ext-${f.slug}">
+          <div class="between" style="margin-bottom:6px;">
+            <h3 class="heading" tabindex="-1">${esc(familyName(f.family))}</h3>
+            <span class="pill"><b>${f.implementations.length}</b> connectors</span>
+          </div>
+          <p class="muted"><code>${esc(f.registry)}</code> in <code>${esc(f.file)}</code>; each is a <code>${esc(f.base)}</code> (<code>${esc(f.baseFile)}</code>).</p>
+          <div style="margin-top:10px;"><div class="sec">Chosen by</div>${chooses(f)}</div>
+          ${f.note ? `<p class="muted" style="margin-top:8px;">${esc(f.note)}</p>` : ""}
+          <div style="overflow-x:auto;margin-top:10px;border:1px solid var(--border);border-radius:8px;">
+            <table class="fixed">
+              <colgroup><col style="width:36%"><col><col style="width:14%"><col style="width:13%"></colgroup>
+              <thead><tr><th>Connector</th><th>Where it runs, what it receives, what is asked first</th><th>Install</th><th>When auto</th></tr></thead>
+              <tbody>${f.implementations.map((i) => `
+                <tr id="impl-${f.slug}-${i.name}">
+                  <td><code>${esc(i.name)}</code>${i.aliases.length ? ` <span class="muted small">(also ${i.aliases.map(esc).join(", ")})</span>` : ""}
+                    <div style="margin-top:2px;">${esc(i.display)}</div>
+                    <div class="muted mono small">${breakable(i.target)}</div></td>
+                  <td><div style="display:flex;flex-direction:column;gap:8px;">${i.places.map(where).join("")}</div></td>
+                  <td>${i.extra ? `<code>--extra</code> <code style="white-space:nowrap;">${esc(i.extra)}</code>` : `<span class="muted">included</span>`}</td>
+                  <td>${orderOf(i) ? `<span class="tag">${orderOf(i)}</span>` : `<span class="muted">only when named</span>`}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+          </div>
+          <p style="margin-top:10px;font-size:12.5px;"><button class="link" data-go="architecture/bricks/${BRICKS[f.brick].slug}">In the architecture: ${esc(BRICKS[f.brick].short)} &rsaquo;</button></p>
+        </article>`).join("");
+      $("contract").innerHTML = DATA.connectors.contract.map((c) => `<li>${c}</li>`).join("");
+      $("catalogues").innerHTML = DATA.catalogues.map((c) => `
+        <article class="card catalogue" id="ext-${c.slug}">
+          <div class="between" style="margin-bottom:6px;"><h3 class="heading" tabindex="-1">${esc(c.what)}</h3><span class="pill"><b>${c.kinds.length}</b> kinds</span></div>
+          <p class="muted"><code>${esc(c.holder)}</code> in <code>${esc(c.file)}</code>, ${esc(c.mechanism)}. ${esc(c.note)}</p>
+          <div class="kinds">${c.kinds.map((k) => `<div class="${k.legacy ? "legacy" : ""}"><code>${esc(k.id)}</code> <span class="muted">${esc(k.label)}${k.legacy ? " (legacy)" : ""}</span></div>`).join("")}</div>
+          <p style="margin-top:10px;font-size:12.5px;"><button class="link" data-go="architecture/bricks/${BRICKS[c.brick].slug}">In the architecture: ${esc(BRICKS[c.brick].short)} &rsaquo;</button></p>
+        </article>`).join("");
+      bindGo($("panel-ext"));
+    }
+    // on a phone: the same, as three lists, one per zone
+    function socketList() {
+      const zones = PLACE_ORDER.map((zone) => {
+        const items = DATA.connectors.families.flatMap((f) => f.implementations.flatMap((i) => i.places
+          .filter((p) => p.place === zone)
+          .map((p) => `<li><button class="link" data-impl="${f.slug}:${i.name}">${esc(p.label)}${p.unplaced ? " *" : ""}</button>
+            <span class="muted small">${esc(familyName(f.family).toLowerCase())}${orderOf(i) ? ` · ${orderOf(i)}` : ""}</span></li>`)));
+        return `<div style="margin-bottom:12px;">${placeBadge(zone)}<ul class="plain" style="margin-top:6px;">${items.join("")}</ul>
+          <p class="muted small" style="margin:4px 0 0 0;">${esc(PLACES[zone].says)}</p></div>`;
+      });
+      const unplaced = DATA.connectors.families.flatMap((f) => f.implementations.flatMap((i) => i.places.filter((p) => p.unplaced)));
+      return zones.join("") + unplaced.map((p) => `<p class="muted small">* ${esc(p.label)}: ${esc(p.when)}.</p>`).join("") +
+        `<p class="muted small">${esc(DATA.connectors.privateNetwork)}</p>`;
+    }
+    // the four families, each connector on its own line, in the zone where it runs
+    function socketSvg() {
+      const W = 980, LEFT = 14, FAM_W = 214, BUS = 250, ROW = 30, GAP = 16, HEAD = 34;
+      const zones = { server: [276, 536], network: [552, 730], outside: [746, 966] };
+      let y = HEAD + 6;
+      const parts = [], rows = [];
+      DATA.connectors.families.forEach((f) => {
+        const entries = f.implementations.flatMap((i) => i.places.map((p, n) => ({ i, p, first: n === 0 })))
+          .sort((a, b) => PLACE_ORDER.indexOf(a.p.place) - PLACE_ORDER.indexOf(b.p.place));
+        const h = entries.length * ROW;
+        rows.push({ f, entries, y, h });
+        y += h + GAP;
+      });
+      const H = y - GAP + 12;
+      Object.entries(zones).forEach(([place, [a, z]]) => {
+        const dash = place === "outside" ? 'stroke-dasharray="5 4"' : "";
+        parts.push(`<rect x="${a}" y="${HEAD - 6}" width="${z - a}" height="${H - HEAD}" rx="8" fill="var(--p-${place})" fill-opacity="0.06" stroke="var(--p-${place})" stroke-opacity="0.4" ${dash}/>`);
+        parts.push(`<text x="${(a + z) / 2}" y="${HEAD - 14}" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--p-${place})" font-family="${SANS}" letter-spacing="0.4">${esc(PLACES[place].label.toUpperCase())}</text>`);
+      });
+      rows.forEach(({ f, entries, y: top, h }) => {
+        const mid = top + h / 2;
+        parts.push(`<g class="svg-step svg-link" data-impl="${f.slug}:" tabindex="0" role="link" aria-label="${esc(familyName(f.family))}: ${f.implementations.length} connectors">
+          <title>${esc(familyName(f.family))}: ${esc(f.registry)}</title>
+          <rect x="${LEFT}" y="${mid - 25}" width="${FAM_W}" height="50" rx="8" fill="var(--card)" stroke="var(--border)"/>
+          <rect x="${LEFT}" y="${mid - 25}" width="4.5" height="50" rx="2" fill="var(--g-services)"/>
+          <text x="${LEFT + 14}" y="${mid - 5}" font-size="12.5" font-weight="700" fill="var(--fg)" font-family="${SANS}">${esc(familyName(f.family))}</text>
+          <text x="${LEFT + 14}" y="${mid + 11}" font-size="10" fill="var(--muted)" font-family="${MONO}">${esc(f.setting)}${f.settingOnly ? " · server only" : ""}</text>
+        </g>`);
+        const ys = entries.map((_, k) => top + ROW / 2 + k * ROW);
+        parts.push(`<path d="M${LEFT + FAM_W},${mid} L${BUS},${mid}" fill="none" stroke="var(--muted)" stroke-width="1.4"/>`);
+        parts.push(`<line x1="${BUS}" y1="${Math.min(...ys, mid)}" x2="${BUS}" y2="${Math.max(...ys, mid)}" stroke="var(--muted)" stroke-width="1.4"/>`);
+        parts.push(`<circle cx="${BUS}" cy="${mid}" r="2.6" fill="var(--muted)"/>`);
+        entries.forEach(({ i, p, first }, k) => {
+          // a connector whose address the code does not place straddles the two zones it may fall in
+          const [a, z] = p.unplaced ? [zones.network[0], zones.outside[1]] : zones[p.place], cy = ys[k];
+          const outside = p.place === "outside", ink = p.unplaced ? "var(--muted)" : `var(--p-${p.place})`;
+          const dashes = outside ? 'stroke-dasharray="5 4"' : p.unplaced ? 'stroke-dasharray="2 3"' : "";
+          parts.push(`<path d="M${BUS},${cy} L${a + 8},${cy}" fill="none" stroke="${ink}" stroke-width="1.5" ${dashes} marker-end="url(#s-${p.unplaced ? "any" : p.place})"/>`);
+          parts.push(`<circle cx="${BUS}" cy="${cy}" r="2.6" fill="${ink}"/>`);
+          // the automatic order is said once, where the connector is drawn first
+          const order = first ? orderOf(i) : "", ow = order.length * 6 + 12;
+          const told = [i.display, p.when, p.receives ? `receives ${p.receives}` : "", p.asked].filter(Boolean).join("; ");
+          const zone = p.unplaced ? "where its address points" : PLACES[p.place].label.toLowerCase();
+          parts.push(`<g class="svg-step svg-link" data-impl="${f.slug}:${i.name}" tabindex="0" role="link" aria-label="${esc(p.label)}, ${esc(zone)}. ${esc(told)}">
+            <title>${esc(told)}</title>
+            <rect x="${a + 10}" y="${cy - 11}" width="${z - a - 20}" height="22" rx="6" fill="var(--card)" stroke="${ink}" stroke-opacity="0.8" ${outside ? 'stroke-dasharray="4 3"' : p.unplaced ? 'stroke-dasharray="2 3"' : ""}/>
+            <text x="${a + 18}" y="${cy + 4}" font-size="11.5" font-weight="600" fill="var(--fg)" font-family="${SANS}">${esc(p.label)}${p.unplaced ? " *" : ""}</text>
+            ${order ? `<rect x="${z - 16 - ow}" y="${cy - 7.5}" width="${ow}" height="15" rx="7.5" fill="var(--accent)"/>
+              <text x="${z - 16 - ow / 2}" y="${cy + 3.6}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--fg)" font-family="${SANS}">${esc(order)}</text>` : ""}
+          </g>`);
+        });
+      });
+      const marker = (place) => `<marker id="s-${place}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto"><path d="M1,1.2 L9.5,5 L1,8.8 z" fill="var(--p-${place})"/></marker>`;
+      return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="group" aria-roledescription="diagram" aria-label="The four connector families and where each connector runs: on your server, on your network, or outside your network">
+        <defs>${PLACE_ORDER.map(marker).join("")}<marker id="s-any" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="7" orient="auto"><path d="M1,1.2 L9.5,5 L1,8.8 z" fill="var(--muted)"/></marker></defs>${parts.join("")}</svg>
+        <div class="legend" style="flex-direction:column;gap:6px;">
+          ${PLACE_ORDER.map((p) => `<span>${placeBadge(p)} ${esc(PLACES[p].says)}</span>`).join("")}
+          <span class="chain-line">A dashed line leaves your network. <span class="tag">1st</span> <span class="tag">2nd</span> tried in this order when the setting says auto · <span class="tag">default</span> the setting's default.</span>
+          ${rows.flatMap(({ entries }) => entries).filter(({ p }) => p.unplaced).map(({ p }) => `<span class="chain-line">* ${esc(p.label)}, drawn across both zones: ${esc(p.when)}.</span>`).join("")}
+          <span>${esc(DATA.connectors.privateNetwork)}</span>
+        </div>`;
+    }
+    function openExtension(slug, name) {
+      opened = $(`ext-${slug}`) ? slug : "";
+      switchTab("ext");
+      const target = name ? $(`impl-${slug}-${name}`) : $(`ext-${slug}`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: calm(), block: "center" });
+      target.classList.add("flash");
+      setTimeout(() => target.classList.remove("flash"), 1600);
+      const heading = $(`ext-${slug}`) && $(`ext-${slug}`).querySelector(".heading");
+      if (heading) heading.focus({ preventScroll: true });
+    }
+
+    // ------------------------------------------------------------------ the journeys
+    let scenario = 0, step = 0, timer = null;
+    function stopAuto() { if (timer) { clearInterval(timer); timer = null; $("flow-play").innerHTML = "&#9654; Play"; } }
+    function flowSvg(sc, active) {
+      const xs = { user: 96, ui: 288, svc: 480, eng: 672, out: 864 };
+      const cur = sc.steps[active], H = 86 + sc.steps.length * 33;
+      const heads = DATA.actors.map((a) => {
+        const on = a.id === cur.actor, x = xs[a.id];
+        return `<g>
+          <line x1="${x}" y1="62" x2="${x}" y2="${H - 8}" stroke="${on ? "var(--primary)" : "var(--border)"}" stroke-width="${on ? 2 : 1.4}" stroke-dasharray="4 4"/>
+          <rect x="${x - 82}" y="10" width="164" height="52" rx="9" fill="${on ? "var(--accent)" : "var(--card)"}" stroke="${on ? "var(--primary)" : "var(--border)"}" stroke-width="${on ? 2.2 : 1.3}"/>
+          <text x="${x}" y="32" text-anchor="middle" font-size="12" font-weight="700" fill="var(--fg)" font-family="${SANS}">${esc(a.label)}</text>
+          <text x="${x}" y="49" text-anchor="middle" font-size="10.5" fill="var(--muted)" font-family="${SANS}">${esc(a.sub)}</text>
+        </g>`;
+      }).join("");
+      const rows = sc.steps.map((s, i) => {
+        const y = 96 + i * 33, from = i === 0 ? s.actor : sc.steps[i - 1].actor, to = s.actor;
+        const done = i < active, act = i === active;
+        const stroke = act ? "var(--primary)" : done ? "var(--ok)" : "var(--muted)";
+        const sw = act ? 2.4 : done ? 1.8 : 1.2, op = act ? 1 : done ? 0.9 : 0.55;
+        const mk = act ? "url(#f-act)" : done ? "url(#f-done)" : "url(#f-idle)", anim = act ? "edge-anim" : "";
+        let path, lx;
+        if (from === to) {
+          const x0 = xs[to];
+          path = `<path d="${orthogonal([[x0, y - 8], [x0 + 30, y - 8], [x0 + 30, y + 8], [x0 + 8, y + 8]], 4)}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round" class="${anim}" marker-end="${mk}"/>`;
+          lx = null;
+        } else {
+          const x1 = xs[from], x2 = xs[to], dx = x2 > x1 ? -8 : 8;
+          path = `<line x1="${x1}" y1="${y}" x2="${x2 + dx}" y2="${y}" stroke="${stroke}" stroke-width="${sw}" ${!act && !done ? 'stroke-dasharray="4 4"' : ""} class="${anim}" marker-end="${mk}"/>`;
+          lx = (x1 + x2) / 2;
+        }
+        const label = `${i + 1}. ${s.short}`, lw = Math.max(110, Math.min(236, label.length * 6 + 22));
+        // a call to itself: its label beside the loop (left of the lifeline at the right edge), never over it
+        if (lx === null) lx = xs[to] > 800 ? xs[to] - 10 - lw / 2 : xs[to] + 40 + lw / 2;
+        const sx = Math.max(lw / 2 + 4, Math.min(960 - lw / 2 - 4, lx));
+        return `<g class="svg-step" data-step="${i}" opacity="${op}" tabindex="0" role="button" aria-pressed="${act}" aria-label="Step ${esc(label)}">
+          <rect x="6" y="${y - 21}" width="948" height="30" rx="6" fill="var(--primary)" fill-opacity="${act ? 0.08 : 0}"/>
+          ${path}
+          <rect x="${sx - lw / 2}" y="${y - 20}" width="${lw}" height="16" rx="8" fill="var(--card)" stroke="${act ? "var(--primary)" : "var(--border)"}"/>
+          <text x="${sx}" y="${y - 8.6}" text-anchor="middle" font-size="10.5" font-weight="${act ? 700 : 500}" fill="${act ? "var(--primary-strong)" : "var(--fg)"}" font-family="${SANS}">${esc(label)}</text>
+          ${act ? `<circle cx="${xs[to]}" cy="${y}" r="4.5" fill="var(--primary)"/>` : ""}
+        </g>`;
+      }).join("");
+      const marker = (id, fill) => `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M1,1 L9,5 L1,9 z" fill="${fill}"/></marker>`;
+      return `<svg viewBox="0 0 960 ${H}" width="100%" role="group" aria-roledescription="diagram" aria-label="The steps of the journey, between the browser, the pages, the services, the engine and the workers">
+        <defs>${marker("f-idle", "var(--muted)")}${marker("f-done", "var(--ok)")}${marker("f-act", "var(--primary)")}</defs>${heads}${rows}</svg>`;
+    }
+    function renderFlow() {
+      const sc = DATA.scenarios[scenario], s = sc.steps[step];
+      $("scenarios").innerHTML = DATA.scenarios.map((x, i) => `<button data-sc="${i}" class="btn btn-sm ${i === scenario ? "btn-on" : ""}" aria-pressed="${i === scenario}">${esc(x.label)}</button>`).join("");
+      $("scenarios").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { stopAuto(); scenario = +b.dataset.sc; step = 0; pushNext = true; renderFlow(); }));
+      $("flow-svg").innerHTML = flowSvg(sc, step);
+      $("flow-svg").querySelectorAll("[data-step]").forEach((g) => {
+        const go = () => { stopAuto(); step = +g.dataset.step; renderFlow(); };
+        g.addEventListener("click", go);
+        g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+      });
+      $("flow-card").innerHTML = `
+        <div class="between" style="margin-bottom:8px;"><h3>${esc(s.title)}</h3><span class="pill pill-strong">${esc(s.where)}</span></div>
+        <div class="file mono" style="display:inline-block;margin-bottom:8px;"><span>${esc(s.fn)}</span></div>
+        <p style="font-size:13.5px;">${esc(s.desc)}</p>`;
+      $("flow-dots").innerHTML = sc.steps.map((_, i) => `<button data-dot="${i}" aria-label="Step ${i + 1}" aria-pressed="${i === step}" style="width:24px;height:8px;border-radius:999px;border:0;cursor:pointer;background:${i === step ? "var(--primary)" : "var(--border)"};"></button>`).join("");
+      $("flow-dots").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { stopAuto(); step = +b.dataset.dot; renderFlow(); }));
+      if (tab === "flow") writeAddress();
+    }
+    const stepBy = (d) => { const n = DATA.scenarios[scenario].steps.length; step = (step + d + n) % n; renderFlow(); };
+    $("flow-prev").addEventListener("click", () => { stopAuto(); stepBy(-1); });
+    $("flow-next").addEventListener("click", () => { stopAuto(); stepBy(1); });
+    $("flow-play").addEventListener("click", () => {
+      if (timer) return stopAuto();
+      $("flow-play").innerHTML = "&#10074;&#10074; Pause";
+      timer = setInterval(() => stepBy(1), 2600);
+    });
+
+    // ------------------------------------------------------------------ the rules
+    // Each answer names what holds it: the layering test, or nothing but the code as it is today.
+    const PK = DATA.packages, ENTRY = DATA.entryPoints, TEST = "tests/test_layering.py";
+    function verdict(from, to) {
+      const ok = (rule, why, held = TEST) => ({ kind: "ok", rule, why, held });
+      const no = (rule, why, held = TEST) => ({ kind: "no", rule, why, held });
+      const part = (rule, why, held = TEST) => ({ kind: "part", rule, why, held });
+      const none = (why) => ({ kind: "none", rule: "", why, held: "" });
+      const fromEntry = ENTRY.includes(from), lf = PK[from], headless = from === "manage_users.py";
+      if (to in PK || ENTRY.includes(to)) {
+        if (ENTRY.includes(to)) return from === to ? none("A file imports nothing of itself.") : no("R1", "Nothing imports an entry point: it sits above every layer.");
+        if (headless) {
+          if (PK[to] >= 8) return no("R5", `manage_users.py is headless: it reaches neither Streamlit nor the AI packages, and ${to} imports Streamlit.`);
+          if (to === "manage") return part("R5", "Only the modules of manage that reach neither Streamlit nor the AI packages (manage.iam, manage.replay); never manage.connectors or manage.rag.");
+          return ok("R1", `An entry point sits above every layer: it may import ${to} (layer ${PK[to]}), as long as what it reaches loads neither Streamlit nor the AI packages (R5).`);
+        }
+        if (fromEntry) return ok("R1", `main.py sits above every layer: it may import ${to} (layer ${PK[to]}).`);
+        if (from === "biostats") return from === to ? ok("R2", "Inside biostats, modules import each other, without cycles.") : no("", "biostats imports only itself: the statistics library runs without the rest of the project.");
+        if (to === "utils") {
+          // the older modules of utils count with the package they serve: some sit above who asks
+          const above = Object.entries(DATA.olderUtils).filter(([, served]) => PK[served] >= lf && served !== from).map(([name, served]) => `${name} (with ${served}, layer ${PK[served]})`);
+          const settings = from === "core" ? " Never utils.settings: core receives its values as parameters, apart from the data root, which core.workspace asks of utils.data_paths." : "";
+          if (from === "utils") return part("R1", "Among the platform modules of utils, yes, without cycles. A platform module does not import one of the eight older modules, which count with the package they serve, above it.");
+          if (!above.length && !settings) return ok("R1", `Imports go down: ${from} (layer ${lf}) may import utils (layer 0), its older modules included.`);
+          return part("R1", `The platform modules of utils, yes.${above.length ? ` Not its older modules that count with a package beside or above ${from}: ${above.join(", ")}.` : ""}${settings}`);
+        }
+        if (from === to) return ok("R2", `Inside ${from}, modules import each other, without cycles.`);
+        if (lf > PK[to]) return ok("R1", `Imports go down: ${from} (layer ${lf}) may import ${to} (layer ${PK[to]}).`);
+        if (lf === PK[to]) return no("R1", `${from} and ${to} share layer ${lf}: two packages on the same layer do not import each other.`);
+        return no("R1", `That import would go up: ${from} is on layer ${lf}, ${to} on layer ${PK[to]}.`);
+      }
+      if (to === "streamlit") {
+        if (from === "main.py" || lf >= 8) return ok("R3", "Streamlit belongs to the interface: ui, app_pages and main.py.");
+        if (from === "graph") return part("R3", "Only inside a renderer's render method; in translate, a Streamlit component package. The graph model and its builders stay free of Streamlit.");
+        if (headless) return no("R5", "Headless code reaches neither Streamlit nor the AI packages.");
+        return no("R3", "Nothing below ui reaches Streamlit, through any chain of imports.");
+      }
+      if (to === "ai_sdk") {
+        if (from === "manage") return part("R4", "Only in manage/rag/providers; and never from manage.package_zip, manage.services, manage.replay or manage.workers, which run without the AI packages (R5).");
+        if (headless) return no("R5", "Headless code reaches neither Streamlit nor the AI packages.");
+        return no("R4", "A provider's SDK is imported only in manage/rag/providers.");
+      }
+      if (to === "plotting") {
+        if (["core", "biostats", "ingest"].includes(from)) return part("", "Plotly must not be loaded when core, biostats or ingest is imported: the test holds that. For another plotting library, no test answers.");
+        if (from === "prompts") return none("No test answers. prompts holds texts only, today.");
+        return none("No rule forbids it here.");
+      }
+      if (to === "numeric") return from === "prompts" ? none("No test answers. prompts holds texts only, today.") : none("The numeric libraries are used on every layer; no rule speaks of them.");
+      if (to === "environment") {
+        const readers = DATA.environmentReaders.filter((name) => name.split(".")[0] === from);
+        if (from === "utils") return part("", "Only in utils.settings, which the other modules of the project ask, apart from the three the test lists.");
+        if (readers.length) return part("", `Only in ${readers.join(" and ")}, listed in the test with ${readers.length > 1 ? "their reasons" : "its reason"}; the list can only shrink.`);
+        return no("", "Only utils.settings reads the environment, apart from the three modules the test lists with their reasons.");
+      }
+      if (to === "settings") {
+        if (from === "core") return no("", "No module of core imports utils.settings: core receives its values as parameters (core.workspace asks utils.data_paths for the data root).");
+        if (from === "biostats") return no("", "No module of biostats imports utils.settings: it receives its values as parameters, and reads its seed itself until the seed moves into the analysis specs.");
+        if (from === "prompts") return none("No test answers. prompts holds texts only, today.");
+        return none("No rule forbids it here: a module reads them with get_settings(), after main.py or manage_users.py has loaded them.");
+      }
+      return none("");
+    }
+    function renderLab() {
+      const who = [...ENTRY.map((e) => [e, `${e} (entry point)`]), ...Object.entries(PK).map(([p, l]) => [p, `${p} (layer ${l})`])];
+      const what = [...Object.entries(PK).map(([p, l]) => [p, `${p} (layer ${l})`]), ...DATA.outside.map((o) => [o.id, o.label])];
+      const fill = (el, items, value) => { el.innerHTML = items.map(([v, l]) => `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(l)}</option>`).join(""); };
+      fill($("lab-from"), who, "app_pages");
+      fill($("lab-to"), what, "biostats");
+      const WORD = { ok: "Allowed", no: "Refused", part: "In part", none: "No rule" };
+      const COLOR = { ok: "var(--ok)", no: "var(--bad)", part: "var(--warn)", none: "var(--muted)" };
+      const show = () => {
+        const v = verdict($("lab-from").value, $("lab-to").value);
+        $("lab-verdict").style.borderColor = COLOR[v.kind];
+        $("lab-verdict").innerHTML = `<strong style="color:${COLOR[v.kind]};">${WORD[v.kind]}${v.rule ? " · " + v.rule : ""}</strong> &mdash; ${esc(v.why)}
+          <div class="muted" style="margin-top:6px;">${v.held ? `Held by <code>${esc(v.held)}</code>.` : "No test holds this: it is how the code is today."}</div>`;
+      };
+      $("lab-from").addEventListener("change", show);
+      $("lab-to").addEventListener("change", show);
+      show();
+      $("rules-list").innerHTML =
+        DATA.rules.map((r) => `<div class="subcard" style="padding:8px 10px;font-size:12.5px;"><strong>${esc(r.id)}</strong> ${esc(r.text)}</div>`).join("") +
+        `<div class="subcard" style="padding:8px 10px;font-size:12.5px;"><strong>Also, in the same test</strong><ul class="plain" style="margin-top:4px;">${DATA.moreRules.map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>`;
+    }
+    let recipe = 0;
+    function renderRecipes() {
+      $("recipe-btns").innerHTML = DATA.recipes.map((r, i) => `<button data-rec="${i}" class="btn btn-sm ${i === recipe ? "btn-on" : ""}" aria-pressed="${i === recipe}">${esc(r.label)}</button>`).join("");
+      $("recipe-btns").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { recipe = +b.dataset.rec; renderRecipes(); $("recipe-btns").querySelector(`[data-rec="${recipe}"]`).focus(); }));
+      const r = DATA.recipes[recipe];
+      $("recipe-box").innerHTML = `
+        <h3 style="margin-bottom:8px;">${esc(r.label)}</h3>
+        <ol class="plain">${r.steps.map((s) => `<li>${s}</li>`).join("")}</ol>
+        <p class="muted" style="margin-top:10px;"><strong>Test:</strong> ${r.test}</p>
+        <div class="row" style="gap:6px;margin-top:10px;">
+          <span class="sec" style="margin:0;">It touches:</span>
+          ${r.nodes.map((id) => `<span class="pill">${esc(BRICKS[id].short)}</span>`).join("")}
+        </div>
+        <button id="recipe-show" class="btn" style="margin-top:12px;">Show these bricks in the architecture</button>`;
+      $("recipe-show").addEventListener("click", () => {
+        spot = { label: `Recipe: ${r.label}`, nodes: r.nodes };
+        level = "bricks"; picked.bricks = r.nodes[0]; view = "svg"; useView("bricks");
+        refresh(); switchTab("arch");
+      });
+    }
+
+    // ------------------------------------------------------------------ the matrix
+    let lib = "All";
+    function renderMatrix() {
+      const names = ["All", ...new Set(DATA.matrix.flatMap((r) => r.libs.map((l) => l.name)))];
+      $("lib-filters").innerHTML = names.map((l) => `<button data-lib="${esc(l)}" class="btn btn-sm ${l === lib ? "btn-on" : ""}" aria-pressed="${l === lib}">${esc(l)}</button>`).join("");
+      $("lib-filters").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { lib = b.dataset.lib; renderMatrix(); [...$("lib-filters").querySelectorAll("button")].find((x) => x.dataset.lib === lib).focus(); }));
+      const q = ($("matrix-search").value || "").trim().toLowerCase();
+      const rows = DATA.matrix.filter((r) =>
+        (lib === "All" || r.libs.some((l) => l.name === lib)) &&
+        (!q || `${r.feature} ${r.comps} ${r.methods} ${r.libs.map((l) => l.name).join(" ")}`.toLowerCase().includes(q)));
+      $("matrix-body").innerHTML = rows.length
+        ? rows.map((r) => `<tr class="click" data-go="architecture/bricks/${BRICKS[r.node].slug}" tabindex="0">
+            <td><strong>${esc(r.feature)}</strong><div class="muted">${esc(BRICKS[r.node].short)}</div></td>
+            <td class="mono muted">${esc(r.comps)}</td><td>${esc(r.methods)}</td>
+            <td><div class="row" style="gap:4px;">${r.libs.length ? r.libs.map((l) => `<span class="pill ${l.name === lib ? "pill-strong" : ""}"><b>${esc(l.name)}</b>${l.version ? " " + esc(l.version) : ""}</span>`).join("") : `<span class="muted">The standard library only.</span>`}</div></td>
+          </tr>`).join("")
+        : `<tr><td colspan="4" class="muted" style="text-align:center;">Nothing matches.</td></tr>`;
+      bindGo($("matrix-body"));
+    }
+    $("matrix-search").addEventListener("input", renderMatrix);
+
+    // ------------------------------------------------------------------ tabs and theme
+    function switchTab(id) {
+      stopAuto();
+      if (id !== tab) pushNext = !restoring;
+      tab = id;
+      document.querySelectorAll("#tabs [data-tab]").forEach((b) => {
+        const on = b.dataset.tab === id;
+        b.classList.toggle("btn-on", on);
+        b.setAttribute("aria-selected", on);
+        b.tabIndex = on ? 0 : -1;
+      });
+      TABS.forEach((p) => $("panel-" + p).classList.toggle("hidden", p !== id));
+      window.scrollTo({ top: 0 });
+      writeAddress();
+    }
+    document.querySelectorAll("#tabs [data-tab]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.tab !== "ext") opened = ""; switchTab(b.dataset.tab); }));
+    // the arrow keys move along a row of tabs, as in the application's own
+    function arrowKeys(container, selector) {
+      container.addEventListener("keydown", (ev) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) return;
+        const items = [...container.querySelectorAll(selector)], at = items.indexOf(document.activeElement);
+        if (at < 0) return;
+        ev.preventDefault();
+        const next = ev.key === "Home" ? 0 : ev.key === "End" ? items.length - 1 : (at + (ev.key === "ArrowRight" ? 1 : -1) + items.length) % items.length;
+        items[next].focus();
+        items[next].click();
+      });
+    }
+    arrowKeys($("tabs"), "[data-tab]");
+    arrowKeys($("levels"), "[data-level]");
+    const THEMES = ["system", "light", "dark"];
+    let theme = 0;
+    $("theme").addEventListener("click", () => {
+      theme = (theme + 1) % THEMES.length;
+      if (THEMES[theme] === "system") delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = THEMES[theme];
+      $("theme").textContent = "Theme: " + THEMES[theme];
+    });
+
+    // ------------------------------------------------------------------ an address for every view
+    // #/architecture/<level>/<box or module>, #/connectors/<family or catalogue>, #/journeys/<journey>, #/rules,
+    // #/features: a document links to the view it speaks of, and the address follows what is shown. A box's name
+    // in an address is its slug, which is never renamed.
+    const idOf = (lvl, slug) => Object.keys(nodesOf(lvl)).find((id) => nodesOf(lvl)[id].slug === slug);
+    function address() {
+      if (tab === "arch") return `#/architecture/${level}/${level === "modules" ? module : N[selected()].slug}`;
+      if (tab === "ext") return opened ? `#/connectors/${opened}` : "#/connectors";
+      return tab === "flow" ? `#/journeys/${DATA.scenarios[scenario].id}` : `#/${TAB_WORDS[tab]}`;
+    }
+    // a change of view or of level is a step of the browser's history; a change of focus is not
+    let booting = true;     // the page's first address replaces the one it was opened with
+    let restoring = false;  // a view brought back by Back or Forward: its address is already the history's
+    function writeAddress() {
+      if (restoring) { pushNext = false; return; }
+      const to = address(), push = pushNext && !booting;
+      pushNext = false;
+      if (to === location.hash) return;
+      try { history[push ? "pushState" : "replaceState"](null, "", to); } catch (refused) { /* a page that may not write its address */ }
+    }
+    function openView(to) { pushNext = true; applyAddress("#/" + to); }
+    function applyAddress(hash) {
+      const [word, a, b] = decodeURIComponent(hash.replace(/^#\/?/, "")).split("/");
+      const to = TABS.find((t) => TAB_WORDS[t] === word);
+      if (!to) return;
+      if (to !== tab) pushNext = pushNext || !restoring;
+      tab = to;  // before anything is drawn, so that every address written names this view
+      if (to === "arch") {
+        if (LEVEL[a]) {
+          level = a;
+          spot = null;
+          if (a === "modules") { if (MOD[b]) { module = b; picked.bricks = MOD[b].brick; arriving = true; } if (scope && !scopeNode().members.includes(module)) scope = null; }
+          else if (b && idOf(a, b)) picked[a] = idOf(a, b);
+        }
+        useView(diagramLevel());
+        feature = "all";
+        refresh();
+      }
+      if (to === "flow") {
+        const k = DATA.scenarios.findIndex((s) => s.id === a);
+        if (k >= 0) { scenario = k; step = 0; renderFlow(); }
+      }
+      if (to === "ext" && a) { openExtension(a); return; }
+      if (to === "ext") opened = "";
+      switchTab(to);
+    }
+
+    const asked = location.hash;  // read before the first view writes its own address
+    useView(diagramLevel());
+    renderHeader(); refresh(); renderExtensions(); renderFlow(); renderLab(); renderRecipes(); renderMatrix();
+    switchTab("arch");
+    if (asked) applyAddress(asked);
+    booting = false;
+    // Back, Forward, or an address typed: one listener (popstate comes for each), and nothing written meanwhile
+    window.addEventListener("popstate", () => {
+      restoring = true;
+      try { applyAddress(location.hash || "#/architecture"); } finally { restoring = false; }
+    });
+  </script>
+</body>
+</html>

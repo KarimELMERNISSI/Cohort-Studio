@@ -1,40 +1,103 @@
 name: Deploy GitHub Pages
 
+# The site is docs/ as committed, plus the architecture explorer, which is built here from the code and never
+# committed (dev_scripts/architecture_explorer). It is published only after CI has passed on a push to main, from the
+# commit CI checked, and only while that commit is still the tip of main: the site never shows code whose suite
+# failed, nor an older commit over a newer one. A failed build stops before the upload, and the site keeps its last
+# version. A manual run publishes the tip of main as it stands, without waiting for CI.
+#
+# Two jobs, as GitHub's own Pages workflows: the build runs the repository's code with the right to read it only;
+# the deploy job, which may publish, runs no code of the repository.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'docs/**'
-      - '.github/workflows/deploy-pages.yml'
+  workflow_run:
+    workflows: [ "CI" ]
+    types: [ completed ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
+    # Only a CI run that passed on a push to this repository's main, or a manual run on main: CI also runs on pull
+    # requests, and the branch filter above reads the name of the run's branch, which a fork may call main too.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.tip.outputs.publish }}
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
-      - name: Checkout
+      - name: Checkout the commit CI checked
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false  # the build needs no token: the repository is public
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v6
+      # CI runs finish in any order, and an old run can be run again: only the tip of main is published
+      - name: Is it still the tip of main?
+        id: tip
+        run: |
+          git fetch --depth=1 origin main
+          if [ "$(git rev-parse FETCH_HEAD)" = "$(git rev-parse HEAD)" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer commit is on main: this one is not published."
+          fi
+
+      # Pinned as in CI (ci.yml): the uv release that writes uv.lock, and Python 3.14
+      - name: Install uv and Python 3.14
+        if: steps.tip.outputs.publish == 'true'
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.9"
+          python-version: "3.14"
+          enable-cache: true
+
+      # The core dependencies and the test tools: the explorer reads the import graph with the layering test's reader,
+      # which imports pytest; no optional group is needed (the connectors are listed without their libraries)
+      - name: Install the core dependencies
+        if: steps.tip.outputs.publish == 'true'
+        run: uv sync --frozen --extra dev
+
+      - name: Build the architecture explorer (docs/architecture/index.html)
+        if: steps.tip.outputs.publish == 'true'
+        run: uv run python dev_scripts/architecture_explorer/build_explorer.py
 
       - name: Upload Pages Artifact
+        if: steps.tip.outputs.publish == 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           path: './docs'
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
 
       - name: Deploy to GitHub Pages
         id: deployment
