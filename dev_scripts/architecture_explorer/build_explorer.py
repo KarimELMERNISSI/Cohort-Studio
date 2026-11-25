@@ -1101,11 +1101,21 @@ def _resolve_dotted(name: str) -> bool:
     return False
 
 
+def _outside(path: str) -> bool:
+    """A path that is not the repository's: absolute (``/users/``, ``C:/Users``), as part of a placeholder such as
+    ``<DATA_ROOT>/users/<username>/`` is. It is never looked up on the machine that builds: ``C:/Users`` exists on
+    Windows and ``/users`` does not on Linux, so the build would depend on where it runs."""
+    return path.startswith(("/", "\\")) or bool(re.match(r"[A-Za-z]:[\\/]", path))
+
+
 def _path_exists(piece: str, last_dir: str | None) -> bool:
+    """Whether a path the words name is in the repository (only there)."""
     candidates = [piece]
     if "/" not in piece and last_dir:
         candidates.insert(0, f"{last_dir}/{piece}")
     for candidate in candidates:
+        if _outside(candidate):
+            continue
         if "*" in candidate:
             if any(ROOT.glob(candidate)):
                 return True
@@ -1142,8 +1152,8 @@ def references(text: str, *, whole: bool) -> list[str]:
         for match in re.finditer(r"[A-Za-z_./*-][\w./*-]*", span):
             piece = match.group(0).rstrip(".,:")
             after = span[match.end() : match.end() + 1]
-            if not piece or piece.startswith("-") or after == "=":
-                continue
+            if not piece or piece.startswith("-") or after == "=" or _outside(piece):
+                continue  # an option, a keyword argument, or a path outside the repository (a placeholder's)
             if "/" in piece or piece.endswith(PATHLIKE):
                 if piece.startswith(("http", ".github")) and not (ROOT / piece).exists():
                     continue
@@ -1192,6 +1202,8 @@ def plain_references(text: str) -> list[str]:
     for match in re.finditer(r"[A-Za-z_][\w./-]*", plain):
         piece = match.group(0).rstrip(".,:;-/")
         head = re.split(r"[./]", piece)[0]
+        if _outside(piece):
+            continue
         if "/" in piece or piece.endswith(PATHLIKE):
             if (head in folders or piece.endswith(PATHLIKE)) and not _path_exists(piece, None):
                 missing.append(piece)

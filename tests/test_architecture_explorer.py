@@ -69,6 +69,22 @@ def test_the_explorer_is_built_from_the_code(explorer, data) -> None:
         assert held == modules, level
 
 
+def test_the_name_check_reads_no_path_outside_the_repository(explorer) -> None:
+    """A path the words name is looked up in the repository only. A placeholder such as <DATA_ROOT>/users/<username>/
+    holds an absolute part, which the check once looked up on the machine that builds: C:/Users exists on Windows,
+    /users does not on Linux, and the build passed on one and stopped on the other."""
+    placeholder = "<code>&lt;DATA_ROOT&gt;/users/&lt;username&gt;/</code>"
+    assert explorer.references(placeholder, whole=False) == []
+    assert (
+        explorer.references("under <DATA_ROOT>/users/<username>/ and C:/Users", whole=False) == []
+    )
+    for outside in ("/users", "/", "C:/Users", "C:\\Users", "\\\\server\\share"):
+        assert not explorer._path_exists(outside, None), outside
+    assert explorer._path_exists(
+        "core/registry.py", None
+    )  # what the repository holds is still found
+
+
 def test_the_page_loads_nothing_from_elsewhere_and_makes_no_unsupported_claim(page) -> None:
     """One file: no script, style or picture fetched from another site, which its own policy forbids too, and the
     site's rule on claims, the docstrings the page shows included."""
