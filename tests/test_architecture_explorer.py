@@ -116,6 +116,54 @@ def test_the_page_names_no_address_machine_person_or_secret(explorer, page) -> N
     )  # no key
 
 
+def test_every_address_the_documents_give_opens_a_view(data) -> None:
+    """The README, the handbook's chapters and the site link to views of the explorer (``architecture/#/...``): each
+    names a level and a box, a module, a family or catalogue, or a journey that the page holds. The names in an
+    address are never renamed; this keeps the documents to them."""
+    documents = [
+        ROOT / "README.md",
+        ROOT / "CHANGELOG.md",
+        *sorted((ROOT / "documentation").rglob("*.md")),
+        ROOT / "docs" / "index.html",
+    ]
+    links = {
+        (path.name, address)
+        for path in documents
+        for address in re.findall(
+            r"architecture/#/([^\s)\"'<>]+)", path.read_text(encoding="utf-8")
+        )
+    }
+    views = data["views"]
+    opens = {
+        "connectors": {f["slug"] for f in data["connectors"]["families"]}
+        | {c["slug"] for c in data["catalogues"]},
+        "journeys": {scenario["id"] for scenario in data["scenarios"]},
+    }
+
+    def opened(address: str) -> bool:
+        word, *rest = address.split("/")
+        if word in ("rules", "features"):
+            return not rest
+        if word in opens:
+            return not rest or rest == [""] or (len(rest) == 1 and rest[0] in opens[word])
+        if (
+            word != "architecture"
+            or not rest
+            or rest[0] not in {level["id"] for level in data["levels"]}
+        ):
+            return False
+        level, focus = rest[0], rest[1] if len(rest) > 1 else ""
+        if not focus:
+            return len(rest) == 1
+        if level == "modules":
+            return focus in data["modules"]
+        return any(node.get("slug") == focus for node in views[level]["nodes"].values())
+
+    assert links, "no document links to the explorer"
+    unopened = sorted(link for link in links if not opened(link[1]))
+    assert not unopened, unopened
+
+
 def test_the_site_publishes_the_page_it_builds(explorer) -> None:
     """The workflow builds the page where the site's upload takes it, and git never holds it."""
     workflow = (ROOT / ".github" / "workflows" / "deploy-pages.yml").read_text(encoding="utf-8")

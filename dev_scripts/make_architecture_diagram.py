@@ -4,8 +4,8 @@ architecture-dark.svg), from the description below.
 
 The scheme shows what the layering test holds true (tests/test_layering.py): the packages on their layers, with
 imports going down only; the two entry points (the browser enters through the interface, the command line below
-it); the four connector families that plug into the services, with what stays on the server and what reaches
-outside it; the catalogues declared in the engine; and what a workspace holds.
+it); the four connector families that plug into the services, with what stays on your server or your network and
+what reaches outside your network; the catalogues declared in the engine; and what a workspace holds.
 
 Usage:
     python dev_scripts/make_architecture_diagram.py            write the two files
@@ -53,7 +53,7 @@ class Theme:
     engine_line: str
     card: str
     card_line: str
-    outside: str  # what reaches outside the server
+    outside: str  # what reaches outside your network
     canvas: (
         str  # behind everything: GitHub's own page colour, so that either file reads on any page
     )
@@ -102,8 +102,8 @@ class Card:
 
 @dataclass(frozen=True)
 class Socket:
-    """A connector family: the implementations that run on the server (the default first), and those that reach
-    outside it."""
+    """A connector family: the implementations that run on your server or your network (the default first), and
+    those that reach outside your network."""
 
     title: str
     inside: tuple[str, ...]
@@ -126,8 +126,12 @@ SERVICES = (
     Card("graph", ("knowledge-graph model, builders", "and renderers")),
 )
 CONNECTORS = (
-    Socket("Identity provider", ("local accounts", f"Better Auth sidecar {DOT} none")),
-    Socket("AI provider", ("Ollama",), ("Gemini, OpenAI,", "Mistral, Claude")),
+    Socket("Identity provider", (f"local accounts {DOT} no sign-in", "Better Auth service")),
+    Socket(
+        "AI provider",
+        ("Ollama",),
+        (f"Gemini {DOT} OpenAI {DOT} Mistral", f"Claude {DOT} a remote Ollama"),
+    ),
     Socket("Vector database", (f"LanceDB {DOT} Qdrant",), ("a remote Qdrant server",)),
     Socket("Graph engine", (f"Plotly {DOT} Graphviz",), ("yFiles (opt-in)",)),
 )
@@ -156,7 +160,7 @@ ENGINE = (
     ),
     Card("prompts", ("texts sent to", "a language", "model"), share=0.5),
 )
-CATALOGUES = f"trace steps {DOT} criterion kinds {DOT} analysis kinds {DOT} checks"
+CATALOGUES = f"trace steps {DOT} criteria {DOT} analyses {DOT} checks {DOT} date formats"
 FOUNDATION = Card(
     "utils", (f"settings checked at start-up {DOT} logging {DOT} optional groups {DOT} paths",)
 )
@@ -168,7 +172,10 @@ STORAGE = (
     ("Taxonomies and", "knowledge graphs"),
     ("Preferences",),
 )
-ACCOUNTS = ("DuckDB", "accounts, statistics", "cache")
+ACCOUNTS = (
+    "DuckDB",
+    "the accounts",
+)  # the cache of dataset statistics is Parquet files in each workspace
 
 # every package the scheme draws, for the test that compares them with the layer table
 PACKAGES = frozenset(
@@ -335,7 +342,8 @@ def scheme(theme: Theme) -> str:
     d.text(
         LEFT + PAD + 16,
         legend,
-        "reaches outside your server: only after an explicit consent, or an opt-in install",
+        "reaches outside your network: AI and Qdrant after a confirmation in each browser tab; yFiles once installed "
+        "and chosen",
         size=12,
         fill=t.outside,
     )

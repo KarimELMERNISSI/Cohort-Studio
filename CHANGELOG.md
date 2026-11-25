@@ -6,6 +6,42 @@ All notable changes to CohortStudio (named Cohort Monitoring Package until 2.3) 
 
 ## [Unreleased]
 
+### The architecture explorer
+
+- **An interactive page of the architecture**, built from the code and published with the website
+  (`.../Cohort-Studio/architecture/`), at four levels of detail: the README's five groups, the developer guide's ten
+  layers, the bricks of each package (the parts that do one job), and every module. Choosing a box shows what it does, the rule it keeps, its files, its libraries and its imports; the
+  arrows of the box in focus never pass behind another box. A second view shows the connectors and the catalogues:
+  each connector drawn where it runs (on your server, on your network, outside your network), with what it receives
+  there and what is asked first. Four calls are followed step by step, the import rules can be tried, and a table
+  gives the libraries each feature's files import. Every view has an address that the documents link to.
+- **What can be read from the code is read from it.** `dev_scripts/architecture_explorer/` reads the modules, the imports, the
+  connector registries and the catalogues; `tests/test_architecture_explorer.py` fails when a module belongs to no
+  brick, when a registry or a catalogue of the code is not described, when its words name a file, a module, a class
+  or a setting the code no longer holds, or when a document links to a view it does not have. The page fetches
+  nothing (its own content security policy forbids it) and holds no host, local path, e-mail address or secret,
+  besides its links to the repository.
+- **The website is published after CI.** The Pages workflow now runs once CI has passed on a push to `main`, builds
+  the explorer from the commit CI checked, and publishes it only while that commit is still the tip of `main`; its
+  build job may only read the repository, and the job that publishes runs none of its code. A push that changes only
+  the documentation now waits for the whole CI; run by hand on `main`, the workflow publishes without waiting.
+- **What the documents said and the code does not**, corrected in the README, the developer guide, the website and
+  the README's scheme:
+  - no import cycle exists by design any more; no exception is left to the import rules, and three modules that read
+    the environment themselves are listed in the layering test, each with its reason;
+  - what reaches outside your network: an Ollama outside it, or one running a cloud model, needs the same
+    confirmation as a cloud provider, and a service on your network (an Ollama, a Qdrant server) receives what it is
+    sent with no confirmation, as Better Auth does at whatever address `CMP_BETTER_AUTH_URL` names; yFiles, once
+    installed, is also chosen by the server's setting, and the browser loads its code from yworks.com. The
+    researcher's act is called a confirmation, asked in each browser tab;
+  - a new connector is one module and one registration for a graph engine only: the developer guide's recipe says
+    what a vector database, an AI provider or an identity provider also needs;
+  - the catalogues are five (the date formats too); the statistics cache is Parquet files in each workspace, and
+    DuckDB holds the accounts;
+  - the developer guide: R5 names all the headless code, the settings rule says what the test holds, the recipe of an
+    analysis registers its kind in `biostats/plan.py`;
+  - the website's architecture block has the README's five groups, and leads to the explorer.
+
 ### MissForest no longer prints the imputed table
 
 - **A single imputation with MissForest for one kind of column and another method for the other** (MissForest for

@@ -503,7 +503,7 @@
         <div>
           <p class="eyebrow">Optional AI</p>
           <h2 id="ai-title">An assistant that stays on your side</h2>
-          <p class="lead">Install the <code>ai</code> group to add a document library you can question, a variable map of your study, and suggestions of new variables built from your columns. Ollama on your own server is the default; an Ollama cloud model runs on ollama.com and asks for consent like a cloud provider. Cloud providers are opt-inand ask for your consent before any data is sent.</p>
+          <p class="lead">Install the <code>ai</code> group to add a document library you can question, a variable map of your study, and suggestions of new variables built from your columns. Ollama on your own server is the default; an Ollama cloud model runs on ollama.com and asks for the same confirmation as a cloud provider. Cloud providers are opt-in and ask for your confirmation, in each browser tab, before any data is sent.</p>
           <ul class="checks">
             <li>The statistics never depend on the assistant</li>
             <li>Suggested formulas are checked against your columns, cite their source and are previewed before anything is added</li>
@@ -512,7 +512,7 @@
             <li>Without the group, the application runs and says which features need it</li>
           </ul>
         </div>
-        <div class="ai-diagram" role="img" aria-label="Your data go to CohortStudio on your machine or server. By default the assistant uses Ollama on your network. Cloud providers stay off until you give consent.">
+        <div class="ai-diagram" role="img" aria-label="Your data go to CohortStudio on your machine or server. By default the assistant uses Ollama on your network. Cloud providers stay off until you confirm.">
           <div class="ai-node ai-data"><svg class="i" aria-hidden="true"><use href="#i-database"/></svg><div><b>Your cohort data</b><span>Parquet files in your workspace</span></div></div>
           <div class="ai-link"></div>
           <div class="ai-node ai-app"><img src="assets/brand/icon-256.webp" width="256" height="256" alt=""><div><b>CohortStudio</b><span>on your machine or server</span></div></div>
@@ -523,7 +523,7 @@
             </div>
             <div class="ai-branch ai-cloud">
               <div class="ai-link ai-link-dashed"></div>
-              <div class="ai-node"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg><div><b>Cloud providers</b><span><svg class="i i-sm" aria-hidden="true"><use href="#i-lock"/></svg>off until you consent</span></div></div>
+              <div class="ai-node"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg><div><b>Cloud providers</b><span><svg class="i i-sm" aria-hidden="true"><use href="#i-lock"/></svg>off until you confirm</span></div></div>
             </div>
           </div>
         </div>
@@ -549,43 +549,67 @@
           <p class="lead">A Streamlit interface on a plain Python data and statistics engine. Tests check the direction of the dependencies, and the optional groups can be left out.</p>
         </div>
         <div class="arch-grid">
-          <figure class="arch" aria-labelledby="arch-caption">
-            <div class="arch-stack">
-              <div class="layer layer-ui">
-                <span class="layer-label">Interface</span>
-                <b>Streamlit pages and components</b>
-                <code>app_pages · ui</code>
-              </div>
-              <div class="layer layer-services">
-                <span class="layer-label">Services</span>
-                <b>Traces, replay, Word dossier, accounts</b>
-                <span class="layer-text">Enrichment, quality scoring, knowledge-graph model</span>
-                <code>manage · enrich · explore · monitor · graph</code>
-              </div>
-              <div class="layer layer-engine">
-                <span class="layer-label">Data and statistics engine · no Streamlit, checked by tests</span>
-                <div class="pkgs">
-                  <div class="pkg"><b>Statistics</b><code>biostats</code><span>tests and effect sizes, regression and survival models, multiple imputation and pooling</span></div>
-                  <div class="pkg"><b>File import</b><code>ingest</code><span>CSV, Excel and Parquet files, with a parse report</span></div>
-                  <div class="pkg"><b>Data session</b><code>core</code><span>analysis population, fingerprints and lineage, participant flow</span></div>
+          <div class="arch-col">
+            <figure class="arch" aria-labelledby="arch-caption">
+              <div class="arch-stack">
+                <div class="layer layer-ui">
+                  <span class="layer-label">Interface</span>
+                  <span class="layer-note">the only layer that needs Streamlit</span>
+                  <b>The pages and their kit</b>
+                  <code>app_pages · ui</code>
+                </div>
+                <div class="layer layer-services">
+                  <span class="layer-label">Services</span>
+                  <span class="layer-note">run without Streamlit, like every layer below</span>
+                  <b>The services and their connectors</b>
+                  <code>manage · graph</code>
+                  <span class="layer-text">Traces and replay, the study package, the Word dossier, accounts, the AI engine, knowledge graphs</span>
+                  <span class="layer-text">Connectors: identity provider · AI provider · vector database · graph engine</span>
+                </div>
+                <div class="layer layer-data">
+                  <span class="layer-label">Data work</span>
+                  <b>Reading, enriching and auditing the data</b>
+                  <code>ingest · enrich · explore · monitor</code>
+                  <span class="layer-text">Files read with a parse report, derived variables and imputation, the quality audit, comparisons</span>
+                </div>
+                <div class="layer layer-engine">
+                  <span class="layer-label">Data and statistics engine</span>
+                  <span class="layer-note">plain Python, used and tested on its own</span>
+                  <div class="pkgs">
+                    <div class="pkg"><b>Data session</b><code>core</code><span>analysis population and criteria, lineage and fingerprints, trace steps, study definition</span></div>
+                    <div class="pkg"><b>Statistics</b><code>biostats</code><span>tests and effect sizes, models, multiple imputation and pooling; imports no other package</span></div>
+                    <div class="pkg"><b>Prompt texts</b><code>prompts</code><span>the texts sent to a language model</span></div>
+                  </div>
+                  <span class="layer-text">Catalogues: trace steps · criteria · analyses · checks · date formats</span>
+                </div>
+                <div class="layer layer-storage">
+                  <span class="layer-label">Platform</span>
+                  <span class="layer-text"><code>utils</code>: settings checked at start-up · logging · optional groups · paths</span>
+                  <span class="layer-label layer-label-next">Storage, beside the layers</span>
+                  <span class="layer-text">One workspace per user: Parquet versions with lineage files · hash-chained traces · the study definition · documents and their index</span>
                 </div>
               </div>
-              <div class="layer layer-storage">
-                <span class="layer-label">Storage</span>
-                <span class="layer-text">Parquet versions with lineage files · JSON traces · per-user workspaces</span>
+              <div class="arch-optional">
+                <span class="layer-label">Optional groups</span>
+                <div class="opt"><code>ai</code><span>services: LLM connectors, documents, vector databases</span></div>
+                <div class="opt"><code>ml</code><span>data work and engine: LightGBM, UMAP, FAMD</span></div>
+                <div class="opt"><code>survival</code><span>engine: lifelines, PH test, concordance</span></div>
               </div>
+              <figcaption class="sr-only" id="arch-caption">The architecture in five groups, imports going down only: the interface (app_pages and ui), the only layer that needs Streamlit; the services (manage and graph), with four connector families; the data work (ingest, enrich, explore and monitor); the data and statistics engine (core, biostats and prompts), with its catalogues; and the platform (utils), beside one workspace per user. The optional groups add to three of them: ai to the services, ml to the data work and the engine, survival to the engine.</figcaption>
+            </figure>
+            <div class="arch-more">
+              <nav class="arch-levels" aria-label="Level of detail">
+                <b>Overview</b>, here <span aria-hidden="true">›</span>
+                <a href="https://github.com/KarimELMERNISSI/Cohort-Studio/blob/main/documentation/10_Developer_Guide.md#the-layers">Layers &amp; packages</a> <span aria-hidden="true">›</span>
+                <a href="architecture/#/architecture/bricks">Bricks</a> <span aria-hidden="true">›</span>
+                <a href="architecture/#/architecture/modules">Modules</a>
+              </nav>
+              <a class="btn btn-primary" href="architecture/">Open the architecture explorer</a>
             </div>
-            <div class="arch-optional">
-              <span class="layer-label">Optional groups</span>
-              <div class="opt"><code>ai</code><span>LLM connectors, documents, vector databases</span></div>
-              <div class="opt"><code>ml</code><span>LightGBM, UMAP, FAMD</span></div>
-              <div class="opt"><code>survival</code><span>lifelines: PH test, concordance</span></div>
-            </div>
-            <figcaption class="sr-only" id="arch-caption">The architecture in four layers: the Streamlit interface; the services; the data and statistics engine (statistics in biostats, file import in ingest, the data session in core), which imports no Streamlit; and the storage. The optional groups ai, ml and survival plug into the services.</figcaption>
-          </figure>
+          </div>
           <ul class="arch-points">
             <li><b>One write path.</b> Every change to the data goes through one session object that records a trace step; nothing changes the data while a page is drawn.</li>
-            <li><b>A clean engine.</b> Its statistics (<code>biostats</code>), file import (<code>ingest</code>) and data session (<code>core</code>) packages import no Streamlit, and <code>core</code> imports nothing above it. A layering test enforces both.</li>
+            <li><b>A clean engine.</b> Below the interface, only a graph engine's drawing methods touch Streamlit, and <code>biostats</code> imports no other package of the project. A layering test enforces both.</li>
             <li><b>Formulas within limits.</b> Every formula and criterion is computed in a separate worker process, stopped past 30 seconds or 2,048 MB, so one expression cannot hold the server for every user.</li>
             <li><b>Light core install.</b> The application runs without the <code>ai</code>, <code>ml</code> and <code>survival</code> groups; CI tests that minimal install in its own job.</li>
             <li><b>Accounts and workspaces.</b> Role-based accounts with bcrypt and login lockout, one workspace per user, and a first administrator created from a one-time setup token.</li>

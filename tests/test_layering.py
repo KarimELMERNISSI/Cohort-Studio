@@ -7,7 +7,7 @@ The layers of the code base and the rules between them (architecture review of 2
 | L8 | ui | shell, AppState, components |
 | L7 | manage | application services, stores and connectors |
 | L6 | graph | graph model, builders, renderers |
-| L5 | explore, monitor | quality audit and correlations; outliers and comparisons |
+| L5 | explore, monitor | quality audit and its index, correlations; the comparison of two versions |
 | L4 | enrich | formulas, transformations, imputation, merging |
 | L3 | ingest | reading files |
 | L2 | core | the pure domain kernel and the extension kit (core/registry.py) |
@@ -23,8 +23,9 @@ storage) are not ordered yet.
 - **R3** Nothing below ui reaches Streamlit, through any chain of imports. Graph renderers import it inside their
   ``render`` method only, and a Streamlit component package (yFiles) inside ``translate`` too.
 - **R4** The AI providers' SDKs are imported only in ``manage/rag/providers``.
-- **R5** The headless entry points (``manage_users``, ``manage.replay`` and its engine) reach neither Streamlit nor the
-  packages of the ``ai`` extra.
+- **R5** The headless code (``manage_users``, ``manage.package_zip``, ``manage.services``, and every module of
+  ``manage.replay`` and ``manage.workers``: ``HEADLESS``) reaches neither Streamlit nor the packages of the ``ai``
+  extra.
 
 The graph is read from the source:
 - imports inside functions count (they run when the function does); those under ``if TYPE_CHECKING:`` do not;

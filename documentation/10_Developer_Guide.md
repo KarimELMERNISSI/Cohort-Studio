@@ -23,7 +23,7 @@ no longer names every package of the table below.
 | L8 | `ui` | the shell, `AppState`, the components, `ui/services.py` |
 | L7 | `manage` | application services, stores and connectors, in groups: iam, ai, repro, storage |
 | L6 | `graph` | the graph model, its builders and its renderers |
-| L5 | `explore`, `monitor` | the quality audit and correlations; outliers and comparisons |
+| L5 | `explore`, `monitor` | the quality audit and its index, and correlations; the comparison of two versions |
 | L4 | `enrich` | formulas, transformations, imputation, merging |
 | L3 | `ingest` | reading files, with one loader |
 | L2 | `core` | the domain kernel, and the extension kit (`core/registry.py`) |
@@ -34,6 +34,11 @@ no longer names every package of the table below.
 `utils.optional`, `utils.data_paths`, ...) are L0; the older ones count with the package they serve (`UTILS_GROUPS` in
 the test) until a milestone moves them. The groups of `manage` are not ordered among themselves yet.
 
+The [architecture explorer](https://karimelmernissi.github.io/Cohort-Studio/architecture/#/architecture/packages)
+draws this table: each package on its layer, what it imports and what imports it; one level finer, the bricks of each
+package, and finer still, every module. It is built from the code by `dev_scripts/architecture_explorer/` and
+published with the website once CI has passed on `main` (or when the workflow is run by hand on `main`).
+
 **Rules:**
 - **R1:** imports go strictly down, and two groups on the same layer do not import each other.
 - **R2:** no import cycles. The multiple-imputation engine starts its worker process by the module's name
@@ -41,22 +46,25 @@ the test) until a milestone moves them. The groups of `manage` are not ordered a
 - **R3:** nothing below `ui` reaches Streamlit, through any chain of imports. A graph renderer imports it inside its
   `render` method only (and yFiles' component package inside `translate`).
 - **R4:** the AI providers' SDKs are imported only in `manage/rag/providers`.
-- **R5:** the headless entry points (`manage_users`, `manage.replay` and `manage.replay.engine`, `manage.services`)
-  reach neither Streamlit nor the packages of the `ai` extra. Each name that runs outside the app is listed, since
+- **R5:** the headless code (`manage_users`, `manage.package_zip`, `manage.services`, and every module of
+  `manage.replay` and `manage.workers`) reaches neither Streamlit nor the packages of the `ai` extra. Each name that runs outside the app is listed, since
   `python -m manage.replay` runs a `__main__` no import of the package reaches; a listed name must exist.
 
 **How `tests/test_layering.py` holds them.** It reads the import graph from the source: an import inside a function
 counts, one under `if TYPE_CHECKING:` does not. R1 and R2 use the imports as written; R3 and R5 follow what runs,
-parent packages and modules named in strings (the lazy registries) included. Today's exceptions are listed at the top
-of the test (`KNOWN_UPWARD`, `CYCLES_BY_DESIGN`, `KNOWN_STREAMLIT`, `KNOWN_SDK`, `KNOWN_ENVIRONMENT`) and only shrink:
+parent packages and modules named in strings (the lazy registries) included. Today's exceptions are listed in the
+test (`KNOWN_UPWARD`, `CYCLES_BY_DESIGN`, `KNOWN_STREAMLIT` and `KNOWN_SDK` at its top, `KNOWN_ENVIRONMENT` beside
+its rule; the first four are empty) and only shrink:
 a new violation fails, and so does a listed one that no longer occurs, until it is deleted. The same file checks that
-every package of the wheel has a layer, that `core`, `biostats` and `ingest` load no UI, plotting or AI library, that
-`biostats` imports only itself, that only `utils.settings` reads the environment, and that `core` and `biostats`
-never read the settings.
+every package of the wheel has a layer, that importing `core`, `biostats` or `ingest` loads neither Streamlit, nor
+Plotly, nor an AI package, that `biostats` imports only itself, that only `utils.settings` reads the environment
+(apart from the modules `KNOWN_ENVIRONMENT` lists, each with its reason), and that no module of `core` or `biostats`
+imports `utils.settings`.
 
 ### Two extension mechanisms
 
-Every extension point takes one of two shapes, both in `core/registry.py` (standard library only):
+Every extension point takes one of two shapes, both in `core/registry.py` (standard library only), but for the
+analysis kinds, a plain dict (below):
 
 | | Connector family (`ConnectorRegistry`) | Catalogue (`Catalogue`) |
 | --- | --- | --- |
@@ -64,7 +72,7 @@ Every extension point takes one of two shapes, both in `core/registry.py` (stand
 | Who chooses | the session, then the preference, the setting, `auto` | the data: a trace or a rule names its kind |
 | Registered as | `"module:Class"`, imported on first use | one frozen dataclass per kind |
 | An unknown name | in a setting, stops start-up with the valid names | `UnknownIdError`, listing the valid ids |
-| Used by | identity providers, AI providers, vector databases, graph renderers | trace steps, criterion kinds |
+| Used by | identity providers, AI providers, vector databases, graph engines | trace steps, criterion kinds, package checks, date formats |
 | Tested by | `tests/connector_contract.py`, called by each family's tests | one consistency test per catalogue |
 
 **A connector family.** Each connector is a class with `name`, `display_name` and a class method `availability()`
@@ -82,17 +90,23 @@ never the value, which may be a pasted key. An old spelling stays accepted as an
 | Identity providers | `manage.iam.providers.IAM_PROVIDERS` | `CMP_IAM_PROVIDER` | none: the setting only (`local`) |
 | AI providers | `manage.rag.providers.AI_PROVIDERS` | `CMP_AI_PROVIDER` | `ollama` |
 | Vector databases | `manage.vectorstores.VECTOR_STORES` | `CMP_VECTOR_STORE` | a recommendation, `lancedb`, `qdrant` |
-| Graph renderers | `graph.renderers.GRAPH_RENDERERS` | `CMP_GRAPH_RENDERER` | `plotly`, `graphviz`; never `yfiles` |
+| Graph engines (renderers) | `graph.renderers.GRAPH_RENDERERS` | `CMP_GRAPH_RENDERER` | `plotly`, `graphviz`; never `yfiles` |
 
-Settings shows each choice and its reasons with one control, `ui.components.connector_selector`.
+Settings shows each choice and its reasons with one control, `ui.components.connector_selector`. The
+[architecture explorer](https://karimelmernissi.github.io/Cohort-Studio/architecture/#/connectors) shows each family
+as its registry holds it: where each connector runs (on your server, on your network, outside your network), what it
+receives there and what is asked first, the group it needs, its place in the automatic order.
 
 **A catalogue.** `register(kind, legacy=False, aliases=())` adds a kind, and the catalogue lists its kinds in the
 order they were registered. `get(id)` finds a kind by its id or an alias, and raises `UnknownIdError` (a
 `LookupError`) for any other; `ids(legacy=False)` lists what is still offered. An id stored in a trace, a
 configuration or a result is never renamed: a kind that nothing writes any more stays registered with `legacy=True`,
 so that what was stored still reads. A test that needs a kind of its own registers it in `copy()`, patched over the
-module's catalogue for that test only. The catalogues are `core.steps.STEPS`, the kinds of trace step, and
-`core.criteria.CRITERION_KINDS`, the criterion kinds (M6's date order and M9's concepts will be criterion kinds).
+module's catalogue for that test only. The catalogues are `core.steps.STEPS` (the kinds of trace step),
+`core.criteria.CRITERION_KINDS` (the criterion kinds; M6's date order and M9's concepts will be criterion kinds),
+`core.verification.CHECKS` (the checks of a received package) and `ingest.dates.DATE_FORMATS` (the date formats).
+The analysis kinds, `biostats.plan.KINDS`, are a plain dict, since `biostats` imports nothing of the project: an
+unknown kind raises a `ValueError`, and no kind is legacy.
 
 ### The composition root
 
@@ -111,7 +125,7 @@ module's catalogue for that test only. The catalogues are `core.steps.STEPS`, th
 
 **Why pages build no service.** A service takes the user's scope as a parameter and never asks the session for the
 user: its files land in that user's workspace, and the command line of M8 builds the same services with a resolver
-limited to the files it names. One AI engine per session means that a withdrawn consent stops the only engine that
+limited to the files it names. One AI engine per session means that a withdrawn confirmation stops the only engine that
 could send data. `tests/test_quality_gates.py` holds this (`test_pages_never_build_services`,
 `test_the_session_builds_its_services_with_the_users_workspace`, `test_only_the_services_write_their_keys`), and
 `tests/test_services.py` builds the services without Streamlit or the AI packages.
@@ -122,14 +136,17 @@ could send data. `tests/test_quality_gates.py` holds this (`test_pages_never_bui
   `graph`, `statistics`, `development`), with keys and passwords as `SecretStr`. `main.py` and `manage_users.py` call
   `load_settings()` first: it loads `.env` (a variable already set wins) and checks every value, and a wrong one
   stops start-up with the variable's name, never its value. Elsewhere, read them with `get_settings()`.
-- **One source.** `utils.settings` is the only module that reads the environment (`tests/test_layering.py`), and
-  `.env.example` lists exactly its variables (`tests/test_settings.py`). `.streamlit/secrets.toml` is not read; its
-  presence is logged. `core` and `biostats` never read the settings: they receive values as parameters.
+- **One source.** `utils.settings` is the only module that reads the environment, apart from the three modules
+  `KNOWN_ENVIRONMENT` lists with their reasons (`tests/test_layering.py`), and `.env.example` lists exactly its
+  variables (`tests/test_settings.py`). `.streamlit/secrets.toml` is not read; its presence is logged. No module of
+  `core` or `biostats` imports `utils.settings`: they receive values as parameters, apart from the seed `biostats`
+  reads itself until it moves into the analysis specs, and the data root, which `core.workspace` asks of
+  `utils.data_paths`.
 - **Preferences** are the non-secret choices made in Settings: the day-first default, the AI provider and its models,
   the vector database, the Ollama address and the Qdrant server, the graph renderer. `manage/preferences.py` keeps
   them per user in `<workspace>/preferences.json` (`load_preferences`, `update_preferences`; written whole and
   atomically), and `ui/preferences.py` seeds the session after sign-in (`seed_session`). A preference never holds a
-  key, a password or a consent, and an address only as chosen among those the server offers
+  key, a password or a confirmation, and an address only as chosen among those the server offers
   (`tests/test_preferences.py`; `tests/ui_layer/test_settings_persist.py` and
   `tests/ui_layer/test_ollama_address_choice.py` for the addresses). Details: *Settings, preferences and API keys*,
   below.
@@ -226,6 +243,7 @@ below in place raises `UntracedMutationError`.
 | Types | `dev_scripts/check_type_baseline.py` (pyright, CI) | the errors per file of `dev_scripts/pyright_baseline.json` fall |
 | Coverage | `dev_scripts/check_coverage_floors.py` (CI) | a floor per package, raised as coverage grows |
 | Source rules | `tests/test_quality_gates.py` | ceilings that only fall |
+| The architecture explorer | `tests/test_architecture_explorer.py` | |
 
 - **Formatting and types.** A file leaves the exclude list in a commit that only reformats it, listed in
   `.git-blame-ignore-revs`. A type error in a file outside the baseline fails; a count that falls is written down
@@ -235,8 +253,20 @@ below in place raises `UntracedMutationError`.
 - **Source rules.** No `eval` outside the expression evaluator; only `AppState` writes the dataset and the trace
   steps; pages build no service; rules are written through their kinds. Raw HTML, `print()` calls, undeclared
   session keys and unformatted files each have a ceiling that only falls.
+- **The architecture explorer.** `dev_scripts/architecture_explorer/` builds it from the code: the modules and their
+  imports, the connector registries and the catalogues, with the words of `explorer_content.py` and
+  `explorer_levels.py`. Its test fails when a module belongs to no brick or to two, when a brick is not on the layer
+  of its modules, when a registry or a catalogue of the code is not described, or when its words name a file, a
+  module, a class or a setting the code no longer holds: a rename is followed there in the same commit. The website
+  publishes it (`.github/workflows/deploy-pages.yml`) only after CI has passed on a push to `main`, from the commit CI
+  checked and while it is still the tip of `main`, or when the workflow is run by hand on `main` (without waiting for
+  CI); a push that changes only the documentation also waits for the whole CI, and a red CI holds the website back.
 
 ### Recipes
+
+The same recipes are in the architecture explorer's
+[Rules & recipes](https://karimelmernissi.github.io/Cohort-Studio/architecture/#/rules) view, where each highlights
+the bricks it touches.
 
 #### Add a connector
 
@@ -248,8 +278,20 @@ below in place raises `UntracedMutationError`.
 3. A package it needs goes into an optional group of `pyproject.toml` and into `utils.optional.EXTRAS`
    (`tests/test_ai_provider_sdks.py` keeps them equal). An AI provider imports its SDK in `manage/rag/providers`
    only (R4); a renderer imports Streamlit in `render` only (R3).
-4. Nothing else changes: the setting accepts the name, and Settings offers it where it can run (not an identity
-   provider, which the setting alone chooses).
+4. What else its family needs. A graph engine: nothing. A vector database: its member in `VectorEngine`
+   (`manage/vectorstores/base.py`) and, when it has a server, its list of addresses (`manage/server_addresses.py`)
+   and its recipient for the confirmation (`manage.ai_payload.store_recipient`). An AI provider: its declaration
+   (`manage/rag/providers/declarations.py`: cloud or not, its SDK, the setting of its key, which also goes into
+   `utils/settings.py` and `.env.example`, and its chat and embedding connectors as `"module:Class"`, written in
+   `manage/rag/providers/<name>.py`), and its member in `ProviderType` (`manage/rag/schemas.py`), through which the
+   factory builds every engine. A provider declared not cloud is sent data with no confirmation whenever its
+   address reads as this machine or the private network (`manage/ai_payload.py`). An identity provider: its name in
+   `IAMProviderType`
+   (`manage/iam/schemas.py`) and its settings. Then the setting accepts the name, and Settings offers it where it can
+   run (not an identity provider, which the setting alone chooses).
+5. Say where it runs in the architecture explorer's words (`FAMILIES` in
+   `dev_scripts/architecture_explorer/explorer_levels.py`: its zone, what it receives there, what is asked first):
+   the explorer's build, and its test, stop without that.
 
 Test: add the name to the family's `test_the_stored_names_never_change`; the family's tests run the checks of
 `tests/connector_contract.py` on it (availability, light listing, a missing package, precedence, unknown names).
@@ -276,13 +318,16 @@ after the five kinds of M5, a writer, and its examples in `tests/core_layer/test
 
 Follow `app_pages/analysis_survival.py`:
 1. The computation goes into `biostats`: plain values in, a result dataclass out, no import of the application.
-2. In the page module, every control has a key. On the button: compute, then `remember(key, result, config=...,
-   n_analysed=..., columns=...)` (`ui/results.py`) and `mark_step("analyse", ...)`; an exception goes to
-   `error_card(...)`.
+2. In the page module, every control has a key. On the button: compute (through `specify(...)` and
+   `run(spec, df, mi=...)` of `biostats/plan.py` when its kind has a runner, as the model page does), then
+   `remember(key, result, config=..., n_analysed=..., columns=...)` (`ui/results.py`; with `spec=` when there is one)
+   and `mark_step("analyse", ...)`; an exception goes to `error_card(...)`.
 3. On every run, `recall(key, config=config)` returns the result only while its data, population and settings still
    hold. Show it, then call `provenance(key)`, which says what it was computed on and offers to add it to the dossier.
-4. Give the key a title in `RESULT_TITLES` (`ui/results.py`; without one, the dossier shows the key in words). A new
-   type of result gets its tables in `manage/report_tables.result_blocks`, which gives an unknown type a short text.
+4. Register its kind in `biostats/plan.py` (`KINDS`: its title, and when it has them its runner and its record):
+   `RESULT_TITLES` (`ui/results.py`) reads the titles from there; without one, the dossier shows the key in words. A
+   new type of result gets its tables in `manage/report_tables.result_blocks`, which gives an unknown type a short
+   text.
 5. Compare its numbers with R: the reference computation goes into a script of `tests/reference/r/`, the manual
    workflow `.github/workflows/r-fixtures.yml` runs it, its values are copied into `tests/reference/fixtures/`, and a
    parity test in `tests/biostats_layer/` (as `test_rates_r_parity.py`) compares, skipped until they are there.
@@ -358,7 +403,7 @@ RAGManager(TaxonomyMixin, DocumentsMixin, ComputedVarsMixin)
   (`similarity_search`, `max_marginal_relevance_search`, `as_retriever`, `build`), so it is identical whatever the
   engine; filtering by document is a list of sources that each engine translates (SQL `IN` for LanceDB, a `MatchAny`
   payload filter for Qdrant). See "Vector databases" below.
-- **AI providers are pluggable connectors** in `manage/rag/` (local Ollama by default; Google Gemini, OpenAI, Mistral and Anthropic Claude as cloud providers that require an explicit data-sharing consent).
+- **AI providers are pluggable connectors** in `manage/rag/` (local Ollama by default; Google Gemini, OpenAI, Mistral and Anthropic Claude as cloud providers that require an explicit data-sharing confirmation, in each browser tab).
 - **Anthropic Claude** (`manage/rag/providers/claude.py`, official `anthropic` SDK) answers but has no embedding
   API. `ConnectorFactory.create_connectors(provider="anthropic", embedding_provider=...)` pairs it with another
   provider's embeddings (local Ollama by default, so the library is indexed on the server and only the retrieved
@@ -1021,7 +1066,7 @@ reads `get_settings().ai.key(variable)` for the variable the provider declares (
 and the Qdrant server, the graph engine, the day-first default) are kept for the next session in
 `<workspace>/preferences.json` (`manage/preferences.py`, written whole and atomically). `ui/preferences.py` seeds the
 session after sign-in, once per user, only for the keys the session has not set, and the controls save them from their
-`on_change` callbacks. A preference never holds a key, a password or a consent; it holds the Ollama address and the
+`on_change` callbacks. A preference never holds a key, a password or a confirmation; it holds the Ollama address and the
 Qdrant server only as chosen among those the server offers (`manage.server_addresses`, never typed: `_PREFERENCES` in
 `app_pages/rag_sidebar.py`); a choice the server no longer offers is not used, and the page names it. The file is read
 only if it is small (64 KiB) and its names short; the lock serialises the writes of one server process (two servers on

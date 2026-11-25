@@ -85,11 +85,22 @@ def test_the_page_loads_nothing_from_other_sites(page: _Page) -> None:
     assert not re.search(r"https?://|fetch\(|XMLHttpRequest|sendBeacon", script)
 
 
+# the page the Pages workflow builds and publishes with the site, never committed: the architecture explorer
+# (dev_scripts/architecture_explorer; tests/test_architecture_explorer.py checks it is written there)
+BUILT = {"architecture/index.html"}
+
+
 def test_every_local_file_exists(page: _Page) -> None:
     local = [url for _, url in page.loads] + [
         url for url in page.links if not re.match(r"^(https?:|mailto:|#)", url)
     ]
-    missing = [url for url in local if not (DOCS / url.split("#")[0]).is_file()]
+
+    def exists(url: str) -> bool:
+        path = url.split("#")[0]
+        path = path + "index.html" if path.endswith("/") else path
+        return (DOCS / path).is_file() or path in BUILT
+
+    missing = [url for url in local if not exists(url)]
     assert not missing, missing
     anchors = [url[1:] for url in page.links if url.startswith("#") and len(url) > 1]
     html = PAGE.read_text(encoding="utf-8")

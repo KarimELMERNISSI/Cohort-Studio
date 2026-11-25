@@ -482,6 +482,20 @@ cite::after { content: ")"; }
 .layer-engine { border: 1.5px solid var(--teal); background: var(--teal-50); }
 .layer-engine .layer-label { color: var(--teal); }
 .layer-storage { border: 1px solid var(--line); background: var(--surface); }
+.layer-data { border: 1.5px solid var(--teal-100); background: #fff; }
+.layer-data .layer-label { color: var(--teal-700); }
+.layer-services .layer-text, .layer-engine .layer-text { margin-top: 6px; }
+/* a group's caption under its name, in sentence case, as the README's scheme writes it */
+.layer-note { margin-top: -2px; font-size: 13px; line-height: 1.4; opacity: 0.85; }
+.layer-label-next { margin-top: 10px; }
+/* the optional groups each name the groups they add to: no single connector to the stack */
+.arch-optional::before { display: none; }
+/* under the scheme, in its column at every width: the four levels of detail, up to the architecture explorer */
+.arch-col { display: grid; gap: 24px; align-content: start; }
+.arch-more { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; }
+.arch-levels { color: var(--muted); font-size: 15px; line-height: 1.6; }
+.arch-levels b { color: var(--ink); }
+.arch-levels a { font-weight: 600; }
 .pkgs { margin-top: 8px; display: grid; gap: 8px; }
 .pkg, .opt { display: grid; gap: 2px; }
 .pkg { padding: 9px 12px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; border: 1px solid #BFDDE1; border-radius: 10px; background: #fff; }

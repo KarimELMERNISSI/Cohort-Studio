@@ -53,10 +53,10 @@ The Start page draws this workflow: three core steps from a raw file to results,
 
 ### Core Architecture Pillars
 
-1. **Plain files and per-user workspaces**: each saved version is a complete Parquet file (`name_v1`, `name_v2`, …) written with pyarrow, with a lineage file next to it; DuckDB holds the user accounts and the statistics cache. Every account works in its own workspace.
+1. **Plain files and per-user workspaces**: each saved version is a complete Parquet file (`name_v1`, `name_v2`, …) written with pyarrow, with a lineage file next to it; DuckDB holds the user accounts, and the cache of dataset statistics is Parquet files in each workspace. Every account works in its own workspace.
 2. **Statistics** (`biostats`, in the data and statistics engine): Welch-first group comparisons with effect sizes and confidence intervals ($\text{Hedges' } g$, rank-biserial $r$, $\eta^2$, $\omega^2$), ANCOVA (one outcome, several covariates) with a test of parallel slopes, 2x2 measures with the Haldane-Anscombe correction, Little's MCAR test, diagnostic accuracy (ROC, PPV, NPV, likelihood ratios), survival and regression models, and multiple imputation. Normality and variance checks are diagnostics, never gates.
 3. **Data quality**: a score across completeness, uniqueness, consistency, uniformity, statistical validity (IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN) and the plausibility rules you declare (domain validity).
-4. **Optional AI assistant** (the `ai` group): connectors for local Ollama (the default), Google Gemini, OpenAI, Mistral and Anthropic Claude, for questions on your documents, column-name suggestions, and new variables proposed from the columns of your dataset (standard indices and scores, each with its source and a formula checked against your columns). Cloud providers, and an Ollama or a Qdrant server outside your network, need an explicit consent; the suggestions come from the language model and are not checked against a terminology.
+4. **Optional AI assistant** (the `ai` group): connectors for local Ollama (the default), Google Gemini, OpenAI, Mistral and Anthropic Claude, for questions on your documents, column-name suggestions, and new variables proposed from the columns of your dataset (standard indices and scores, each with its source and a formula checked against your columns). Cloud providers, an Ollama cloud model, and an Ollama or a Qdrant server outside your network need an explicit confirmation in each browser tab; the suggestions come from the language model and are not checked against a terminology.
 5. **Analysis Population, Recorded Lineage & Checked Replay**: Inclusion and exclusion criteria are filters you tick in the sidebar; every page analyses the same population, every result says which population and data it was computed on, and a result computed on other data is not shown as current. Every change of the data goes through one write path and is one step of a hash-chained (tamper-evident) JSON trace that records what it did to the table. The headless engine (`run_trace`) replays the trace, checks every step against the fingerprint recorded for it, and says when the replayed table is exactly the analysed one; a multiple imputation is re-run and its imputed cells are checked; the few steps it cannot recompute (the single imputation adopted from the former multiple-imputation panel) are listed. A Microsoft Word (`.docx`) report documents the trace, and a Word **study dossier** gathers the provenance, the participant flow (STROBE item 13), the data handling, the missing data (with the multiple-imputation items of Sterne et al. 2009) and the results you add to it. Neither is an electronically signed record, and neither certifies compliance with a reporting guideline.
 
 ---
@@ -72,7 +72,7 @@ The Start page draws this workflow: three core steps from a raw file to results,
 | **Outliers**             | IQR, z-score, quantiles, Isolation Forest, local outlier factor, DBSCAN                                      |
 | **Plausibility rules**   | Bounds and expressions declared in the study configuration, flagging implausible values                     |
 | **Reproducibility**      | Hash-chained trace (tamper-evident, not signed), a replay that checks every step, Word report and study dossier |
-| **AI (optional)**        | Local Ollama by default; Gemini, OpenAI, Mistral and Claude, and an Ollama or Qdrant server outside your network, after an explicit consent |
+| **AI (optional)**        | Local Ollama by default; Gemini, OpenAI, Mistral and Claude, an Ollama cloud model, and an Ollama or Qdrant server outside your network, after an explicit confirmation in each browser tab |
 | **Knowledge graphs**     | Offline Plotly/NetworkX engine by default, or a static Graphviz one; the proprietary yFiles engine is optional |
 | **Deployment**           | Local (uv or pip), Docker or Docker Compose; offline with the default graph engine and a local LLM          |
 | **Configuration**        | One settings object, read from the environment and `.env` and checked at start-up; a wrong setting stops it, named without its value |
@@ -112,24 +112,33 @@ The Start page draws this workflow: three core steps from a raw file to results,
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KarimELMERNISSI/Cohort-Studio/main/assets/readme/architecture-dark.svg">
-    <img src="assets/readme/architecture.svg" width="100%" alt="The architecture of CohortStudio in layers, from top to bottom: the interface (app_pages and ui), the only layer that needs Streamlit; the services (manage and graph), with four connector families (identity provider, AI provider, vector database, graph engine); the data work (ingest, enrich, explore and monitor); the data and statistics engine (core, biostats and prompts), with its catalogues; and utils. Imports go down only. The browser enters through the interface; the command line and scripts enter at the services. The services store one workspace per user (Parquet versions with lineage files, hash-chained traces, the study definition, documents and their vector index) and the accounts in DuckDB. Cloud AI providers, a remote Qdrant server and the yFiles engine reach outside the server, only after an explicit consent or an opt-in install.">
+    <img src="assets/readme/architecture.svg" width="100%" alt="The architecture of CohortStudio in layers, from top to bottom: the interface (app_pages and ui), the only layer that needs Streamlit; the services (manage and graph), with four connector families (identity provider, AI provider, vector database, graph engine); the data work (ingest, enrich, explore and monitor); the data and statistics engine (core, biostats and prompts), with its catalogues; and utils. Imports go down only. The browser enters through the interface; the command line and scripts enter at the services. The services store one workspace per user (Parquet versions with lineage files, hash-chained traces, the study definition, documents and their vector index) and the accounts in DuckDB. Cloud AI providers, an Ollama outside your network or running a cloud model, a Qdrant server outside your network, and the yFiles engine reach outside your network: the AI providers and the Qdrant server only after a confirmation in each browser tab; yFiles once installed and chosen.">
   </picture>
+</p>
+
+<p align="center">
+  <b>Overview</b>, this section
+  &ensp;›&ensp;<a href="documentation/10_Developer_Guide.md#the-layers">Layers &amp; packages</a>
+  &ensp;›&ensp;<a href="https://karimelmernissi.github.io/Cohort-Studio/architecture/#/architecture/bricks">Bricks</a>
+  &ensp;›&ensp;<a href="https://karimelmernissi.github.io/Cohort-Studio/architecture/#/architecture/modules">Modules</a>
+  <br><sub>From this overview to the developer guide's layers, then to the bricks and modules of the
+  <a href="https://karimelmernissi.github.io/Cohort-Studio/architecture/">architecture explorer</a>.</sub>
 </p>
 
 **Layers.** Each package sits on a layer, and imports only go down; every layer may use `utils` (settings, logging,
 optional groups, paths). [`test_layering.py`](tests/test_layering.py) places every module on its layer and checks, on
 each push, that:
 
-- no two modules import each other, directly or through others (one cycle exists by design: the multiple-imputation
-  engine and its worker process);
+- no two modules import each other, directly or through others;
 - nothing below the interface reaches Streamlit, by any chain of imports, so the engine, the data work and the
-  services run without it;
+  services run without it (a graph engine draws through Streamlit inside its drawing methods only);
 - `biostats` imports no other package of the application, so the statistics can be used and tested on their own;
 - the libraries of the AI providers are imported in one package only.
 
-The few exceptions left are listed in the test, and the list can only shrink.
+No exception is left to these rules. Only `utils.settings` reads the environment, apart from three modules the test
+lists with their reasons; that list can only shrink.
 
-**Two ways in.** The browser reaches the pages, the only code that needs Streamlit. The command line
+**Two ways in.** The browser reaches the pages, the only code built on Streamlit. The command line
 (`manage_users.py`, for the accounts) and a script that replays a trace (`run_trace`) enter at the services, below
 the interface.
 
@@ -138,29 +147,42 @@ one step of the trace. The services write each saved version as a Parquet file w
 recomputes the steps and compares each with the fingerprint recorded for it.
 
 **Connectors.** Four families share one shape ([`core/registry.py`](core/registry.py)): the identity providers
-(local accounts, a Better Auth sidecar, or no sign-in), the AI providers (Ollama, Gemini, OpenAI, Mistral, Claude),
+(local accounts, a Better Auth service, or no sign-in), the AI providers (Ollama, Gemini, OpenAI, Mistral, Claude),
 the vector databases (LanceDB, Qdrant) and the graph engines (Plotly, Graphviz, yFiles). Each implementation is a
 class that says whether it can run here, and why not, and is loaded only when used. The identity provider is the
 server's choice; for the others, the session's choice comes first, then the user's saved choice, the server's
-setting and a default. Settings says why a connector is used and lists those that cannot run here, with the group to
-install. One contract test per family checks the same rules for each, and a new connector is one module and one
-registration, with no change to the code that uses the family. In the scheme, an arrow marks what reaches outside
-your server: a cloud AI provider or a remote Qdrant server, after an explicit consent, and the yFiles engine, after
-an opt-in install.
+setting and the family's order. Settings says why a connector is used and lists those that cannot run here, with the
+group to install. One contract test per family checks the same rules for each. A new graph engine is one module and
+one registration; a new vector database, AI provider or identity provider also needs its declaration in its family
+(the developer guide's recipe says what).
+
+**What leaves your network.** In the scheme, an arrow marks it. A cloud AI provider, an Ollama outside your network
+or running a cloud model on ollama.com, and a Qdrant server outside your network are each used only after a
+confirmation, in each browser tab, that names it and what it receives. The yFiles engine, once installed and chosen
+by a user or by the server's setting, has its code loaded by the browser from yworks.com. A service on your network
+(an Ollama, a Qdrant server) receives what it is sent with no confirmation, and so does Better Auth, at whatever
+address `CMP_BETTER_AUTH_URL` names: list only services you trust. The
+[architecture explorer](https://karimelmernissi.github.io/Cohort-Studio/architecture/#/connectors) draws each
+connector where it runs, with what it receives, the optional group it needs and its place in the automatic order.
 
 **Settings and catalogues.** Every setting the application reads is a field of one object
 ([`utils/settings.py`](utils/settings.py)), read from the environment and `.env` and checked at start-up. Each kind
 of trace step is declared once ([`core/steps.py`](core/steps.py)), with its label, whether it changes the data and how
 the replay handles it; so are the kinds of criterion ([`core/criteria.py`](core/criteria.py)), of stored analysis
-([`biostats/plan.py`](biostats/plan.py)) and of check ([`core/verification.py`](core/verification.py)).
+([`biostats/plan.py`](biostats/plan.py)), of check ([`core/verification.py`](core/verification.py)) and of date
+format ([`ingest/dates.py`](ingest/dates.py)).
 
-**Storage.** Everything a user makes stays in their own workspace, under `<DATA_ROOT>/users/<username>/`: the
-versions of their datasets, their traces, the study definition and its revisions, their documents and the vector
-index built from them. DuckDB holds the accounts and the cache of dataset statistics.
+**Storage.** What a user makes is kept in their own workspace, under `<DATA_ROOT>/users/<username>/`: the versions
+of their datasets, their traces, the study definition and its revisions, their documents and the vector index built
+from them (an index on a Qdrant server is kept on that server), and the cache of their dataset statistics (Parquet
+files). DuckDB holds the accounts.
 
 The scheme is drawn by [`dev_scripts/make_architecture_diagram.py`](dev_scripts/make_architecture_diagram.py); a
 test fails when it no longer names every package of the layer table, or when its files are not what the script
-builds.
+builds. The architecture explorer is built from the code by
+[`build_explorer.py`](dev_scripts/architecture_explorer/build_explorer.py) and published with the website once CI
+has passed on `main`; [`test_architecture_explorer.py`](tests/test_architecture_explorer.py) fails when a module
+belongs to no brick, or when its words name a file, module, class or setting the code no longer holds.
 
 ---
 
@@ -170,7 +192,7 @@ builds.
 
 - CSV, TSV and text files, Excel workbooks (`.xlsx`, `.xls`, `.xlsm`) and Parquet; automatic encoding detection (UTF-8, Latin-1, CP1252) and delimiter detection (comma, semicolon, tab, pipe), with a parse report.
 - Each saved version is a complete Parquet file (`dataset_v1`, `dataset_v2`, …) written with pyarrow, with a lineage file (fingerprint, parent trace, population) that is checked when the version is loaded.
-- DuckDB holds the user accounts and the cache of dataset statistics.
+- DuckDB holds the user accounts; the cache of dataset statistics is Parquet files in each workspace.
 - Per-user workspaces: every account has its own workspace under `<DATA_ROOT>/users/<username>/` (datasets, traces, uploads, taxonomies, knowledge graphs, document library, vector store); path inputs are confined to that workspace. Accounts are managed by a role-based IAM module with bcrypt hashing and login lockout.
 
 ### 2. Clinical Biostatistics & Epidemiological Testing
@@ -208,11 +230,11 @@ builds.
 
 ### 5. AI Assistant (optional `ai` group)
 
-- **Provider-Agnostic Interface**: Connectors for local Ollama (the default: prompts and documents stay on your server, except with an Ollama cloud model, which runs on ollama.com and asks for the same consent as a cloud provider), Google Gemini, OpenAI, Mistral and Anthropic Claude, with the model chosen in Settings (Claude answers; local Ollama or another provider embeds the documents). Cloud providers are used only after an explicit consent in Settings > AI engine. The server's default is set by `CMP_AI_PROVIDER` (local Ollama unless set), and Settings offers only the providers that can run here.
+- **Provider-Agnostic Interface**: Connectors for local Ollama (the default: prompts and documents stay on your network, except with an Ollama cloud model, which runs on ollama.com and asks for the same confirmation as a cloud provider), Google Gemini, OpenAI, Mistral and Anthropic Claude, with the model chosen in Settings (Claude answers; local Ollama or another provider embeds the documents). Cloud providers are used only after an explicit confirmation in Settings > AI engine, in each browser tab. The server's default is set by `CMP_AI_PROVIDER` (local Ollama unless set), and Settings offers only the providers that can run here.
 - **Column-Name Suggestions**: The language model suggests clearer, standardised names for raw columns. The suggestions are not checked against a terminology: UMLS, LOINC and SNOMED CT are not loaded.
 - **Variable Suggestions**: From the columns of your dataset, the variable map and your indexed documents, the engine proposes new variables (BMI, eGFR, clinical scores), for a concept you name or by scanning the dataset. Each formula is checked against your columns and shown with its source (a document and its pages, or the model's knowledge); for a missing input, it can look for a proxy or an alternative formula. A suggestion goes to the formula editor, where you preview it before anything is added.
-- **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation, indexed in LanceDB or Qdrant, in your workspace or on a Qdrant server (a server outside your network needs the same consent as a cloud provider). What is sent anywhere names each passage by its PDF, never by its folder on the server.
-- **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, a static Graphviz engine, and the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; it loads its runtime from yworks.com and reports anonymised usage data).
+- **Document Intelligence**: Vectorized retrieval over uploaded clinical protocols, biomedical research PDFs, and study documentation, indexed in LanceDB or Qdrant, in your workspace or on a Qdrant server (a server outside your network needs the same confirmation as a cloud provider). What is sent anywhere names each passage by its PDF, never by its folder on the server.
+- **Knowledge Graphs**: Automated variable relationship induction into interactive knowledge graphs, rendered through a library-agnostic connector (`graph/`): the offline Plotly/NetworkX engine by default, a static Graphviz engine, and the proprietary yFiles engine as an opt-in extra (`uv sync --extra graph-yfiles`, `CMP_GRAPH_RENDERER=yfiles`; the browser loads its runtime from yworks.com, and yWorks states that it reports anonymised usage data).
 
 Asked for *BSA* on the tutorial cohort, with a review of the body-surface-area formulae indexed (Redlarski et al., *Sci Rep* 2016), the engine proposes formulas mapped onto the height and weight columns, each citing the review. **Apply to Editor** puts one in the formula editor, which computes and previews it before anything is added:
 
@@ -243,7 +265,7 @@ Asked for *BSA* on the tutorial cohort, with a review of the body-surface-area f
 
 - **Provider Contract**: `BaseIAMProvider` (`manage/iam/base.py`) defines sign-in, account creation, session checks and roles. The application uses two roles, administrator and researcher.
 - **Default Provider**: local accounts in DuckDB with bcrypt hashing and login lockout (`LocalDuckDBIAMProvider`); the first administrator comes from `.env` or from a one-time setup token.
-- **Other Providers**: a Better Auth sidecar adapter (password sign-in and session checks over HTTP), and a mode without sign-in for a single local user (`CMP_IAM_PROVIDER=disabled`).
+- **Other Providers**: a Better Auth adapter (password sign-in and session checks over HTTP, to the Better Auth service at the address `CMP_BETTER_AUTH_URL` names), and a mode without sign-in for a researcher's own machine (`CMP_IAM_PROVIDER=disabled`: every visitor is one administrator, with one workspace).
 - **Choice**: the server's setting `CMP_IAM_PROVIDER` (`local`, `better_auth` or `disabled`); any other value stops start-up instead of falling back to local accounts. Admin > Users manages the accounts of the provider in use.
 
 ---
@@ -357,12 +379,13 @@ DATA_ROOT=./data
 CMP_ADMIN_USERNAME=admin
 CMP_ADMIN_PASSWORD=choose-a-long-passphrase
 
-# Identity provider: local (default) | better_auth | disabled (no sign-in, one local user)
+# Identity provider: local (default) | better_auth | disabled (no sign-in: every visitor is one administrator,
+# with one workspace)
 CMP_IAM_PROVIDER=local
 
-# AI providers: Ollama is the default and keeps data on the server (its cloud models run on ollama.com and ask
-# for consent). Cloud providers are opt-in
-# and require an explicit confirmation in the app before any data is sent.
+# AI providers: Ollama is the default and keeps data on your network (its cloud models run on ollama.com and ask
+# for a confirmation). Cloud providers are opt-in
+# and require an explicit confirmation in the app, in each browser tab, before any data is sent.
 CMP_AI_PROVIDER=auto
 OLLAMA_BASE_URL=http://localhost:11434
 # Other Ollama addresses users may choose in Settings, after OLLAMA_BASE_URL; administrators add others there
@@ -385,7 +408,7 @@ The application reads its settings from the environment and `.env` only (a `.str
 and checks every one at start-up: a wrong value, or a connector name this version does not offer, stops start-up
 with the variable's name, never its value. The choices each user makes in Settings (the AI provider and its models,
 the vector database, the graph engine, the day-first reading of dates) are kept in their workspace for the next
-session; a key, a password, an address or a consent never is.
+session; a key, a password or a confirmation never is, and an address only as chosen among those the server offers.
 
 ### Administrator accounts and user management
 
@@ -431,7 +454,8 @@ CI fails when the line coverage of the non-test code falls below 70 %, or a pack
 | Each account works in its own workspace, paths cannot leave it, and expressions run in a whitelisted sandbox | [`test_workspace.py`](tests/core_layer/test_workspace.py), [`test_safe_eval.py`](tests/core_layer/test_safe_eval.py) |
 | Each connector family keeps one contract: availability found without a network call, the group to install named, the order of choice, unknown names refused | [`connector_contract.py`](tests/connector_contract.py) |
 | A wrong setting stops start-up, named without its value | [`test_startup_config.py`](tests/test_startup_config.py), [`test_settings.py`](tests/test_settings.py) |
-| No row, no extreme value and no folder of the server goes to an AI provider, and nothing goes before the consent | [`test_ai_payload.py`](tests/test_ai_payload.py), [`test_rag_consent.py`](tests/test_rag_consent.py) |
+| No row, no extreme value and no folder of the server goes to an AI provider, and none of the data goes before the confirmation | [`test_ai_payload.py`](tests/test_ai_payload.py), [`test_rag_consent.py`](tests/test_rag_consent.py) |
+| The architecture explorer places every module in one brick and names only files, modules, classes and settings the code holds; the website publishes it only after CI has passed on `main`, or when its workflow is run by hand on `main` | [`test_architecture_explorer.py`](tests/test_architecture_explorer.py), [`deploy-pages.yml`](.github/workflows/deploy-pages.yml) |
 | The coverage floors, overall and per package | [`ci.yml`](.github/workflows/ci.yml), [`check_coverage_floors.py`](dev_scripts/check_coverage_floors.py) |
 
 ---
@@ -452,11 +476,12 @@ For in-depth guides and methodological handbooks, consult the [`documentation/`]
 - [**09_Clustering.md**](documentation/09_Clustering.md): Algorithmic population stratification guidelines.
 - [**10_Developer_Guide.md**](documentation/10_Developer_Guide.md): Architecture specifications, plugin connectors, and development guidelines.
 - [**11_UI_Style_Guide.md**](documentation/11_UI_Style_Guide.md): Page structure, components and wording rules of the interface.
-- [**12_IAM_Architecture_and_BetterAuth_Evaluation.md**](documentation/12_IAM_Architecture_and_BetterAuth_Evaluation.md): Pluggable authentication architecture and the evaluation of a Better Auth sidecar.
+- [**12_IAM_Architecture_and_BetterAuth_Evaluation.md**](documentation/12_IAM_Architecture_and_BetterAuth_Evaluation.md): Pluggable authentication architecture and the evaluation of a Better Auth service.
 - [**13_Audit_Report_2026-10.md**](documentation/13_Audit_Report_2026-10.md): The October 2026 audit and the follow-up programme (M0 to M4).
 - [**14_Full_Tutorial.md**](documentation/14_Full_Tutorial.md): From a raw file to a reproducible report, step by step on the tutorial cohort.
 - [**Tutorials.md**](documentation/Tutorials.md): Shorter walkthroughs of each page.
 - [**developer/**](documentation/developer/): The configuration reference, the graph rendering connector, the process flow and the module reference generated from the code.
+- [**Architecture explorer**](https://karimelmernissi.github.io/Cohort-Studio/architecture/): The architecture at four levels of detail, where each connector runs and what it receives, and four calls followed step by step (an interactive page of the website, built from the code).
 
 ---
 
